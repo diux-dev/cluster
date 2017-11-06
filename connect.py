@@ -30,7 +30,7 @@ from operator import itemgetter
 
 
 def toseconds(dt):
-  # to invert
+  # to invert:
   # import pytz
   # utc = pytz.UTC
   # utc.localize(datetime.fromtimestamp(seconds))
