@@ -21,6 +21,9 @@ instance = reservation['Instances'][0]
 pprint(instance)
 """
 
+# todo: allow to do ls, show tags
+# todo: handle KeyError: 'PublicIpAddress'
+
 import boto3
 import time
 import sys
