@@ -3,32 +3,8 @@
 # Dependencies:
 # portpicker (pip install portpicker)
 # tcmalloc4 (sudo apt-get install google-perftools)
-# TF 0.12
 #
-#
-# Benchmarks on Xeon E5-2630 v3 @ 2.40GHz
-#
-# export LD_PRELOAD=/usr/lib/libtcmalloc.so.4
-# python benchmark_grpc_recv.py --data_mb=128
-# Local rate:       15214.63 MB/s
-# Distributed rate: 569.27 MB/s
-
-# python benchmark_grpc_recv.py --data_mb=256
-# Local rate:       15461.36 MB/s
-# Distributed rate: 362.97 MB/s
-#
-# python benchmark_grpc_recv.py --data_mb=512
-# Local rate:       15451.36 MB/s
-# Distributed rate: 202.46 MB/s
-#
-# python benchmark_grpc_recv.py --data_mb=768
-# Local rate:       16046.28 MB/s
-# Distributed rate: 142.19 MB/s
-#
-# python benchmark_grpc_recv.py --data_mb=1024
-# Local rate:       14546.77 MB/s
-# Distributed rate: 106.29 MB/s
-#
+# TODO: add baseline numbers
 # Generating profile:
 #
 # rm /tmp/profile*
@@ -99,7 +75,7 @@ def create_graph(device0, device1):
     var2 = tf.get_variable("var2", [params_size], dtype,
                            initializer=tf.ones_initializer())
     add_op = var1.assign_add(var2)
-    
+
   init_op = tf.global_variables_initializer()
   return init_op, add_op
 
@@ -140,7 +116,6 @@ def run_benchmark(sess, init_op, add_op):
   training_util.get_or_create_global_step()
 
   sess.run(init_op)
-
 
   for step in range(FLAGS.iters):
     start_time = time.time()

@@ -126,6 +126,7 @@ def launch_job_tmux(role, num_tasks):
   DEFAULT_NAME = 'blargh'
   ossystem('tmux kill-session -t ' + job_name)
 
+  # todo: move tmux initialization into localjob init
   # TODO: don't need default name
   ossystem('tmux new-session -s %s -n %s -d '% (job_name, DEFAULT_NAME))
   ossystem('tmux rename-window -t %s %s '%(DEFAULT_NAME, '0'))
@@ -213,70 +214,6 @@ def select_window(window):
   """select the window to be in the foreground"""
   ossystem('tmux select-window -t %s:%s'% (FLAGS.tmux_name, window))
 
-def launch_local():
-  # TODO: tee tmux outputs into local logs
-  # TODO: travis compatible logs location
-  
-  # launch parameter servers
-  # setup tf_config for each ps server, run
-  # launch workers
-
-  # the launcher takes care of setting up logdir
-  logdir = '/temp/logs/'+FLAGS.name
-  os.system('rm -Rf '+logdir)
-  os.system('mkdir -p '+logdir)
-
-  # todo: remove opencl stuff
-  common_setup_cmds = ["export OPENCV_OPENCL_RUNTIME=",
-                       "source activate sep22",
-                       "export LOGDIR="+logdir]
-
-  # allocate ports
-  hostname = 'localhost'
-  ps_hosts = []
-  for task_id in range(FLAGS.num_workers):
-    ps_hosts.append("%s:%d"%(hostname, portpicker.pick_unused_port()))
-  worker_hosts = []
-  for task_id in range(FLAGS.num_ps):
-    worker_hosts.append("%s:%d"%(hostname, portpicker.pick_unused_port()))
-  cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
-
-
-  def tf_config_setup():
-    task_spec = {'type': task_type, 'index': task_id}
-    cluster_config = {'cluster': cluster_spec, 'task': task_spec}
-    json_string = json.dumps(cluster_config)
-    json_string_encoded = base64.b16encode(json_string.encode('ascii'))
-    json_string_encoded = json_string_encoded.decode('ascii')
-    export_command = "export TF_CONFIG_BASE16=%s"%(json_string_encoded,)
-    print('export command')
-    print(repr(export_command))
-    return export_command
-    
-  task_type = 'ps'
-  for task_id in range(FLAGS.num_ps):
-    cmds = list(common_setup_cmds)
-    cmds.append(tf_config_setup())
-    cmds.append(PS_CMD)
-    window_name = '%s-%04d'%(task_type[0], task_id)
-    run_in_window(window_name, cmds)
-
-  task_type = 'worker'
-  for task_id in range(FLAGS.num_workers):
-    cmds = list(common_setup_cmds)
-    cmds.append(tf_config_setup())
-    cmds.append(WORKER_CMD)
-    window_name = '%s-%04d'%(task_type[0], task_id)
-    run_in_window(window_name, cmds)
-  
-  # launch tensorboard process with logdir
-  port = portpicker.pick_unused_port()
-  run_in_window('tb', 'echo "Running on port %d"'%(port,))
-  run_in_window('tb', 'tensorboard --port=%d --logdir=%s'%(port, logdir))
-
-  select_window('w-0000')
-  
-    
 def launch_job_aws(name, replicas):
 
   # todo: rename instance_tag to name
@@ -288,10 +225,61 @@ def launch_job_aws(name, replicas):
                                              instance_tag=name,
                                              placement_group='',
                                              instance_type=INSTANCE_TYPE)
+  job = AwsJob()
+
+
+
+class BasicAwsJob():
+  def __init__(name, num_tasks):
+    pass
+
+  
+  
+def launch_aws():
+  ps_job = aws.tf_job(FLAGS.run+'-ps', FLAGS.num_ps)
+  worker_job = aws.tf_job(FLAGS.run+'-worker', FLAGS.num_workers)
+  tb_job = aws.tf_job(FLAGS.run+'-tb', 1)
+
+  # wait for everything to come up
+
+  # todo: private IP's may be known before instances are ready
+  ps_job.wait_for_ready()
+  worker_job.wait_for_ready()
+  
+  # TODO: orchestration may be easier if I save server spec to a predictable
+  # location on AWS rather than passing it to each worker through command-line
+  
+  # Orchestration: every worker needs to know:
+  # 1. their own role (task_spec), ie {type: worker, index: 0}
+  # 2. role->ip mapping of all machines (cluster_spec), ie
+  #    {"worker": ["localhost:24724"], "ps": ["localhost:15960"]}}
+  ps_hosts = ["%s:%d"%(task.ip, task.port) for task in ps_job.tasks]
+  worker_hosts = ["%s:%d"%(task.ip, task.port) for task in worker_job.tasks]
+  cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
+
+  # launch parameter server tasks
+  task_type = 'ps'  
+  for task in ps_job.tasks:
+    task_spec = {'type': task_type, 'index': task.id}
+    task.run(generate_tf_env_setup_cmd(cluster_spec, task_spec))
+    task.run(PS_CMD)
+
+  # launch worker tasks
+  task_type = 'worker' # task type can also be "chief", overlapping with worker
+  for task in worker_job.tasks:
+    task_spec = {'type': task_type, 'index': task.id}
+    task.run(generate_tf_env_setup_cmd(cluster_spec, task_spec))
+    task.run(WORKER_CMD)
+
+  # launch tensorboard visualizer
+  task = tb_job.tasks[0]
+  task.run('tensorboard --port=%d --logdir=%s'%(task.port, logdir))
+
   
 
 class Instance:
   # todo: move inside instance
+  
   def tf_env_setup(self, cluster_spec, task_spec):
     cluster_config = {'cluster': cluster_spec, 'task': task_spec}
     json_string = json.dumps(cluster_config)
@@ -302,7 +290,7 @@ class Instance:
 
 # TODO: rename .ip to get_ip()
 
-def launch_local2():
+def launch_local():
   ps_job = launch_job_tmux('ps', FLAGS.num_ps)
   worker_job = launch_job_tmux('worker', FLAGS.num_workers)
   tb_job = launch_job_tmux('tb', 1)
@@ -337,47 +325,47 @@ def launch_local2():
   task.run('tensorboard --port=%d --logdir=%s'%(task.port, logdir))
 
 
-def launch_remote():
-  ps_instances = launch_instances_aws('ps', 1)
-  worker_instances = launch_instances_aws('worker', 1)
-  tb_instance = launch_instances_aws('tb', 1)[0]
+# def launch_remote():
+#   ps_job = AwsJob('ps', 1)
+#   worker_job = launch_instances_aws('worker', 1)
+#   tb_job = launch_instances_aws('tb', 1)[0]
 
-  # Orchestration, every worker needs to know their own role (task_spec)
-  # and role->ip mapping of all machines (cluster_spec)
-  # This information is saved as base16 encoded dictionary in env var
-  # and loaded in the task script
-  PORT = 3000
-  ps_hosts = ["%s:%d"%(i.ip, PORT) for i in ps_instances]
-  worker_hosts = ["%s:%d"%(i.ip, PORT) for i in worker_instances]
-  cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
+#   # Orchestration, every worker needs to know their own role (task_spec)
+#   # and role->ip mapping of all machines (cluster_spec)
+#   # This information is saved as base16 encoded dictionary in env var
+#   # and loaded in the task script
+#   PORT = 3000
+#   ps_hosts = ["%s:%d"%(i.ip, PORT) for i in ps_instances]
+#   worker_hosts = ["%s:%d"%(i.ip, PORT) for i in worker_instances]
+#   cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
 
-  def tf_config_setup():
-    task_spec = {'type': task_type, 'index': task_id}
-    cluster_config = {'cluster': cluster_spec, 'task': task_spec}
-    json_string = json.dumps(cluster_config)
-    json_string_encoded = base64.b16encode(json_string.encode('ascii'))
-    json_string_encoded = json_string_encoded.decode('ascii')
-    export_command = "export TF_CONFIG_BASE16=%s"%(json_string_encoded,)
-    print('export command')
-    print(repr(export_command))
-    return export_command
+#   def tf_config_setup():
+#     task_spec = {'type': task_type, 'index': task_id}
+#     cluster_config = {'cluster': cluster_spec, 'task': task_spec}
+#     json_string = json.dumps(cluster_config)
+#     json_string_encoded = base64.b16encode(json_string.encode('ascii'))
+#     json_string_encoded = json_string_encoded.decode('ascii')
+#     export_command = "export TF_CONFIG_BASE16=%s"%(json_string_encoded,)
+#     print('export command')
+#     print(repr(export_command))
+#     return export_command
 
-  task_type = 'ps'
-  for task_id, instance in enumerate(ps_instances):
-    instance.run(tf_config_setup())
-    instance.run(PS_CMD)
+#   task_type = 'ps'
+#   for task_id, instance in enumerate(ps_instances):
+#     instance.run(tf_config_setup())
+#     instance.run(PS_CMD)
 
-  task_type = 'worker'
-  for task_id, instance in enumerate(worker_instances):
-    instance.run(tf_config_setup())
-    instance.run(WORKER_CMD)
+#   task_type = 'worker'
+#   for task_id, instance in enumerate(worker_instances):
+#     instance.run(tf_config_setup())
+#     instance.run(WORKER_CMD)
 
-  tb_instance.run('tensorboard --port=%d --logdir=%s'%(port, logdir))
+#   tb_instance.run('tensorboard --port=%d --logdir=%s'%(port, logdir))
 
 
 def main():
   os.system('rm -Rf data') # todo: remove
-  launch_local2()
+  launch_local()
   
 
 if __name__=='__main__':

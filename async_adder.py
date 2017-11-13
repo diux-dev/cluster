@@ -43,6 +43,7 @@ flags.DEFINE_string('name', 'default',
                     'tag used to keep track of machines in this experiment')
 
 
+# TODO: switch back to regular (not traced) runs
 timeline_counter = 0
 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE, output_partition_graphs=True)
 def traced_run(fetches):
