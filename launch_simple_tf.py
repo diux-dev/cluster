@@ -37,7 +37,7 @@ def launcher(do_local=False):
   task.run("%s && python %s --role=worker" % (setup_cmd, __file__,))
   
   print("To see the output: tail -f %s" %(task.last_stdout))
-  print("To interact with the job, do "+task.connect_instructions)
+  print("To interact with the task, do "+task.connect_instructions)
  
 
 def worker():
