@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # ImageNet experiments
-# 1 worker, 1 ps: 1 gpu/machine, no placement group
+# 1 worker, 1 ps: 1 gpu/machine
 # python launch_async_adder.py --cluster=aws --run=gpu
 # worker 0 log:
 # 1	images/sec: 52.5 +/- 0.0 (jitter = 0.0)	8.128
@@ -9,7 +9,7 @@
 # 20	images/sec: 52.2 +/- 0.0 (jitter = 0.1)	8.132
 # 30	images/sec: 52.2 +/- 0.0 (jitter = 0.2)	8.023
 
-# 1 worker, 1 ps: 8 gpus/machine, placement group
+# 1 worker, 1 ps: 8 gpus/machine
 # python launch_async_adder.py --cluster=aws --run=gpu2
 # worker 0 log:
 # 1	images/sec: 391.0 +/- 0.0 (jitter = 0.0)	8.070
@@ -37,6 +37,33 @@
 # 30	images/sec: 382.7 +/- 1.2 (jitter = 3.1)	7.854
 #
 #
+# 8 workers, 4 ps
+# ./launch_async_adder.py --run=cnn --num_workers=8 --num_ps=4 --worker_type=p2.8xlarge --ps_type=c5.2xlarge
+#
+# worker 0 log:
+# 1	images/sec: 389.6 +/- 0.0 (jitter = 0.0)	7.903
+# 10	images/sec: 388.4 +/- 0.7 (jitter = 1.2)	7.867
+# 20	images/sec: 388.3 +/- 0.4 (jitter = 0.7)	7.851
+# 30	images/sec: 387.9 +/- 0.3 (jitter = 1.6)	7.863
+#
+#
+# after enabling placement groups
+# python ./launch_async_adder.py --run=cnn2 --num_workers=8 --num_ps=4 --worker_type=p2.8xlarge --ps_type=c5.2xlarge
+# worker 0 log:
+# 1	images/sec: 368.4 +/- 0.0 (jitter = 0.0)	7.925
+# 10	images/sec: 368.7 +/- 0.8 (jitter = 1.3)	7.880
+# 20	images/sec: 368.5 +/- 0.5 (jitter = 0.8)	7.873
+#
+#
+# after disabling placement groups again
+# python ./launch_async_adder.py --run=cnn2 --num_workers=8 --num_ps=4 --worker_type=p2.8xlarge --ps_type=c5.2xlarge --disable_placement
+# 1	images/sec: 371.8 +/- 0.0 (jitter = 0.0)	7.928
+# 10	images/sec: 370.0 +/- 0.6 (jitter = 1.6)	7.886
+# 20	images/sec: 369.1 +/- 0.4 (jitter = 2.1)	7.874
+# 30	images/sec: 369.0 +/- 0.3 (jitter = 1.6)	7.886
+# 40	images/sec: 368.4 +/- 0.3 (jitter = 1.6)	7.914
+
+
 # Works either with remote or local instances.
 # Local instances are tmux sessions. Each session has separate window
 # corresponding to the task.
@@ -54,6 +81,39 @@
 # tmux session test-worker
 
 # todo: utility to scp directory to amazon machine
+
+# TODO: check if instance limits are satisfiable ahead of time, crash early if
+# not (need iam:GetAccountSummary  permission)
+#
+# Stop failure that happens when cluster init is triggered before instances
+# are ready, currently stack trace as below
+#     self.stop(close_summary_writer=close_summary_writer)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/supervisor.py", line 820, in stop
+#     ignore_live_threads=ignore_live_threads)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/coordinator.py", line 387, in join
+#     six.reraise(*self._exc_info_to_raise)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/supervisor.py", line 981, in managed_session
+#     start_standard_services=start_standard_services)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/supervisor.py", line 726, in prepare_or_wait_for_session
+#     max_wait_secs=max_wait_secs)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/session_manager.py", line 400, in wait_for_session
+#     sess)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/session_manager.py", line 481, in _try_run_local_init_op
+#     is_ready_for_local_init, msg = self._model_ready_for_local_init(sess)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/session_manager.py", line 466, in _model_ready_for_local_init
+#     "Model not ready for local init")
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/training/session_manager.py", line 508, in _ready
+#     ready_value = sess.run(op)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/client/session.py", line 889, in run
+#     run_metadata_ptr)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/client/session.py", line 1120, in _run
+#     feed_dict_tensor, options, run_metadata)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/client/session.py", line 1317, in _do_run
+#     options, run_metadata)
+#   File "/home/ubuntu/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/client/session.py", line 1336, in _do_call
+#     raise type(e)(node_def, op, message)
+# tensorflow.python.framework.errors_impl.UnavailableError: Endpoint read failed
+
 import base64
 import json
 import os
@@ -73,6 +133,9 @@ import cluster_aws
 
 import aws
 import tmux
+
+# TODO: stop launcher script from quitting when ssh command returns
+# (remove daemon thread designation)
 
 # todo: robustness to worker restarts
 
@@ -112,6 +175,7 @@ flags.DEFINE_string("cluster", "aws", "where to run (aws or local)")
 flags.DEFINE_boolean("kill", False, "brings down experiment")
 flags.DEFINE_string('worker_type', 'p2.8xlarge', 'instance type to use for workers')
 flags.DEFINE_string('ps_type', 'c5.large', 'instance type to use for ps')
+flags.DEFINE_boolean('disable_placement', False, 'disable placement groups')
 
 FLAGS = flags.FLAGS
 
@@ -504,14 +568,19 @@ def cnn_launcher():
     # create placement group, same as run name
     import boto3
     ec2 = boto3.client('ec2')
-    placement_group = FLAGS.run
-    try:
-      response = ec2.create_placement_group(GroupName=placement_group,
+    
+    if not FLAGS.disable_placement:
+      placement_group = FLAGS.run
+      try:
+        response = ec2.create_placement_group(GroupName=placement_group,
                                             Strategy='cluster')
-    except Exception as e:
-      if 'Duplicate' in e.response['Error']['Code']:
-        print("Warning, placement group already exists, skipping")
-        print("Got message "+str(e))
+      except Exception as e:
+        if 'Duplicate' in e.response['Error']['Code']:
+          print("Warning, placement group %s already exists, skipping" %(placement_group,))
+          print("Got message "+str(e))
+    else:
+      placement_group = ''
+
 
     # out of instances for c5.large
     logdir = setup_remote_logdir(FLAGS.run)
@@ -591,6 +660,11 @@ def cnn_launcher():
                                                     task.last_stdout))
 
 
+    print("Sleeping")
+    time.sleep(1000)
+
+    # TODO: are ssh calls blocking?
+    
     # launch tensorboard visualizer
     #    task = tb_job.tasks[0]
     #    cmds = []
