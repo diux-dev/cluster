@@ -41,6 +41,11 @@ def _ossystem(cmd):
   print(cmd)
   os.system(cmd)
 
+def kill_job(name):
+  """Simple local TensorFlow job launcher."""
+  
+  _ossystem('tmux kill-session -t ' + name)
+
 def tf_job(name, num_tasks):
   """Simple local TensorFlow job launcher."""
   

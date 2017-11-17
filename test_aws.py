@@ -47,6 +47,9 @@ def test_send_file():
   print(stdout)    # => testfile2
   assert stdout.strip() == secret_word
 
+def test_upload_directory():
+  pass
+
 def test_stream_output():
   name = "testjob"
   job = aws.tf_job(name, 4)

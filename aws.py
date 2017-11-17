@@ -16,13 +16,29 @@ from myutil import timeit
 module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, module_path+'/tf-tools/benchmark/runner')
 
+# TODO: decide on name to show in TMUX window
+# TODO: should we do jobname=run5-worker, or have each job also have
+# associated "run" name "run5" in addition to jobname "worker"?
+# TODO: check for instance type when reusing, and kill if necessary
+
+# TODO: support "kill"
+
+# Todo: better clean-up (at least kill python processes to free ports)
+
+# TODO: bash errors get swallowed
+# ubuntu@ip-172-31-33-25:~$ source ~/.bashrc || export PATH=~/anaconda3/bin:$PATH || source activate py2 || cd ~/git0/benchmarks/scripts/tf_cnn_benchmarks || killall python< || export TF_PICKLE_BASE16=80037D7100285807000000636C7573746572710163636F6C6C656374696F6E730A64656661756C74646963740A7102636275696C74696E730A646963740A7103857104527105285802000000707371067D71074B0058110000003137322E33312E33332E32353A333030307108735806000000776F726B657271095D710A58110000003137322E33312E34302E34303A33303030710B617558040000007461736B710C7D710D285805000000696E646578710E4B00580400000074797065710F680675752E || export LOGDIR=/efs/logs/default || CUDA_VISIBLE_DEVICES='' python tf_cnn_benchmarks.py --local_parameter_device=gpu --worker_hosts=172.31.40.40:3000 --ps_hosts=172.31.33.25:3000 --job_name=ps --task_index=0
+# -bash: syntax error near unexpected token `||'
+
+# TODO: option to reuse stopped instances
+# TODO: ability to get instance id for a given task
+
 # User specific config. These settings are reused for all jobs.
 AMI = 'ami-9ddb0fe5'
 KEY_NAME = 'yaroslav'  # AWS key-name to use, only modify instances with this
 # key
 SSH_KEY_PATH = os.environ['HOME']+'/d/yaroslav.pem' # location of .pem file locally
 SECURITY_GROUP = 'open' # security group for all instances
-
+DEFAULT_PORT = 3000
 
 LOCAL_TASKLOGDIR_PREFIX='/temp/tasklogs'
 LOCAL_LOGDIR_PREFIX='/temp/logs'
@@ -146,15 +162,19 @@ def lookup_aws_instances(name):
       result.append(i)
   return result
 
-def tf_job(name, num_tasks):
+def tf_job(name, num_tasks, instance_type=None, placement_group=''):
   """Creates TensorFlow job on AWS cluster. If job with same name already
   exist on AWS cluster, then reuse those instances instead of creating new."""
 
+  if instance_type is None:
+    instance_type = 'c5.large'
   # assume if given job exists, it's been configured properly
   # this is a performance optimization to avoid AWS startup delay
   instances = lookup_aws_instances(name)
   if instances:
-    assert len(instances) == num_tasks, ("Found job with same name, but number"
+    # TODO: change >= to ==?
+    # TODO: otherwise you have problem where job has more tasks than requested
+    assert len(instances) >= num_tasks, ("Found job with same name, but number"
        " of tasks %d doesn't match requested %d, kill job manually."%(len(instances), num_tasks))
     print("Found existing job "+name)
   else:
@@ -163,7 +183,7 @@ def tf_job(name, num_tasks):
     ec2 = boto3.resource('ec2')
     instances = ec2.create_instances(
       ImageId=AMI,
-      InstanceType='c5.large',
+      InstanceType=instance_type,
       MinCount=num_tasks,
       MaxCount=num_tasks,
       SecurityGroups=[SECURITY_GROUP],
@@ -245,6 +265,7 @@ class Job:
   def __init__(self, name, instances):
     self.name = name
     self.tasks = []
+    # todo: make task_ids asignment deterministic
     for task_id, instance in enumerate(instances):
       self.tasks.append(Task(instance, self, task_id))
 
@@ -265,10 +286,10 @@ class Task:
   def __init__(self, instance, job, task_id):
     self.instance = instance
     self.job = job
-    self.task_id = task_id
+    self.id = task_id
     self.initialized = False
     self.local_tasklogdir = '%s/%s/%s' %(LOCAL_TASKLOGDIR_PREFIX, self.job.name,
-                                         self.task_id)
+                                         self.id)
     self.last_stdout = None  # path of last stdout file location
     self.last_stderr = None  # path of last stderr file location
 
@@ -285,7 +306,13 @@ class Task:
   def initialize(self):
     # todo: do we need to wait until public_ip is available?
     assert self.public_ip
+    # todo: this sometimes fails because public_ip is not ready
+    # add query/wait
     self.ssh_client = _ssh_to_host(self.public_ip, SSH_KEY_PATH)
+    if self.ssh_client is None:
+      print("SSH into %s:%s failed" %(self.job.name, self.id,))
+      return
+    
     # this blocks until instance is up
     self.initialized = True
     
@@ -310,6 +337,8 @@ class Task:
                               "initialized")
     
     self._setup_tasklogdir()
+    # todo: switch from encoded floats to integer micros
+    print("---", cmd)
     timestamp = _encode_float(time.time())
     stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
     stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
@@ -332,16 +361,24 @@ class Task:
     """Uploads file to remote instance. If location not specified, dumps it
     in default directory with same name."""
     self.wait_until_ready()
-      
+
+    # TODO: self.ssh_client is sometimes None
     sftp = self.ssh_client.open_sftp()
     if remote_file is None:
       remote_file = os.path.basename(local_file)
     sftp.put(local_file, remote_file)
-    
+
+  def _upload_directory(self, local_directory, remote_directory):
+    pass
+  
   @property
   def public_ip(self):
     self.instance.load()
     return self.instance.public_ip_address
+
+  @property
+  def port(self):
+    return DEFAULT_PORT
 
   @property
   def ip(self):  # private ip

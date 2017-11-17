@@ -20,6 +20,7 @@ from tensorflow.python.framework import device as pydev
 
 from myutil import timeit
 
+# TODO: when ps server restarts, it doesn't reinitialize the variables
 # TODO: document TF_CONFIG
 
 RETRY_DELAY_SEC = 5
@@ -73,10 +74,11 @@ def traced_run(fetches):
   timeline_counter+=1
   return results
 
+
 def sessrun(fetches):
   sess = tf.get_default_session()
-  return traced_run(fetches)
   return sess.run(fetches)
+  return traced_run(fetches)
 
 
 def get_ps_device(task=0, op_device_str=''):
