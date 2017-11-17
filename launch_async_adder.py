@@ -3,6 +3,7 @@
 # ImageNet experiments
 # 1 worker, 1 ps: 1 gpu/machine, no placement group
 # python launch_async_adder.py --cluster=aws --run=gpu
+# worker 0 log:
 # 1	images/sec: 52.5 +/- 0.0 (jitter = 0.0)	8.128
 # 10	images/sec: 52.3 +/- 0.0 (jitter = 0.1)	8.093
 # 20	images/sec: 52.2 +/- 0.0 (jitter = 0.1)	8.132
@@ -10,6 +11,7 @@
 
 # 1 worker, 1 ps: 8 gpus/machine, placement group
 # python launch_async_adder.py --cluster=aws --run=gpu2
+# worker 0 log:
 # 1	images/sec: 391.0 +/- 0.0 (jitter = 0.0)	8.070
 # 10	images/sec: 391.7 +/- 0.5 (jitter = 2.1)	7.985
 # 20	images/sec: 391.0 +/- 0.3 (jitter = 1.1)	7.969
@@ -18,6 +20,7 @@
 
 # 2 workers, 1 ps
 # python launch_async_adder.py --cluster=aws --run=gpu4 --num_workers=2 --num_ps=1
+# worker 0 log:
 # 1	images/sec: 385.2 +/- 0.0 (jitter = 0.0)	8.014
 # 10	images/sec: 383.4 +/- 0.5 (jitter = 1.1)	7.928
 # 20	images/sec: 383.3 +/- 0.4 (jitter = 2.1)	7.910
@@ -27,6 +30,7 @@
 # 5 workers, 1 ps
 # ./launch_async_adder.py --run=gpu5 --cluster=aws --num_workers=5 --num_ps=4 \
 # --worker_type=p2.8xlarge --ps_type=c5.large
+# worker 0 log:
 # 1	images/sec: 384.1 +/- 0.0 (jitter = 0.0)	7.943
 # 10	images/sec: 381.8 +/- 3.4 (jitter = 2.0)	7.868
 # 20	images/sec: 382.6 +/- 1.8 (jitter = 3.3)	7.861
