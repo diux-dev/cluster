@@ -18,7 +18,7 @@ For different sizes you should see this performance:
 # Detailed instructions
 ## Setup
 
-First create the proper environment that can run this benchmark. This means installing TensorFlow and CUDA if necessary.
+First create the proper environment that can run this benchmark. This means installing TensorFlow, CUDA and Python3 if necessary.
 
 For instance, starting from Amazon Ubuntu 16.04 official AMI, might do this
 
@@ -111,7 +111,9 @@ export KEY_NAME=mykey
 ## Running experiment
 
 Now to launch experiment with 1 gradient worker and 1 parameter server
+
 ```
+pip install -r requirements.txt
 python launch.py
 ```
 
@@ -154,10 +156,15 @@ To clean up your running experiments, use [terminate_instances.py](https://githu
 
 ## Troubleshooting
 
-Sometimes first launch will get stuck with the following error printed in worker console
+* Sometimes first launch will get stuck with the following error printed in worker console
 
 ```
 tensorflow.python.framework.errors_impl.UnavailableError: Endpoint read failed
 ```
 
 This is due one of the workers taking too long to spin up, and connection timing out in `tf_cnn_benchmarks.py`. The solution is to simply repeat the same launch command. It will reuse existing AWS instances, so the connection should succeed the second time.
+
+* Note that "variable_mgr.py" is not compatible
+
+task.upload("variable_mgr.py",
+                "/home/ubuntu/Dropbox/git0/benchmarks/scripts/tf_cnn_benchmarks/variable_mgr.py")
