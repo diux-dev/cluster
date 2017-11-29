@@ -18,7 +18,7 @@ For different sizes you should see this performance:
 # Detailed instructions
 ## Setup
 
-First create the proper environment that can run this benchmark. This means installing TensorFlow, CUDA and Python3 if necessary.
+First create the proper environment that can run this benchmark. This means installing TensorFlow and CUDA if necessary.
 
 For instance, starting from Amazon Ubuntu 16.04 official AMI, might do this
 
@@ -48,7 +48,7 @@ cudnn6="libcudnn6_6.0.21-1_cuda8.0_amd64.deb"
 cuda_base="https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/"
 cuda_ver="cuda-repo-ubuntu1604_8.0.61-1_amd64.deb"
 
-<wget $cuda_base/$cuda_ver
+wget $cuda_base/$cuda_ver
 sudo dpkg -i ./cuda-repo-ubuntu1604_8.0.61-1_amd64.deb
 sudo apt -y update
 sudo apt install -y "cuda-8.0"
