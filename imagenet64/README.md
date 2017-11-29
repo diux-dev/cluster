@@ -20,7 +20,9 @@ For different sizes you should see this performance:
 
 First create the proper environment that can run this benchmark. This means installing TensorFlow and CUDA if necessary.
 
-For instance, starting from Amazon Ubuntu 16.04 official AMI, might do this
+For this, launch an instance on AWS, SSH into it, setup all the proper packages, and then save this instance image as an AMI to use in your experiments.
+
+Starting from Amazon Ubuntu 16.04 official AMI, might do this
 
 ```
 sudo apt install -y wget python-pip git python-dev jq
@@ -87,7 +89,6 @@ Now pick a security group that has SSH ports open (either pick an existing one f
 Save name of the group into env var. It is under "Group Name" column in the console
 <img src=https://i.stack.imgur.com/vqUTL.png>
 
-security-group.png
 
 Save the name of this group into environment variable
 ```
