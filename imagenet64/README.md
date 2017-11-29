@@ -164,7 +164,4 @@ tensorflow.python.framework.errors_impl.UnavailableError: Endpoint read failed
 
 This is due one of the workers taking too long to spin up, and connection timing out in `tf_cnn_benchmarks.py`. The solution is to simply repeat the same launch command. It will reuse existing AWS instances, so the connection should succeed the second time.
 
-* Note that "variable_mgr.py" is not compatible
-
-task.upload("variable_mgr.py",
-                "/home/ubuntu/Dropbox/git0/benchmarks/scripts/tf_cnn_benchmarks/variable_mgr.py")
+* **Note for people porting to other systems**: "variable_mgr.py" in benchmarks is not compatible with Python3, hence the `launch.py` script overwrites it with the local `variable_mgr.py` version. If you don't use launch.py, make sure to copy this file manually.
