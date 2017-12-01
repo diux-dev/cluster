@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 """
-
-Script to kill all instances matching given prefix.
+Script to kill all instances whose name matches given prefix
 
 Usage:
 
-./terminate_instances.py gpu   # terminates all instances matching "gpu*"
+./terminate.py gpu   # terminates all instances matching "gpu*"
 """
 
 import boto3
@@ -13,8 +12,10 @@ import time
 import sys
 import os
 
-LIMIT_TO_KEY = 'yaroslav'   # only touch instances launched with this key,
-                            # set to '' to remove restriction
+# By default only touch instances launched with LIMIT_TO_KEY
+# this is to prevent accidentally wiping all jobs on the account (been there)
+# set to '' to remove this restriction
+LIMIT_TO_KEY = os.environ.get("KEY_NAME", "dontkillanything")
 
 def main():
   prefix = sys.argv[1]
@@ -56,6 +57,16 @@ def main():
   for (instance_id, name, task_id, state) in instances_to_kill:
     print("%s:%s   %s"%(name, task_id, state))
 
+
+  if not instances_to_kill:
+    valid_names = sorted(list(set(name for (name, instance_response) in instance_list)))
+    from pprint import pprint as pp
+    print("Current instances:")
+    pp(valid_names)
+    print("No match found: Prefix '%s', key '%s'"%
+          (prefix, LIMIT_TO_KEY))
+    return
+  
   answer = input("%d instances found, terminate? (Y/n) " % (
     len(instances_to_kill)))
   if not answer:

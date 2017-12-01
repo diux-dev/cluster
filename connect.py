@@ -1,24 +1,19 @@
 #!/usr/bin/env python
 """
 
-Script to connect to most recent instance with containing given fragment:
+Script to connect to most recent instance whose id or name has substring
+
 Usage:
-connect
--- connects to most recently launched instance
-connect i3
--- connects to most recently launchedn instance containing i3 in instance id
+To connect to most recently launched instance:
+  connect
+
+To connect to most recently launched instance containing 5i3 either in instance id or in instance name:
+  connect 5i3
+
+To connect to most recent instance with name simple
+  connect simple
 
 
-Debugging/exploring:
-
-python
-from pprint import pprint
-import boto3
-ec2 = boto3.client('ec2')
-response = ec2.describe_instances()
-reservation=response['Reservations'][0]
-instance = reservation['Instances'][0]
-pprint(instance)
 """
 
 # todo: allow to do ls, show tags
@@ -43,7 +38,15 @@ def main():
   fragment = ''
   if len(sys.argv)>1:
     fragment = sys.argv[1]
-    
+
+  def get_name(instance_response):
+    names = [entry['Value'] for entry in instance_response.get('Tags',[]) if
+             entry['Key']=='Name']
+    if not names:
+      names = ['']
+    assert len(names)==1
+    return names[0]
+
   ec2 = boto3.client('ec2')
   response = ec2.describe_instances()
 
@@ -58,12 +61,12 @@ def main():
   sorted_instance_list = sorted(instance_list, key=itemgetter(0))
   cmd = ''
   for (ts, instance) in reversed(sorted_instance_list):
-    if fragment in instance['InstanceId']:
+    if fragment in instance['InstanceId'] or fragment in get_name(instance):
       
       localtime = instance['LaunchTime'].astimezone(get_localzone())
       keyname = instance.get('KeyName','none')
       print("Connecting to %s launched at %s with key %s" % (instance['InstanceId'], localtime, keyname))
-      cmd = "ssh -i $HOME/Dropbox/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@"+instance['PublicIpAddress']
+      cmd = "ssh -i %s -o StrictHostKeyChecking=no ubuntu@%s" % (os.environ['SSH_KEY_PATH'], instance['PublicIpAddress'])
       break
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
