@@ -28,6 +28,8 @@ LOCAL_TASKLOGDIR_PREFIX='/temp/tasklogs'
 INITIALIZE_CHECK_TIMEOUT_SEC=5
 
 # TODO: document KEY_NAME restriction a bit better
+# TODO: move installation script to run under tmux for easier debugging of
+# installation failures
  
 # global AWS vars from environment
 AMI = os.environ['AMI']
@@ -366,7 +368,7 @@ class Task:
                                          self.id)
     self.last_stdout = None  # path of last stdout file location
     self.last_stderr = None  # path of last stderr file location
-
+    self.connect_instructions = "waiting for initialize()"
 
   def log(self, message, args=None):
     """Log to client console."""
@@ -383,7 +385,6 @@ class Task:
         break
       self.log("Not initialized, retrying in %d seconds"%(INITIALIZE_CHECK_TIMEOUT_SEC))
       time.sleep(INITIALIZE_CHECK_TIMEOUT_SEC)
-    self.connect_instructions = '<todo: add instructions>'
       
 
   def initialize(self):
@@ -422,6 +423,12 @@ class Task:
       self.run("echo 'ok' > is_initialized")
 
     self._setup_tmux()  # reset tmux session
+
+    self.connect_instructions = """
+ssh -i %s -o StrictHostKeyChecking=no ubuntu@%s
+tmux a
+""".strip() % (os.environ['SSH_KEY_PATH'], self.public_ip)
+
     self.initialized = self._is_initialized_file_present()
 
 

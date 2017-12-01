@@ -6,17 +6,18 @@ BENCHMARK_URL="https://gist.githubusercontent.com/robertnishihara/4e246d6942cd69
 # This are setup commands to run on each AWS instance
 INSTALL_SCRIPT="""
 sudo apt update
+
+# install ray and dependencies
+sudo apt install -y pssh
+
+# make Python3 the default
 sudo apt install -y wget
 sudo apt install -y python3
 sudo apt install -y python3-pip
-
-# make Python3 work by default
 sudo ln -s /usr/bin/pip3 /usr/bin/pip
 sudo mv /usr/bin/python /usr/bin/python.old
 sudo ln -s /usr/bin/python3 /usr/bin/python
 
-# install ray and dependencies
-sudo apt install -y pssh
 pip install ray
 pip install numpy
 pip install jupyter
@@ -46,8 +47,7 @@ def main():
   slave_task.run("python "+script_name)
 
   print ("To see results:")
-  print("ssh -i %s -o StrictHostKeyChecking=no ubuntu@%s"%(os.environ['SSH_KEY_PATH'], slave_task.public_ip))
-  print("tmux a -t tmux")
+  print(slave_task.connect_instructions)
   
 if __name__=='__main__':
   main()
