@@ -25,7 +25,7 @@ from pprint import pprint as pp
 # global settings that we don't expect to change
 DEFAULT_PORT = 3000
 LOCAL_TASKLOGDIR_PREFIX='/tmp/tasklogs'
-INITIALIZE_CHECK_TIMEOUT_SEC=5
+TIMEOUT_SEC=5
 
 # TODO: document KEY_NAME restriction a bit better
 # TODO: move installation script to run under tmux for easier debugging of
@@ -188,7 +188,31 @@ def lookup_aws_instances(name):
       result.append(i)
   return result
 
-def simple_job(name, num_tasks=1, instance_type=None, install_script="",
+def _maybe_create_placement_group(name):
+  client = boto3.client('ec2')
+  try:
+    client.describe_placement_groups(GroupNames=[name])
+  except boto3.exceptions.botocore.exceptions.ClientError as e:
+    print("Creating placement group: "+name)
+    res = client.create_placement_group(GroupName=name, Strategy='cluster')
+
+  counter = 0
+  while True:
+    try:
+      res = client.describe_placement_groups(GroupNames=[name])
+      if res['PlacementGroups'][0]['State'] == 'available':
+        print("Found placement group: "+name)
+        break
+    except Exception as e:
+      print(e)
+    counter = counter + 1
+    if counter >= 10:
+      print('Failed to create placement group %s' % name)
+    time.sleep(TIMEOUT_SEC)
+
+
+
+def simple_job(name, num_tasks=1, instance_type=None, install_script='',
                placement_group=''):
   """Creates simple job on AWS cluster. If job with same name already
   exist on AWS cluster, then reuse those instances instead of creating new.
@@ -208,6 +232,9 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script="",
     print("Launching new job "+name)
 
     ec2 = boto3.resource('ec2')
+    if placement_group:
+      _maybe_create_placement_group(placement_group)
+      
     placement_arg = {'GroupName': placement_group} if placement_group else {'GroupName': ''}
     print("Requesting %d %s" %(num_tasks, instance_type))
     instances = ec2.create_instances(
@@ -383,8 +410,8 @@ class Task:
       self.initialize()
       if self.initialized:
         break
-      self.log("Not initialized, retrying in %d seconds"%(INITIALIZE_CHECK_TIMEOUT_SEC))
-      time.sleep(INITIALIZE_CHECK_TIMEOUT_SEC)
+      self.log("Not initialized, retrying in %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
       
 
   def initialize(self):
@@ -397,8 +424,8 @@ class Task:
         public_ip = self.public_ip
         break
       except:
-        self.log("no public IP, retrying in %d seconds"%(INITIALIZE_CHECK_TIMEOUT_SEC))
-      time.sleep(INITIALIZE_CHECK_TIMEOUT_SEC)
+        self.log("no public IP, retrying in %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
 
       # todo: this sometimes fails because public_ip is not ready
     # add query/wait
