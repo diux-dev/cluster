@@ -430,11 +430,8 @@ class Task:
     try:
       # construct unique local name
       fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
-      print("hi")
       fn = LOCAL_TASKLOGDIR_PREFIX+'/'+fn
-      print("hi2")
       self.download('is_initialized', fn)
-      print("hey")
       return 'ok' in open(fn).read()
     except:
       return False
