@@ -4,7 +4,7 @@ Example usage:
 job = aws.tf_job('myjob', 1)
 task = job.tasks[0]
 task.upload(__file__)   # copies current script onto machine
-task.run("python %s --role=worker" % (__file__,)) # runs script and streams output locally to file in /temp
+task.run("python %s --role=worker" % (__file__,)) # runs script and streams output locally to file in /tmp
 
 """
 
@@ -24,7 +24,7 @@ from pprint import pprint as pp
 
 # global settings that we don't expect to change
 DEFAULT_PORT = 3000
-LOCAL_TASKLOGDIR_PREFIX='/temp/tasklogs'
+LOCAL_TASKLOGDIR_PREFIX='/tmp/tasklogs'
 INITIALIZE_CHECK_TIMEOUT_SEC=5
 
 # TODO: document KEY_NAME restriction a bit better
