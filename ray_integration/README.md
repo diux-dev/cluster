@@ -2,9 +2,12 @@
 
 You need to choose AMI, create a security group that allows SSH access, and get keyname/.pem pair, and install Python 3 locally
 
+
 AMI's are region specific. For Oregon, I do this to use standard Ubuntu 16.04 AMI from Amazon
 
 ```
+aws configure
+export AWS_DEFAULT_REGION=us-west-2
 export AMI=ami-0def3275
 export KEY_NAME=yaroslav
 export SSH_KEY_PATH=yaroslav.pem
