@@ -50,11 +50,17 @@ def main():
   ec2 = boto3.client('ec2')
   response = ec2.describe_instances()
 
+  username = os.environ.get("EC2_USER", "ubuntu")
+  print("Using username '%s'"%(username,))
+    
+  
   instance_list = []
   for reservation in response['Reservations']:
     for instance in reservation['Instances']:
+      if instance["State"]["Name"] != "running":
+        continue
       instance_list.append((toseconds(instance['LaunchTime']), instance))
-
+      
   import pytz
   from tzlocal import get_localzone # $ pip install tzlocal
 
@@ -66,7 +72,7 @@ def main():
       localtime = instance['LaunchTime'].astimezone(get_localzone())
       keyname = instance.get('KeyName','none')
       print("Connecting to %s launched at %s with key %s" % (instance['InstanceId'], localtime, keyname))
-      cmd = "ssh -i %s -o StrictHostKeyChecking=no ubuntu@%s" % (os.environ['SSH_KEY_PATH'], instance['PublicIpAddress'])
+      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (os.environ['SSH_KEY_PATH'], username, instance['PublicIpAddress'])
       break
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
