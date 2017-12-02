@@ -18,8 +18,11 @@ import os
 LIMIT_TO_KEY = os.environ.get("KEY_NAME", "dontkillanything")
 
 def main():
-  prefix = sys.argv[1]
-
+  if len(sys.argv)>1:
+    prefix = sys.argv[1]
+  else:
+    prefix = ''
+    
   ec2 = boto3.client('ec2')
   response = ec2.describe_instances()
 
