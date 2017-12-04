@@ -430,7 +430,7 @@ class Task:
         # todo: add checking of return codes to report when some command failed
         self.run(cmd)
 
-      self.run("echo 'ok' > is_initialized")
+      self.run("echo 'ok' > /tmp/is_initialized")
 
     self.connect_instructions = """
 ssh -i %s -o StrictHostKeyChecking=no %s@%s
@@ -453,7 +453,7 @@ tmux a
       # construct unique local name
       fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
       fn = LOCAL_TASKLOGDIR_PREFIX+'/'+fn
-      self.download('is_initialized', fn)
+      self.download('/tmp/is_initialized', fn)
       return 'ok' in open(fn).read()
     except:
       return False
