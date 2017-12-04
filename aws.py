@@ -44,12 +44,8 @@ INSTALL_IN_PARALLEL=False
 
 # Things that are automatically installed on all instances, all job types
 ROOT_INSTALL_SCRIPT_UBUNTU="""
-sudo apt update -y
-sudo apt install -y tmux
 """
 ROOT_INSTALL_SCRIPT_DEBIAN="""
-sudo yum update -y
-sudo yum install -y tmux
 """
 
 USERNAME_UBUNTU="ubuntu"
