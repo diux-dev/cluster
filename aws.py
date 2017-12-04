@@ -332,6 +332,11 @@ class Job:
       self.tasks.append(Task(instance, self, task_id, install_script,
                              linux_type=linux_type))
 
+  def initialize(self):
+    for task in self.tasks:
+      task.initialize()  # todo: make initialization run in parallel
+
+      
   def wait_until_ready(self):
     """Waits until all tasks in the job are available and initialized."""
     for task in self.tasks:
@@ -380,7 +385,6 @@ class Task:
   # todo: rename wait_until_ready to wait_until_initialized
   def wait_until_ready(self):
     while not self.initialized:
-      self.initialize()
       if self.initialized:
         break
       self.log("wait_until_ready: Not initialized, retrying in %d seconds"%(TIMEOUT_SEC))
@@ -399,8 +403,6 @@ class Task:
       except:
         self.log("no public IP, retrying in %d seconds"%(TIMEOUT_SEC))
       time.sleep(TIMEOUT_SEC)
-
-    
 
     # todo: this sometimes fails because public_ip is not ready
     # add query/wait?
