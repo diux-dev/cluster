@@ -20,7 +20,6 @@ pip install numpy
 pip install jupyter
 """
 
-
 DEFAULT_PORT = 6379  # default redis port
 
 def main():

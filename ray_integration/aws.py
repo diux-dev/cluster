@@ -19,6 +19,9 @@ import time
 import yaml
 import paramiko
 
+# todo: add timestamps to log messages so I can get delay before connecte
+# TODO: if the instance exists, but is stopped, add ability to start it
+
 from collections import OrderedDict
 from pprint import pprint as pp
 
@@ -41,11 +44,11 @@ INSTALL_IN_PARALLEL=False
 
 # Things that are automatically installed on all instances, all job types
 ROOT_INSTALL_SCRIPT_UBUNTU="""
-sudo apt update
+sudo apt update -y
 sudo apt install -y tmux
 """
 ROOT_INSTALL_SCRIPT_DEBIAN="""
-sudo yum update
+sudo yum update -y
 sudo yum install -y tmux
 """
 
@@ -522,6 +525,10 @@ tmux a
     self._setup_tasklogdir()
     # todo: switch from encoded floats to integer micros
     print("---", cmd)
+    if cmd.startswith("send "):
+      _, fname = cmd.split()
+      fname = fname.replace("~", os.environ["HOME"])
+      self.upload(fname)
     timestamp = _encode_float(time.time())
     stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
     stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
