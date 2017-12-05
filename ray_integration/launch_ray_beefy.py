@@ -4,8 +4,13 @@
 BENCHMARK_URL="https://gist.githubusercontent.com/robertnishihara/24979fb01b4b70b89e5cf9fbbf9d7d65/raw/b2d3bb66e881034039fbd244d7f72c5f6b425235/async_sgd_benchmark_multinode.py"
 
 # This are setup commands to run on each AWS instance
+INSTALL_SCRIPT_MINIMAL="""
+tmux set-option -g history-limit 250000
+"""
+
 INSTALL_SCRIPT="""
-sudo apt update
+rm -f /tmp/install_finished
+sudo apt update -y
 
 # install ray and dependencies
 sudo apt install -y pssh
@@ -21,10 +26,14 @@ sudo ln -s /usr/bin/python3 /usr/bin/python
 pip install ray
 pip install numpy
 pip install jupyter
+ray stop
+echo ok > /tmp/install_finished
 """
 
 DEFAULT_PORT = 6379  # default redis port
 
+import os
+import sys
 import argparse
 parser = argparse.ArgumentParser(description='ImageNet experiment')
 parser.add_argument('--placement', type=int, default=1,
@@ -36,9 +45,11 @@ parser.add_argument('--run', type=str, default='beefy',
 args = parser.parse_args()
 
 
+
 def main():
+  module_path=os.path.dirname(os.path.abspath(__file__))
+  sys.path.append(module_path+'/..')
   import aws
-  import os
   
   # job launches are asynchronous, can spin up multiple jobs in parallel
   if args.placement:
@@ -47,11 +58,17 @@ def main():
     placement_name = ''
   job = aws.simple_job(args.run, num_tasks=2,
                        instance_type='c5.18xlarge',
-                       install_script=INSTALL_SCRIPT,
+                       install_script=INSTALL_SCRIPT_MINIMAL,
                        placement_group=placement_name)
 
   # block until things launch to run commands
   job.wait_until_ready()
+  open('/tmp/script.sh','w').write(INSTALL_SCRIPT)
+  
+  for task in job.tasks:
+    task.upload('/tmp/script.sh')
+    task.run('bash script.sh')
+    task.wait_until_file_ok('/tmp/install_finished')
 
   head_task = job.tasks[0]
   head_task.run("ray start --head --redis-port=%d --num-gpus=0 --num-cpus=10000 --num-workers=10"%(DEFAULT_PORT,))

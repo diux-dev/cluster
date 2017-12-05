@@ -19,6 +19,9 @@ import time
 import yaml
 import paramiko
 
+# TODO: for robustness, redirect install command output somewhere
+# tmux seems to drop "send-keys" commands sometimes
+
 # todo: add timestamps to log messages so I can get delay before connecte
 # TODO: if the instance exists, but is stopped, add ability to start it
 
@@ -42,6 +45,8 @@ SECURITY_GROUP = os.environ['SECURITY_GROUP']
 # TODO: add support for running install scripts on all instances in parallel
 INSTALL_IN_PARALLEL=False
 
+ENABLE_MIRRORING=True # copy every command invocation locally
+
 # Things that are automatically installed on all instances, all job types
 ROOT_INSTALL_SCRIPT_UBUNTU="""
 """
@@ -51,6 +56,14 @@ ROOT_INSTALL_SCRIPT_DEBIAN="""
 USERNAME_UBUNTU="ubuntu"
 USERNAME_DEBIAN="ec2-user"
 USERNAME="username_is_not_defined"
+
+def _current_timestamp():
+  # timestamp logic from https://github.com/tensorflow/tensorflow/blob/155b45698a40a12d4fef4701275ecce07c3bb01a/tensorflow/core/platform/default/logging.cc#L80
+  current_seconds=time.time();
+  remainder_micros=int(1e6*(current_seconds-int(current_seconds)))
+  time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(current_seconds))
+  full_time_str = "%s.%06d"%(time_str, remainder_micros)
+  return full_time_str
 
 class timeit:
   """Decorator to measure length of time spent in the block in millis and log
@@ -353,12 +366,14 @@ def _decode_float(b16):
 class Task:
   def __init__(self, instance, job, task_id, install_script="",
                linux_type="crash-here-linux-type"):
+    self.initialized_called = False
     self.instance = instance
     self.job = job
     self.id = task_id
     self.install_script = install_script
     
     self.initialized = False
+    self.cmd_idx = 0
     self.local_tasklogdir = '%s/%s/%s' %(LOCAL_TASKLOGDIR_PREFIX, self.job.name,
                                          self.id)
     self.last_stdout = None  # path of last stdout file location
@@ -374,16 +389,21 @@ class Task:
     else:
       assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
 
-    
+
   def log(self, message, args=None):
     """Log to client console."""
-    
+    ts = _current_timestamp()
+
     if args:
       message = message % args
-    print("task %d: %s"%(self.id, message))
+    print("%s task %d: %s"%(ts, self.id, message))
     
   # todo: rename wait_until_ready to wait_until_initialized
   def wait_until_ready(self):
+    if not self.initialized_called:
+      self.initialize()
+    else:
+      assert False, "Don't call initialize, just call wait_until_ready()"
     while not self.initialized:
       if self.initialized:
         break
@@ -391,11 +411,17 @@ class Task:
       time.sleep(TIMEOUT_SEC)
       
 
+  def wait_until_file_ok(self, fn):
+    while not self._is_custom_file_present(fn):
+      self.log("wait_until_file_ok: not present, waiting %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
+
   def initialize(self):
     """Tries to initialize the task. This can fail for various reasons, so
     the user must retry until self.initialized is True."""
 
     self.log("Running initialize")
+    self.initialize_called = True
     while True:
       try:
         public_ip = self.public_ip
@@ -406,11 +432,14 @@ class Task:
 
     # todo: this sometimes fails because public_ip is not ready
     # add query/wait?
-    self.ssh_client = _ssh_to_host(self.public_ip, SSH_KEY_PATH,
-                                   self.username)
-    if self.ssh_client is None:
-      self.log("SSH into %s:%s failed" %(self.job.name, self.id,))
-      return
+    while True:
+      self.ssh_client = _ssh_to_host(self.public_ip, SSH_KEY_PATH,
+                                     self.username)
+      if self.ssh_client is None:
+        self.log("SSH into %s:%s failed, retrying in %d seconds" %(self.job.name, self.id,TIMEOUT_SEC))
+        time.sleep(TIMEOUT_SEC)
+      else:
+        break
     
     # run initialization commands here
     if self._is_initialized_file_present():
@@ -431,6 +460,7 @@ class Task:
           continue
         # todo: add checking of return codes to report when some command failed
         self.run(cmd)
+        time.sleep(5)  # avoid overwhelming tmux
 
       self.run("echo 'ok' > /tmp/is_initialized")
 
@@ -440,7 +470,7 @@ tmux a
 """.strip() % (os.environ['SSH_KEY_PATH'], self.username, self.public_ip)
 
     # wait for things to install
-    for i in range(100):
+    while True:
       self.initialized = self._is_initialized_file_present()
       if self.initialized:
         break
@@ -448,6 +478,17 @@ tmux a
       time.sleep(TIMEOUT_SEC)
 
 
+  def _is_custom_file_present(self, remote_fn):
+    self.log("Checking for custom file "+remote_fn)
+    try:
+      # construct unique local name
+      local_fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
+      local_fn = LOCAL_TASKLOGDIR_PREFIX+'/'+local_fn
+      self.download(remote_fn, local_fn)
+      return 'ok' in open(local_fn).read()
+    except Exception as e:
+      self.log("Got exception %s"%(e,))
+      return False
 
   def _is_initialized_file_present(self):
     self.log("Checking for initialized file")
@@ -474,7 +515,7 @@ tmux a
     # TODO: run doesn't preserve tty
     # find paramiko recipe to use tty and use that
     self.log("run_sync: %s"%(cmd,))
-    stdin, stdout, stderr = self.ssh_client.exec_command(cmd)
+    stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
     stdout_str = stdout.read().decode('ascii')
     stderr_str = stderr.read().decode('ascii')
     self.log("run_sync returned: " + stdout_str)
@@ -519,10 +560,14 @@ tmux a
   def run(self, cmd):
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
+
+    self.cmd_idx+=1
     
     self._setup_tasklogdir()
     # todo: switch from encoded floats to integer micros
-    print("---", cmd)
+    self.log("tmux> %s", cmd)
+
+    # todo: allow sending files to specific locations
     if cmd.startswith("send "):
       _, fname = cmd.split()
       fname = fname.replace("~", os.environ["HOME"])
@@ -535,10 +580,22 @@ tmux a
 
     window = 'tmux:0'
     tmux_cmd = "tmux send-keys -t {} '{}' Enter".format(window, cmd)
-    stdin, stdout, stderr = self.ssh_client.exec_command(tmux_cmd)
+    self.log("actual> %s"%(tmux_cmd,))
+    stdin, stdout, stderr = self.ssh_client.exec_command(tmux_cmd+"&& echo $?", get_pty=True)
     stdout_str = stdout.read().decode('ascii')
     stderr_str = stderr.read().decode('ascii')
-    print("Got result " + stdout_str)
+    stdin.channel.shutdown_write()  # workaround for occasional breakage
+    self.log("Got "+stdout_str)
+
+    if ENABLE_MIRRORING:
+      cmd = 'echo "%s" > %03d.txt'%(tmux_cmd, self.cmd_idx)
+      stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
+      stdout_str = stdout.read().decode('ascii')
+      stderr_str = stderr.read().decode('ascii')
+      stdin.channel.shutdown_write()  # workaround for occasional breakage
+      
+    
+    #    self.log("Got result " + stdout_str)
     return stdout_str, stderr_str
     
 
@@ -559,7 +616,7 @@ tmux a
     sftp = self.ssh_client.open_sftp()
     if local_file is None:
       local_file = os.path.basename(local_file)
-    print("downloading %s to %s"%(remote_file, local_file))
+    self.log("downloading %s to %s"%(remote_file, local_file))
     sftp.get(remote_file, local_file)
 
   
