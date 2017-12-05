@@ -4,7 +4,7 @@ Example usage:
 job = aws.tf_job('myjob', 1)
 task = job.tasks[0]
 task.upload(__file__)   # copies current script onto machine
-task.run("python %s --role=worker" % (__file__,)) # runs script and streams output locally to file in /temp
+task.run("python %s --role=worker" % (__file__,)) # runs script and streams output locally to file in /tmp
 
 """
 
@@ -19,28 +19,42 @@ import time
 import yaml
 import paramiko
 
+# todo: add timestamps to log messages so I can get delay before connecte
+# TODO: if the instance exists, but is stopped, add ability to start it
+
 from collections import OrderedDict
 from pprint import pprint as pp
 
 # global settings that we don't expect to change
 DEFAULT_PORT = 3000
-LOCAL_TASKLOGDIR_PREFIX='/temp/tasklogs'
-INITIALIZE_CHECK_TIMEOUT_SEC=5
+LOCAL_TASKLOGDIR_PREFIX='/tmp/tasklogs'
+TIMEOUT_SEC=5
 
 # TODO: document KEY_NAME restriction a bit better
+# TODO: move installation script to run under tmux for easier debugging of
+# installation failures
  
 # global AWS vars from environment
-AMI = os.environ['AMI']
 KEY_NAME = os.environ['KEY_NAME']
 SSH_KEY_PATH = os.environ['SSH_KEY_PATH']
 SECURITY_GROUP = os.environ['SECURITY_GROUP']
 
+# TODO: add support for running install scripts on all instances in parallel
+INSTALL_IN_PARALLEL=False
 
 # Things that are automatically installed on all instances, all job types
-ROOT_INSTALL_SCRIPT="""
-sudo apt update
-sudo apt install tmux
+ROOT_INSTALL_SCRIPT_UBUNTU="""
+sudo apt update -y
+sudo apt install -y tmux
 """
+ROOT_INSTALL_SCRIPT_DEBIAN="""
+sudo yum update -y
+sudo yum install -y tmux
+"""
+
+USERNAME_UBUNTU="ubuntu"
+USERNAME_DEBIAN="ec2-user"
+USERNAME="username_is_not_defined"
 
 class timeit:
   """Decorator to measure length of time spent in the block in millis and log
@@ -186,8 +200,32 @@ def lookup_aws_instances(name):
       result.append(i)
   return result
 
-def simple_job(name, num_tasks=1, instance_type=None, install_script="",
-               placement_group=''):
+def _maybe_create_placement_group(name):
+  client = boto3.client('ec2')
+  try:
+    client.describe_placement_groups(GroupNames=[name])
+  except boto3.exceptions.botocore.exceptions.ClientError as e:
+    print("Creating placement group: "+name)
+    res = client.create_placement_group(GroupName=name, Strategy='cluster')
+
+  counter = 0
+  while True:
+    try:
+      res = client.describe_placement_groups(GroupNames=[name])
+      if res['PlacementGroups'][0]['State'] == 'available':
+        print("Found placement group: "+name)
+        break
+    except Exception as e:
+      print(e)
+    counter = counter + 1
+    if counter >= 10:
+      print('Failed to create placement group %s' % name)
+    time.sleep(TIMEOUT_SEC)
+
+
+
+def simple_job(name, num_tasks=1, instance_type=None, install_script='',
+               placement_group='', ami='', linux_type='ubuntu'):
   """Creates simple job on AWS cluster. If job with same name already
   exist on AWS cluster, then reuse those instances instead of creating new.
 
@@ -195,6 +233,14 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script="",
   settings (number of tasks/instace type/placement group)
   """
 
+  global ROOT_INSTALL_SCRIPT
+  if linux_type == 'ubuntu':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_UBUNTU
+  elif linux_type == 'debian':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_DEBIAN
+  else:
+    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
+
   if instance_type is None:
     instance_type = 'c5.large'
   instances = lookup_aws_instances(name)
@@ -206,10 +252,19 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script="",
     print("Launching new job "+name)
 
     ec2 = boto3.resource('ec2')
+    if placement_group:
+      _maybe_create_placement_group(placement_group)
+      
     placement_arg = {'GroupName': placement_group} if placement_group else {'GroupName': ''}
     print("Requesting %d %s" %(num_tasks, instance_type))
+
+    if not ami:
+      ami = os.environ.get('AMI', '')
+
+    assert ami, "No AMI specified, need AMI envvar or explicit parameter"
+    
     instances = ec2.create_instances(
-      ImageId=AMI,
+      ImageId=ami,
       InstanceType=instance_type,
       MinCount=num_tasks,
       MaxCount=num_tasks,
@@ -227,77 +282,14 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script="",
     assert len(instances) == num_tasks
     print('{} Instances created'.format(len(instances)))
 
-  job = Job(name, instances=instances, install_script=install_script)
+  job = Job(name, instances=instances, install_script=install_script,
+            linux_type=linux_type)
   return job
 
-
-def tf_job(name, num_tasks, instance_type=None, placement_group=''):
-  """Creates TensorFlow job on AWS cluster. If job with same name already
-  exist on AWS cluster, then reuse those instances instead of creating new.
-
-  This requires that that job settings are identical (number of tasks/instace
-  type/placement group)
-  """
-
-  if instance_type is None:
-    instance_type = 'c5.large'
-  # assume if given job exists, it's been configured properly
-  # this is a performance optimization to avoid AWS startup delay
-  instances = lookup_aws_instances(name)
-  if instances:
-    assert len(instances) == num_tasks, ("Found job with same name, but number"
-       " of tasks %d doesn't match requested %d, kill job manually."%(len(instances), num_tasks))
-    print("Found existing job "+name)
-  else:
-    print("Launching new job "+name)
-
-    ec2 = boto3.resource('ec2')
-    placement_arg = {'GroupName': placement_group} if placement_group else {'GroupName': ''}
-    print("Requesting %d %s" %(num_tasks, instance_type))
-    instances = ec2.create_instances(
-      ImageId=AMI,
-      InstanceType=instance_type,
-      MinCount=num_tasks,
-      MaxCount=num_tasks,
-      SecurityGroups=[SECURITY_GROUP],
-      Placement=placement_arg,
-      KeyName=KEY_NAME)
-    
-    for instance in instances:
-      tag = ec2.create_tags(
-        Resources=[instance.id], Tags=[{
-            'Key': 'Name',
-            'Value': name
-        }])
-
-    assert len(instances) == num_tasks
-    print('{} Instances created'.format(len(instances)))
-    
-  job = Job(name, instances=instances)
-  
-  # todo: setup EFS logdir
-  # todo: setup remote tasklogdir?
-
-  return job
-
-def terminate_job(name):
-  instances = lookup_aws_instances(name)
-  for i in instances:
-    print("Killing '%s' '%s' '%s'" %(name, i.id, i.instance_type))
-    i.terminate()
-
-  for i in instances:
-    i.load()
-    while True:
-      if i.state['Name'] ==  'terminated':
-        break
-      print("Waiting for %s to die, instance state is %s"%(i.id, i.state))
-      time.sleep(5)
-      i.load()
 
 def _ssh_to_host(hostname,
               ssh_key=None,
-              username='ubuntu',
+              username=None,
               retry=1):
 
   """Create ssh connection to host
@@ -314,6 +306,7 @@ def _ssh_to_host(hostname,
 
   """
 
+  print("ssh_to_host %s@%s"%(username, hostname))
   k = paramiko.RSAKey.from_private_key_file(ssh_key)
   
   ssh_client = paramiko.SSHClient()
@@ -334,12 +327,14 @@ def _ssh_to_host(hostname,
 
 
 class Job:
-  def __init__(self, name, instances, install_script=""):
+  def __init__(self, name, instances, install_script="",
+               linux_type="also-crash-linux-type"):
     self.name = name
     self.tasks = []
     # todo: make task_ids asignment deterministic
     for task_id, instance in enumerate(instances):
-      self.tasks.append(Task(instance, self, task_id, install_script))
+      self.tasks.append(Task(instance, self, task_id, install_script,
+                             linux_type=linux_type))
 
   def wait_until_ready(self):
     """Waits until all tasks in the job are available and initialized."""
@@ -355,19 +350,30 @@ def _decode_float(b16):
   return struct.unpack('d', base64.b16decode(b16))[0]
 
 class Task:
-  def __init__(self, instance, job, task_id, install_script=""):
+  def __init__(self, instance, job, task_id, install_script="",
+               linux_type="crash-here-linux-type"):
     self.instance = instance
     self.job = job
     self.id = task_id
-    self.install_script = ROOT_INSTALL_SCRIPT + '\n' + install_script
+    self.install_script = install_script
     
     self.initialized = False
     self.local_tasklogdir = '%s/%s/%s' %(LOCAL_TASKLOGDIR_PREFIX, self.job.name,
                                          self.id)
     self.last_stdout = None  # path of last stdout file location
     self.last_stderr = None  # path of last stderr file location
+    self.connect_instructions = "waiting for initialize()"
 
+    # username to use to ssh into instances
+    # ec2-user or ubuntu
+    if linux_type == 'ubuntu':
+      self.username = USERNAME_UBUNTU
+    elif linux_type == 'debian':
+      self.username = USERNAME_DEBIAN
+    else:
+      assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
 
+    
   def log(self, message, args=None):
     """Log to client console."""
     
@@ -381,9 +387,8 @@ class Task:
       self.initialize()
       if self.initialized:
         break
-      self.log("Not initialized, retrying in %d seconds"%(INITIALIZE_CHECK_TIMEOUT_SEC))
-      time.sleep(INITIALIZE_CHECK_TIMEOUT_SEC)
-    self.connect_instructions = '<todo: add instructions>'
+      self.log("wait_until_ready: Not initialized, retrying in %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
       
 
   def initialize(self):
@@ -396,12 +401,15 @@ class Task:
         public_ip = self.public_ip
         break
       except:
-        self.log("no public IP, retrying in %d seconds"%(INITIALIZE_CHECK_TIMEOUT_SEC))
-      time.sleep(INITIALIZE_CHECK_TIMEOUT_SEC)
+        self.log("no public IP, retrying in %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
 
-      # todo: this sometimes fails because public_ip is not ready
-    # add query/wait
-    self.ssh_client = _ssh_to_host(self.public_ip, SSH_KEY_PATH)
+    
+
+    # todo: this sometimes fails because public_ip is not ready
+    # add query/wait?
+    self.ssh_client = _ssh_to_host(self.public_ip, SSH_KEY_PATH,
+                                   self.username)
     if self.ssh_client is None:
       self.log("SSH into %s:%s failed" %(self.job.name, self.id,))
       return
@@ -409,20 +417,38 @@ class Task:
     # run initialization commands here
     if self._is_initialized_file_present():
       self.log("reusing previous initialized state")
+      self._setup_tmux()
     else:
       self.log("running install script")
-      for cmd in self.install_script.split('\n'):
+      for cmd in ROOT_INSTALL_SCRIPT.split('\n'):
         cmd = cmd.strip()
         if not cmd:
           continue
         # todo: add checking of return codes to report when some command failed
         self.run_sync(cmd)
-
       self._setup_tmux()
+      for cmd in self.install_script.split('\n'):
+        cmd = cmd.strip()
+        if not cmd:
+          continue
+        # todo: add checking of return codes to report when some command failed
+        self.run(cmd)
+
       self.run("echo 'ok' > is_initialized")
 
-    self._setup_tmux()  # reset tmux session
-    self.initialized = self._is_initialized_file_present()
+    self.connect_instructions = """
+ssh -i %s -o StrictHostKeyChecking=no %s@%s
+tmux a
+""".strip() % (os.environ['SSH_KEY_PATH'], self.username, self.public_ip)
+
+    # wait for things to install
+    for i in range(100):
+      self.initialized = self._is_initialized_file_present()
+      if self.initialized:
+        break
+      self.log("initialize: no is_initialized file, waiting %d seconds"%(TIMEOUT_SEC))
+      time.sleep(TIMEOUT_SEC)
+
 
 
   def _is_initialized_file_present(self):
@@ -430,11 +456,8 @@ class Task:
     try:
       # construct unique local name
       fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
-      print("hi")
       fn = LOCAL_TASKLOGDIR_PREFIX+'/'+fn
-      print("hi2")
       self.download('is_initialized', fn)
-      print("hey")
       return 'ok' in open(fn).read()
     except:
       return False
@@ -502,6 +525,10 @@ class Task:
     self._setup_tasklogdir()
     # todo: switch from encoded floats to integer micros
     print("---", cmd)
+    if cmd.startswith("send "):
+      _, fname = cmd.split()
+      fname = fname.replace("~", os.environ["HOME"])
+      self.upload(fname)
     timestamp = _encode_float(time.time())
     stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
     stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
