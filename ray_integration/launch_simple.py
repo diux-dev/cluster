@@ -35,7 +35,7 @@ def main():
     import sys, time
     print('hello world')
     print('Python version is '+str(sys.version))
-    for i in range(1e6):
+    for i in range(10000):
       time.sleep(1)
       print("step %d"%(i,))
     
