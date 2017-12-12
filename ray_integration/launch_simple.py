@@ -2,6 +2,8 @@
 # example of launching instance and running Python loop on it
 
 import argparse
+import os
+import sys
 
 parser = argparse.ArgumentParser(description='ImageNet experiment')
 parser.add_argument('--role', type=str, default='launcher',
@@ -19,9 +21,13 @@ sudo mv /usr/bin/python /usr/bin/python2
 sudo ln -s /usr/bin/python3 /usr/bin/python
 """
 
+def add_parent_path():
+  """Adds .. to system path."""
+  os.sys.path.append(os.path.dirname(os.path.abspath(__file__))+'/..')
 
 def main():
   if args.role == 'launcher':
+    add_parent_path()
     import aws
     job = aws.simple_job('simple', num_tasks=1, install_script=INSTALL_SCRIPT)
     task = job.tasks[0]
