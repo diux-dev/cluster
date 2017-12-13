@@ -29,6 +29,16 @@ import yaml
 import paramiko
 
 
+# TODO: improve errors when root script hangs, ie tmux install can send
+# Another app is currently holding the yum lock; waiting for it to exit...
+#  The other application is: yum
+#    Memory :  46 M RSS (394 MB VSZ)
+#    Started: Wed Dec 13 19:54:40 2017 - 03:15 ago
+# To reproduce this, run "sudo yum install tmux" on new Amazon Linux image
+# then launch install script which does "sudo yum install -y tmux"
+# this will hang because of lock issues, but error is not printed anyhwere
+# until the command finishes. Need to make printing asynchronous
+
 # TODO: for robustness, redirect install command output somewhere
 # tmux seems to drop "send-keys" commands sometimes
 
@@ -63,9 +73,12 @@ ENABLE_MIRRORING=False # copy every command invocation locally
 BULK_INSTALL=True
 
 # Things that are automatically installed on all instances, all job types
+# These install necessary dependencies like tmux, commands run synchronously
+# through regular shell
 ROOT_INSTALL_SCRIPT_UBUNTU="""
 """
 ROOT_INSTALL_SCRIPT_DEBIAN="""
+sudo yum install -y tmux
 """
 
 USERNAME_UBUNTU="ubuntu"

@@ -4,6 +4,7 @@
 # networking drivers
 
 import os
+import sys
 import argparse
 
 AMI='ami-bf4193c7'  # us-west-2 Amazon linux AMI
@@ -15,7 +16,7 @@ BENCHMARK_URL="https://gist.githubusercontent.com/robertnishihara/24979fb01b4b70
 
 # This are setup commands to run on each AWS instance
 INSTALL_SCRIPT="""
-sudo yum update
+sudo yum update -y
 sudo yum install -y wget
 sudo yum install -y pssh
 sudo yum install -y python36
@@ -36,7 +37,7 @@ sudo pip install jupyter
 
 DEFAULT_PORT = 6379  # default redis port
 
-parser = argparse.ArgumentParser(description='ImageNet experiment')
+parser = argparse.ArgumentParser(description='Ray beefy experiment')
 parser.add_argument('--placement', type=int, default=1,
                      help=("whether to launch workers inside a placement "
                            "group"))
@@ -47,8 +48,9 @@ args = parser.parse_args()
 
 
 def main():
+  module_path=os.path.dirname(os.path.abspath(__file__))
+  sys.path.append(module_path+'/..')
   import aws
-  import os
   
   # job launches are asynchronous, can spin up multiple jobs in parallel
   if args.placement:
