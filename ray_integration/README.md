@@ -84,3 +84,35 @@ You can clean-up your instanes using `terminate` script in directory above
 ```
 terminate ray
 ```
+
+## Two machine Ray example on Beefy machines
+Uses script downloaded from Robert's async_sgd_benchmark_multinode.py [gist](https://gist.githubusercontent.com/robertnishihara/24979fb01b4b70b89e5cf9fbbf9d7d65/raw/b2d3bb66e881034039fbd244d7f72c5f6b425235/async_sgd_benchmark_multinode.py) on Dec 12th.
+
+```
+pip install -r requirements.txt
+./launch_ray_beefy.py
+```
+This will spin up 2 instances, install necessary dependencies, upload gist file. You will see something like this printed on the console:
+
+```
+To see results:
+ssh -i yaroslav.pem -o StrictHostKeyChecking=no ubuntu@34.215.161.205
+tmux a
+```
+
+Once you execute these two commands, you'll attach to the tmux session that was used to launch the experiment and see the numbers.
+
+The first 5 numbers are due to measurement bug, ignore them
+```
+Write throughput is 3912.902203452332MB/s.
+Write throughput is 3912.902203452332MB/s.
+Write throughput is 1299.0097899535428MB/s.
+Write throughput is 1299.0097899535428MB/s.
+Write throughput is 942.7658299178238MB/s.
+Write throughput is 1052.2112765757333MB/s.
+Write throughput is 948.8590160709089MB/s.
+Write throughput is 1036.3927498042233MB/s.
+Write throughput is 957.4880657957102MB/s.
+```
+
+To disconnect from tmux session, but stay in shell, CTRL+b d

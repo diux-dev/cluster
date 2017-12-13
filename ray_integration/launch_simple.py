@@ -16,8 +16,9 @@ sudo apt install python3
 sudo apt install -y python3-pip
 
 # make Python 3 the default script
+sudo mv /usr/bin/pip /usr/bin/pip.old || echo
 sudo ln -s /usr/bin/pip3 /usr/bin/pip
-sudo mv /usr/bin/python /usr/bin/python2
+sudo mv /usr/bin/python /usr/bin/python2 || echo
 sudo ln -s /usr/bin/python3 /usr/bin/python
 """
 
