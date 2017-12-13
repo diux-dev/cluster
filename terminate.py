@@ -5,6 +5,8 @@ Script to kill all instances whose name matches given prefix
 Usage:
 
 ./terminate.py gpu   # terminates all instances matching "gpu*"
+
+# TODO: also delete corresponding placement groups
 """
 
 import boto3
