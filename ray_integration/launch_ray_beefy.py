@@ -49,6 +49,12 @@ def main():
   module_path=os.path.dirname(os.path.abspath(__file__))
   sys.path.append(module_path+'/..')
   import aws
+
+  # make sure you are using correct aws module (it moved one level up)
+  import inspect
+  current_location = os.path.dirname(os.path.abspath(__file__))
+  aws_location = os.path.dirname(os.path.abspath(inspect.getsourcefile(aws)))
+  assert len(aws_location)<len(current_location), "Using wrong aws module, delete aws.py in current directory."
   
   # job launches are asynchronous, can spin up multiple jobs in parallel
   if args.placement:
