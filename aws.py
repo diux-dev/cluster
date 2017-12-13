@@ -8,16 +8,26 @@ task.run("python %s --role=worker" % (__file__,)) # runs script and streams outp
 
 """
 
+# list current jobs
+# todo: print the command currently being executed to tmux
+# todo: ability to ssh into head node (task:0)
+# todo: ability to delete is_initialized on a bunch of nodes
+# todo: file better bug for https://github.com/tmux/tmux/issues/1186
+# todo: use task id as part of instance name
+
 import argparse
 import base64
-import boto3
 import os
 import struct
 import sys
 import threading
+import shlex
 import time
+
+import boto3
 import yaml
 import paramiko
+
 
 # TODO: for robustness, redirect install command output somewhere
 # tmux seems to drop "send-keys" commands sometimes
@@ -36,7 +46,9 @@ TIMEOUT_SEC=5
 # TODO: document KEY_NAME restriction a bit better
 # TODO: move installation script to run under tmux for easier debugging of
 # installation failures
- 
+
+# 
+
 # global AWS vars from environment
 KEY_NAME = os.environ['KEY_NAME']
 SSH_KEY_PATH = os.environ['SSH_KEY_PATH']
@@ -45,7 +57,10 @@ SECURITY_GROUP = os.environ['SECURITY_GROUP']
 # TODO: add support for running install scripts on all instances in parallel
 INSTALL_IN_PARALLEL=False
 
-ENABLE_MIRRORING=True # copy every command invocation locally
+ENABLE_MIRRORING=False # copy every command invocation locally
+
+# work-around for https://github.com/tmux/tmux/issues/1186
+BULK_INSTALL=True
 
 # Things that are automatically installed on all instances, all job types
 ROOT_INSTALL_SCRIPT_UBUNTU="""
@@ -56,6 +71,7 @@ ROOT_INSTALL_SCRIPT_DEBIAN="""
 USERNAME_UBUNTU="ubuntu"
 USERNAME_DEBIAN="ec2-user"
 USERNAME="username_is_not_defined"
+
 
 def _current_timestamp():
   # timestamp logic from https://github.com/tensorflow/tensorflow/blob/155b45698a40a12d4fef4701275ecce07c3bb01a/tensorflow/core/platform/default/logging.cc#L80
@@ -264,22 +280,23 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
     if placement_group:
       _maybe_create_placement_group(placement_group)
       
-    placement_arg = {'GroupName': placement_group} if placement_group else {'GroupName': ''}
     print("Requesting %d %s" %(num_tasks, instance_type))
 
     if not ami:
       ami = os.environ.get('AMI', '')
 
     assert ami, "No AMI specified, need AMI envvar or explicit parameter"
-    
-    instances = ec2.create_instances(
-      ImageId=ami,
-      InstanceType=instance_type,
-      MinCount=num_tasks,
-      MaxCount=num_tasks,
-      SecurityGroups=[SECURITY_GROUP],
-      Placement=placement_arg,
-      KeyName=KEY_NAME)
+
+    args = {'ImageId':ami,
+            'InstanceType':instance_type,
+            'MinCount':num_tasks,
+            'MaxCount':num_tasks,
+            'SecurityGroups':[SECURITY_GROUP],
+            'KeyName':KEY_NAME}
+    if placement_group:
+      args['Placement']={'GroupName': placement_group}
+
+    instances = ec2.create_instances(**args)
     
     for instance in instances:
       tag = ec2.create_tags(
@@ -363,6 +380,27 @@ def _encode_float(value):
 def _decode_float(b16):
   return struct.unpack('d', base64.b16decode(b16))[0]
 
+def _add_echo(script):
+  """Goes over install script, adds "echo cmd" in front of each cmd.
+
+  ls a
+
+  becomes
+
+  echo * ls a
+  ls a
+  """
+  new_script = ""
+  for cmd in script.split('\n'):
+    cmd = cmd.strip()
+    if not cmd:
+      continue
+    new_script+="echo \\* " + shlex.quote(cmd) + "\n"
+    new_script+=cmd+"\n"
+  return new_script
+
+
+# add access to instance id from task
 class Task:
   def __init__(self, instance, job, task_id, install_script="",
                linux_type="crash-here-linux-type"):
@@ -454,15 +492,26 @@ class Task:
         # todo: add checking of return codes to report when some command failed
         self.run_sync(cmd)
       self._setup_tmux()
-      for cmd in self.install_script.split('\n'):
-        cmd = cmd.strip()
-        if not cmd:
-          continue
-        # todo: add checking of return codes to report when some command failed
-        self.run(cmd)
-        time.sleep(5)  # avoid overwhelming tmux
+      # TODO: make upload/send commands work
 
-      self.run("echo 'ok' > /tmp/is_initialized")
+      if BULK_INSTALL:
+        self.install_script+='\necho ok > /tmp/is_initialized\n'
+        open('/tmp/install.sh','w').write(self.install_script)
+        open('/tmp/echo_install.sh','w').write(_add_echo(self.install_script))
+        self.upload('/tmp/install.sh')
+        self.upload('/tmp/echo_install.sh')
+        self.run('bash -e echo_install.sh') # fail on errors
+      else:
+        for cmd in self.install_script.split('\n'):
+          cmd = cmd.strip()
+          if not cmd:
+            continue
+
+          self.run(cmd)
+          time.sleep(5)  # avoid overwhelming tmux
+
+        self.run("echo 'ok' > /tmp/is_initialized")
+        
 
     self.connect_instructions = """
 ssh -i %s -o StrictHostKeyChecking=no %s@%s
@@ -596,6 +645,10 @@ tmux a
       
     
     #    self.log("Got result " + stdout_str)
+
+    # workaround for https://github.com/tmux/tmux/issues/1185
+    # doesn't work if commands take longer than 2 seconds and prints stuff
+    time.sleep(2)
     return stdout_str, stderr_str
     
 
