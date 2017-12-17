@@ -102,6 +102,13 @@ if __name__ == "__main__":
     if args.redis_address is not None:
         all_ips = ray.get([ps.ip.remote() for ps in pss] +
                           [w.ip.remote() for w in workers])
+        
+        print("ps ips:")
+        for (i, ps) in enumerate(pss):
+            print(i, ps.ip.remote(), ray.get([ps.ip.remote()]))
+        print("worker ips:")
+        for (i, worker) in enumerate(workers):
+            print(i, worker.ip.remote(), ray.get([worker.ip.remote()]))
         assert len(all_ips) == len(set(all_ips))
 
     while True:
