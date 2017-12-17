@@ -6,6 +6,7 @@ You need to choose AMI, create a security group that allows SSH access, and get 
 AMI's are region specific. For Oregon, I do this to use standard Ubuntu 16.04 AMI from Amazon
 
 ```
+pip install -r requirements.txt
 aws configure
 export AWS_DEFAULT_REGION=us-west-2
 export AMI=ami-0def3275
@@ -18,7 +19,6 @@ export SECURITY_GROUP=open
 # Single machine example
 
 ```
-pip install -r requirements.txt
 ./launch_simple.py
 ```
 
@@ -57,7 +57,6 @@ terminate simple
 ## Two machine Ray example
 
 ```
-pip install -r requirements.txt
 ./launch_ray.py
 ```
 
@@ -89,7 +88,6 @@ terminate ray
 Uses script downloaded from Robert's async_sgd_benchmark_multinode.py [gist](https://gist.githubusercontent.com/robertnishihara/24979fb01b4b70b89e5cf9fbbf9d7d65/raw/b2d3bb66e881034039fbd244d7f72c5f6b425235/async_sgd_benchmark_multinode.py) on Dec 12th.
 
 ```
-pip install -r requirements.txt
 ./launch_ray_beefy.py
 ```
 This will spin up 2 instances, install necessary dependencies, upload gist file. You will see something like this printed on the console:
@@ -116,3 +114,30 @@ Write throughput is 957.4880657957102MB/s.
 ```
 
 To disconnect from tmux session, but stay in shell, CTRL+b d
+
+[## Four machine Ray example with synchronous parameter server](#sync-example)
+
+```
+./launch_ray_sync.py
+```
+
+This will reserve 5 c5.large machines and start running ray synchronous parameter server. The first machine is used as the head node and as the client node to launch commands. Remaining 4 machines is used as 2 ps workers and 2 gradient workers.
+
+Setup for 5 machines is currently sequential and takes about 6 minutes end-to-end.
+
+After 6 minutes you should see the instructions to connect all nodes
+
+```
+Connect to head node:
+ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@34.215.140.112
+tmux a
+Other nodes:
+0 ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@35.161.116.239
+tmux a
+1 ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@54.68.60.179
+tmux a
+2 ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@34.211.21.138
+tmux a
+3 ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@34.215.154.208
+tmux a
+```
