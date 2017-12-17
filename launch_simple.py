@@ -2,9 +2,9 @@
 #
 # Stand-alone launcher. Creates all necessary AWS resources and starts
 # run.
-# 
-# TODO: crashes with
-# mv: cannot stat '/usr/bin/python': No such file or directory
+#
+# TODO: provide a tool to delete all the resources created
+# TODO: authorize access roles so that instance kills itself after some time
 #
 # Ubuntu 16.04 AMI
 # https://aws.amazon.com/marketplace/fulfillment?productId=d83d0782-cb94-46d7-8993-f4ce15d1a484&ref_=dtl_psb_continue&region=eu-west-2
