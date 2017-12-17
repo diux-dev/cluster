@@ -115,7 +115,7 @@ Write throughput is 957.4880657957102MB/s.
 
 To disconnect from tmux session, but stay in shell, CTRL+b d
 
-[## Four machine Ray example with synchronous parameter server](#sync-example)
+## Ray example with synchronous parameter server
 
 ```
 ./launch_ray_sync.py
@@ -141,3 +141,4 @@ tmux a
 3 ssh -i /Users/yaroslav/d/yaroslav.pem -o StrictHostKeyChecking=no ubuntu@34.215.154.208
 tmux a
 ```
+
