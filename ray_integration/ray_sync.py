@@ -2,31 +2,30 @@
 # To run the example, use a command like the following.
 #
 #     python sharded_parameter_server_benchmark.py \
-#         --num-workers=3 \
-#         --num-parameter-servers=2 \
+#         --num-workers=1 \
+#         --num-parameter-servers=1 \
 #         --dim=25000
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
 import numpy as np
 import time
 
 import ray
 
+import argparse
 parser = argparse.ArgumentParser(description="Run the synchronous parameter "
                                              "server example.")
-parser.add_argument("--num-workers", default=3, type=int,
+parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of workers to use.")
-parser.add_argument("--num-parameter-servers", default=5, type=int,
+parser.add_argument("--num-parameter-servers", default=2, type=int,
                     help="The number of parameter servers to use.")
 parser.add_argument("--dim", default=1000, type=int,
                     help="The number of parameters.")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
-
 args = parser.parse_args()
 
 
