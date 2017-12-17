@@ -32,7 +32,7 @@ sudo ln -s /usr/bin/python3 /usr/bin/python
 
 sudo pip install -I --upgrade setuptools
 sudo pip install ray
-sudo pip install jupyter
+sudo pip install jupyter ipywidgets bokeh
 """
 
 DEFAULT_PORT = 6379  # default redis port
