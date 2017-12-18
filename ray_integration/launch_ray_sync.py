@@ -40,7 +40,7 @@ import time
 parser = argparse.ArgumentParser(description='Ray parameter server experiment')
 
 # turn off placement for less maintainance
-# 1. placement groups periodically need to get deleted
+# 1. placement groups need to periodically get deleted
 # 2. launching into placement group fails when an existing instance in it is "terminating"
 parser.add_argument('--placement', type=int, default=0,
                      help=("whether to launch workers inside a placement "
