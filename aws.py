@@ -69,7 +69,7 @@ INSTALL_IN_PARALLEL=False
 
 ENABLE_MIRRORING=False # copy every command invocation locally
 
-# work-around for https://github.com/tmux/tmux/issues/1186
+# work-around for https://github.com/tmux/tmux/issues/1185
 BULK_INSTALL=True
 
 # Things that are automatically installed on all instances, all job types
@@ -261,6 +261,39 @@ def _maybe_create_placement_group(name):
     time.sleep(TIMEOUT_SEC)
 
 
+def _create_ec2_client():
+  REGION = os.environ['AWS_DEFAULT_REGION']
+  return boto3.client('ec2', region_name=REGION)
+
+
+def _create_ec2_resource():
+  REGION = os.environ['AWS_DEFAULT_REGION']
+  return boto3.resource('ec2',region_name=REGION)
+
+
+def _is_good_response(response):
+  """Helper method to check if boto3 call was a success."""
+  
+  return response["ResponseMetadata"]['HTTPStatusCode'] == 200
+
+
+def _check_security_group_exists(group_name):
+  """To catch boto3 errors of the form
+  Value () for parameter groupId is invalid. The value cannot be empty
+  """
+
+  client = _create_ec2_client()
+  response = client.describe_security_groups()
+  assert _is_good_response(response)
+
+  result = OrderedDict()
+  ec2 = _create_ec2_resource()
+  for security_group_response in response['SecurityGroups']:
+    observed_group_name = security_group_response['GroupName']
+    if group_name == observed_group_name:
+      return True
+  return False
+
 
 def simple_job(name, num_tasks=1, instance_type=None, install_script='',
                placement_group='', ami='', linux_type='ubuntu'):
@@ -309,6 +342,8 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
     if placement_group:
       args['Placement']={'GroupName': placement_group}
 
+    assert _check_security_group_exists(SECURITY_GROUP), "Security group '%s' does not exist in region '%s'" %(SECURITY_GROUP, os.environ['AWS_DEFAULT_REGION'])
+    
     instances = ec2.create_instances(**args)
     
     for instance in instances:
