@@ -3,13 +3,6 @@
 # Creates resources
 # This script creates VPC/security group/keypair if not already present
 
-ami_dict = {
-    "us-west-1": "ami-a089b2c0", #"ami-45ead225",
-    "us-east-1": "ami-08c35d72",
-    "eu-west-2": "ami-4a4b9232",
-}
-LINUX_TYPE = "ubuntu"  # linux type determines username to use to login
-
 import os
 import argparse
 import boto3
@@ -46,8 +39,7 @@ PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
 
 # region is taken from environment variable AWS_DEFAULT_REGION
 assert 'AWS_DEFAULT_REGION' in os.environ
-assert os.environ['AWS_DEFAULT_REGION'] in {'us-east-2','us-east-1','us-west-1','us-west-2','ap-south-1','ap-northeast-2','ap-southeast-1','ap-southeast-2','ap-northeast-1','ca-central-1','eu-west-1','eu-west-2','sa-east-1'}
-assert os.environ.get("AWS_DEFAULT_REGION") in ami_dict
+#assert os.environ['AWS_DEFAULT_REGION'] in {'us-east-2','us-east-1','us-west-1','us-west-2','ap-south-1','ap-northeast-2','ap-southeast-1','ap-southeast-2','ap-northeast-1','ca-central-1','eu-west-1','eu-west-2','sa-east-1'}
 
 
 import util as u
@@ -193,8 +185,6 @@ def placement_group_setup(group_name):
 
   
 def main():
-  ami = ami_dict[os.environ.get("AWS_DEFAULT_REGION")]
-
   DISABLE_PLACEMENT_GROUP = True   # t2.micro doesn't allow them
   placement_group_name = args.name
 
