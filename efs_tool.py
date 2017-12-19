@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Tools for manipulating VPCs
+# Tools for EFS related tasks
 import boto3
 import sys
 import os
@@ -65,42 +65,7 @@ def main():
   if mode == 'list':
     list_efss()
   elif mode == 'delete':
-    assert len(sys.argv) == 3
+    assert False, "not implemented, see delete_resources.py"
     
-    assert 'AWS_DEFAULT_REGION' in os.environ
-    client = c.create_ec2_client()
-    ec2 = c.create_ec2_resource()
-    response = client.describe_vpcs()
-    for vpc_response in response['Vpcs']:
-      vpc_name = _get_name(vpc_response.get('Tags', []))
-      vpc = ec2.Vpc(vpc_response['VpcId'])
-      if vpc_name == sys.argv[2]:
-        print("Deleting VPC name=%s, id=%s"%(vpc_name, vpc.id))
-        
-        for subnet in vpc.subnets.all():
-          print("Deleting subnet %s" % (subnet.id))
-          assert c.is_good_response(subnet.delete())
-
-        for gateway in vpc.internet_gateways.all():
-          print("Deleting gateway %s" % (gateway.id))
-          assert c.is_good_response(gateway.detach_from_vpc(VpcId=vpc.id))
-          assert c.is_good_response(gateway.delete())
-
-        for security_group in vpc.security_groups.all():
-          try:
-            assert c.is_good_response(security_group.delete())
-          except Exception as e:
-            print("Failed with "+str(e))
-            
-        for route_table in vpc.route_tables.all():
-          print("Deleting route table %s" % (route_table.id))
-          try:
-            assert c.is_good_response(route_table.delete())
-          except Exception as e:
-            print("Failed with "+str(e))
-          
-        if c.is_good_response(client.delete_vpc(VpcId=vpc.id)):
-          print("Succeeded deleting VPC ", vpc.id)
-
 if __name__=='__main__':
   main()
