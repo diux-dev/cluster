@@ -61,11 +61,13 @@ def main():
         state = mount_response['LifeCycleState']
         id = mount_response['MountTargetId']
         ip = mount_response['IpAddress']
-        print('Deleting mount target %-14s %-14s %-14s %-14s' %(zone, ip, id,
-                                                                state, ))
-        efs_client.delete_mount_target(MountTargetId=id)
+        sys.stdout.write('Deleting mount target %s ... ' %(id,))
+        sys.stdout.flush()
+        response = efs_client.delete_mount_target(MountTargetId=id)
+        print(response_type(response))
 
-      sys.stdout.write('Deleting EFS %s (%s)... ' %(DEFAULT_NAME, efs_id))
+
+      sys.stdout.write('Deleting EFS %s (%s)... ' %(efs_id, DEFAULT_NAME))
       sys.stdout.flush()
       u.delete_efs_id(efs_id)
 

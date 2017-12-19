@@ -13,6 +13,7 @@ LINUX_TYPE = "ubuntu"  # linux type determines username to use to login
 import os
 import argparse
 import boto3
+import sys
 import time
 from collections import OrderedDict
 
@@ -205,7 +206,7 @@ def main():
   efs_id = efss.get(DEFAULT_NAME, '')
   if not efs_id:
     print("Creating EFS "+DEFAULT_NAME)
-    u.create_efs(DEFAULT_NAME)
+    efs_id = u.create_efs(DEFAULT_NAME)
   else:
     print("Reusing EFS "+DEFAULT_NAME)
     
@@ -214,20 +215,25 @@ def main():
   # create mount target for each subnet in the VPC
 
   # added retries because efs is not immediately available
-  MAX_FAILURES = 1
+  MAX_FAILURES = 10
   RETRY_INTERVAL_SEC = 1
   for subnet in vpc.subnets.all():
     for retry_attempt in range(MAX_FAILURES):
       try:
-        print("Creating efs mount target for "+subnet.availability_zone)
+        sys.stdout.write("Creating efs mount target for %s ... "%(subnet.availability_zone,))
+        sys.stdout.flush()
+        
         response = efs_client.create_mount_target(FileSystemId=efs_id,
                                                   SubnetId=subnet.id,
                                                   SecurityGroups=[security_group.id])
         if u.is_good_response(response):
+          print("success")
           break
       except Exception as e:
         print("Failed with %s, retrying in %s sec"%(str(e), RETRY_INTERVAL_SEC))
         time.sleep(RETRY_INTERVAL_SEC)
+    else:
+      print("Giving up.")
     
     
 

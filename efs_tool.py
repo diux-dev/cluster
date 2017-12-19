@@ -65,7 +65,19 @@ def main():
   if mode == 'list':
     list_efss()
   elif mode == 'delete':
-    assert False, "not implemented, see delete_resources.py"
-    
+    name_or_id = sys.argv[2]
+    efs_dict = u.get_efs_dict()
+    if name_or_id in efs_dict:
+      efs_id = efs_dict[name_or_id]
+      sys.stdout.write('Deleting EFS %s (%s)... ' %(efs_id, name_or_id))
+      sys.stdout.flush()
+      u.delete_efs_id(efs_id)
+    else:
+      efs_id = name_or_id
+      sys.stdout.write('Deleting EFS %s ()... ' %(efs_id,))
+      sys.stdout.flush()
+      u.delete_efs_id(name_or_id)
+    print("success")
+      
 if __name__=='__main__':
   main()

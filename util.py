@@ -12,7 +12,7 @@ util = sys.modules[__name__]
 u = util
 
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
-WAIT_TIMEOUT_SEC=10 # timeout after this many seconds
+WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
 
 
@@ -221,17 +221,18 @@ def create_efs(name):
   # make sure EFS is now visible
   efs_dict = get_efs_dict()
   assert name in efs_dict
+  return efs_dict[name]
 
 def delete_efs_id(efs_id):
   """Deletion sometimes fails, try several times."""
   start_time = time.time()
   efs_client = u.create_efs_client()
-  print("Deleting "+efs_id)
+  sys.stdout.write("deleting %s ... " %(efs_id,))
   while True:
     try:
       response = efs_client.delete_file_system(FileSystemId=efs_id)
       if is_good_response(response):
-        print("Succeeded")
+        print("succeeded")
         break
       time.sleep(WAIT_INTERVAL_SEC)
     except Exception as e:
