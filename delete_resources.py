@@ -26,62 +26,111 @@ parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
 args = parser.parse_args()
 
-brand=args.name
-VPC_NAME=brand
-SECURITY_GROUP_NAME=brand
-ROUTE_TABLE_NAME=brand
-KEYPAIR_LOCATION=os.environ["HOME"]+'/.'+brand+'.pem'
-KEYPAIR_NAME=brand
-EFS_NAME=brand
+DEFAULT_NAME=args.name
+VPC_NAME=DEFAULT_NAME
+SECURITY_GROUP_NAME=DEFAULT_NAME
+ROUTE_TABLE_NAME=DEFAULT_NAME
+KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
+KEYPAIR_NAME=DEFAULT_NAME
+EFS_NAME=DEFAULT_NAME
 
-import common_resources as c
+import util as u
+
 
 def main():
-  existing_vpcs = c.get_vpc_dict()
-  client = c.create_ec2_client()
-  ec2 = c.create_ec2_resource()
+  existing_vpcs = u.get_vpc_dict()
+  client = u.create_ec2_client()
+  ec2 = u.create_ec2_resource()
   
-  if VPC_NAME not in existing_vpcs:
-    print("VPC %s doesn't exist" %(VPC_NAME,))
-    return
-  
-  vpc = ec2.Vpc(existing_vpcs[VPC_NAME].id)
-  print("Deleting VPC %s (%s) subresources:"%(VPC_NAME, vpc.id))
-
   def response_type(response):
-    return 'ok' if c.is_good_response(response) else 'failed'
+    return 'ok' if u.is_good_response(response) else 'failed'
 
-  for subnet in vpc.subnets.all():
+  # delete EFS
+  efss = u.get_efs_dict()
+  efs_id = efss.get(DEFAULT_NAME, '')
+  efs_client = u.create_efs_client()
+  if efs_id:
     try:
-      sys.stdout.write("Deleting subnet %s ... " % (subnet.id))
-      sys.stdout.write(response_type(subnet.delete())+'\n')
-    except:
-      sys.stdout.write('failed\n')
+      # delete mount targets first
+      print("About to delete %s (%s)" % (efs_id, DEFAULT_NAME))
+      response = efs_client.describe_mount_targets(FileSystemId=efs_id)
+      assert u.is_good_response(response)
+      for mount_response in response['MountTargets']:
+        subnet = ec2.Subnet(mount_response['SubnetId'])
+        zone = subnet.availability_zone
+        state = mount_response['LifeCycleState']
+        id = mount_response['MountTargetId']
+        ip = mount_response['IpAddress']
+        print('Deleting mount target %-14s %-14s %-14s %-14s' %(zone, ip, id,
+                                                                state, ))
+        efs_client.delete_mount_target(MountTargetId=id)
 
-  for gateway in vpc.internet_gateways.all():
-    sys.stdout.write("Deleting gateway %s ... " % (gateway.id))
-    sys.stdout.write(' detached ... ' if c.is_good_response(gateway.detach_from_vpc(VpcId=vpc.id)) else ' detach_failed ')
-    sys.stdout.write(' deleted ' if c.is_good_response(gateway.delete()) else ' delete_failed ')
-    sys.stdout.write('\n')
+      sys.stdout.write('Deleting EFS %s (%s)... ' %(DEFAULT_NAME, efs_id))
+      sys.stdout.flush()
+      u.delete_efs_id(efs_id)
 
-  for route_table in vpc.route_tables.all():
-    sys.stdout.write("Deleting route table %s ... " % (route_table.id))
-    try:
-      sys.stdout.write(response_type(route_table.delete())+'\n')
     except Exception as e:
       sys.stdout.write('failed\n')
+      u.loge(str(e)+'\n')
 
-  for security_group in vpc.security_groups.all():
-    sys.stdout.write('Deleting security group %s ... ' %(security_group.id,))
+  if VPC_NAME in existing_vpcs:
+    vpc = ec2.Vpc(existing_vpcs[VPC_NAME].id)
+    print("Deleting VPC %s (%s) subresources:"%(VPC_NAME, vpc.id))
+
+    for subnet in vpc.subnets.all():
+      try:
+        sys.stdout.write("Deleting subnet %s ... " % (subnet.id))
+        sys.stdout.write(response_type(subnet.delete())+'\n')
+      except Exception as e:
+        sys.stdout.write('failed\n')
+        u.loge(str(e)+'\n')
+
+    for gateway in vpc.internet_gateways.all():
+      sys.stdout.write("Deleting gateway %s ... " % (gateway.id))
+      sys.stdout.write('detached ... ' if u.is_good_response(gateway.detach_from_vpc(VpcId=vpc.id)) else ' detach_failed ')
+      sys.stdout.write('deleted ' if u.is_good_response(gateway.delete()) else ' delete_failed ')
+      sys.stdout.write('\n')
+
+    def desc(route_table):
+      return "%s (%s)"%(route_table.id, u.get_name(route_table.tags))
+    for route_table in vpc.route_tables.all():
+      sys.stdout.write("Deleting route table %s ... " % (desc(route_table)))
+      try:
+        sys.stdout.write(response_type(route_table.delete())+'\n')
+      except Exception as e:
+        sys.stdout.write('failed\n')
+        u.loge(str(e)+'\n')
+
+    def desc(security_group):
+      return "%s (%s, %s)"%(security_group.id, u.get_name(security_group.tags),
+                            security_group.group_name)
+    for security_group in vpc.security_groups.all():
+      sys.stdout.write('Deleting security group %s ... ' %(desc(security_group)))
+      try:
+        sys.stdout.write(response_type(security_group.delete())+'\n')
+      except Exception as e:
+        sys.stdout.write('failed\n')
+        u.loge(str(e)+'\n')
+
+    sys.stdout.write("Deleting VPC %s ... " % (vpc.id))
+    sys.stdout.write(response_type(vpc.delete())+'\n')
+  
+  # delete keypair
+  keypairs = u.get_keypair_dict()
+  keypair = keypairs.get(DEFAULT_NAME, '')
+  if keypair:
     try:
-      sys.stdout.write(response_type(security_group.delete())+'\n')
+      sys.stdout.write("Deleting keypair %s (%s) ... " % (keypair.key_name,
+                                                     DEFAULT_NAME))
+      sys.stdout.write(response_type(keypair.delete())+'\n')
     except Exception as e:
       sys.stdout.write('failed\n')
-      
-  sys.stdout.write("Deleting VPC %s ... " % (vpc.id))
-  sys.stdout.write(response_type(vpc.delete())+'\n')
+      u.loge(str(e)+'\n')
 
-  # todo: also delete security key pair
+  if os.path.exists(KEYPAIR_LOCATION):
+    print("Deleting local keypair file %s" % (KEYPAIR_LOCATION,))
+    os.system('rm -f '+KEYPAIR_LOCATION)
+    
 
 
 if __name__=='__main__':

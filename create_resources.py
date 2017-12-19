@@ -23,21 +23,20 @@ parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
 args = parser.parse_args()
 
+import util as u
+
 DRYRUN=False
 DEBUG=True
 
 # Names of Amazon resources that are created. These settings are fixed across
 # all runs, and correspond to resources created once per user per region.
-brand=args.name
-VPC_NAME=brand
-SECURITY_GROUP_NAME=brand
-ROUTE_TABLE_NAME=brand
-KEYPAIR_LOCATION=os.environ["HOME"]+'/.'+brand+'.pem'
-KEYPAIR_NAME=brand
-EFS_NAME=brand
-
-WAIT_PERIOD_SEC=1  # how long to use for wait period
-WAIT_TIMEOUT_SEC=10 # timeout after this many seconds
+DEFAULT_NAME=args.name
+VPC_NAME=DEFAULT_NAME
+SECURITY_GROUP_NAME=DEFAULT_NAME
+ROUTE_TABLE_NAME=DEFAULT_NAME
+KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
+KEYPAIR_NAME=DEFAULT_NAME
+EFS_NAME=DEFAULT_NAME
 
 PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
                     6379,              # redis port
@@ -50,7 +49,7 @@ assert os.environ['AWS_DEFAULT_REGION'] in {'us-east-2','us-east-1','us-west-1',
 assert os.environ.get("AWS_DEFAULT_REGION") in ami_dict
 
 
-import common_resources as c
+import util as u
 
 def network_setup():
   """Creates VPC if it doesn't already exists, configures it for public
@@ -58,8 +57,8 @@ def network_setup():
 
   # from https://gist.github.com/nguyendv/8cfd92fc8ed32ebb78e366f44c2daea6
   
-  existing_vpcs = c.get_vpc_dict()
-  zones = c.get_available_zones()
+  existing_vpcs = u.get_vpc_dict()
+  zones = u.get_available_zones()
   if VPC_NAME in existing_vpcs:
     print("Reusing VPC "+VPC_NAME)
     vpc = existing_vpcs[VPC_NAME]
@@ -68,22 +67,23 @@ def network_setup():
     
   else:
     print("Creating VPC "+VPC_NAME)
-    ec2 = c.create_ec2_resource()
+    ec2 = u.create_ec2_resource()
     vpc = ec2.create_vpc(CidrBlock='192.168.0.0/16')
-    vpc.create_tags(Tags=[{"Key": "Name", "Value": VPC_NAME}])
+    vpc.create_tags(Tags=u.make_name(VPC_NAME))
     vpc.wait_until_available()
 
     ig = ec2.create_internet_gateway()
     ig.attach_to_vpc(VpcId=vpc.id)
+    ig.create_tags(Tags=u.make_name(DEFAULT_NAME))
 
     # check that attachment succeeded
-    attach_state = c.get1(ig.attachments, State=-1, VpcId=vpc.id)
+    attach_state = u.get1(ig.attachments, State=-1, VpcId=vpc.id)
     assert attach_state == 'available', "vpc %s is in state %s"%(vpc.id,
                                                                  attach_state)
     
     
     route_table = vpc.create_route_table()
-    route_table.create_tags(Tags=c.make_name(ROUTE_TABLE_NAME))
+    route_table.create_tags(Tags=u.make_name(ROUTE_TABLE_NAME))
 
     dest_cidr = '0.0.0.0/0'
     route = route_table.create_route(
@@ -109,11 +109,11 @@ def network_setup():
       print("Creating subnet %s in zone %s"%(cidr_block, zone))
       subnet = vpc.create_subnet(CidrBlock=cidr_block,
                                  AvailabilityZone=zone)
-      c.wait_until_available(subnet)
+      u.wait_until_available(subnet)
       route_table.associate_with_subnet(SubnetId=subnet.id)
 
   # Creates security group if necessary
-  existing_security_groups = c.get_security_group_dict()
+  existing_security_groups = u.get_security_group_dict()
   if SECURITY_GROUP_NAME in existing_security_groups:
     print("Reusing security group "+SECURITY_GROUP_NAME)
     security_group = existing_security_groups[SECURITY_GROUP_NAME]
@@ -140,9 +140,9 @@ def network_setup():
       response = security_group.authorize_ingress(IpProtocol="tcp",
                                                   CidrIp="0.0.0.0/0",
                                                   FromPort=port,ToPort=port)
-      assert c.is_good_response(response)
+      assert u.is_good_response(response)
 
-  return vpc, subnet, security_group
+  return vpc, security_group
 
 
 def keypair_setup():
@@ -150,7 +150,7 @@ def keypair_setup():
   of private key file."""
   
   
-  existing_keypairs = c.get_keypair_dict()
+  existing_keypairs = u.get_keypair_dict()
   keypair = existing_keypairs.get(KEYPAIR_NAME, None)
   if keypair:
     print("Reusing keypair "+KEYPAIR_NAME)
@@ -163,7 +163,7 @@ def keypair_setup():
 
   
   print("Creating keypair "+KEYPAIR_NAME)
-  ec2 = c.create_ec2_resource()
+  ec2 = u.create_ec2_resource()
   keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
   assert not os.path.exists(KEYPAIR_LOCATION), "previous, keypair exists, delete it with 'sudo rm %s'"%(KEYPAIR_LOCATION,)
   
@@ -176,15 +176,17 @@ def placement_group_setup(group_name):
   """Creates placement group if necessary. Returns True if new placement
   group was created, False otherwise."""
   
-  existing_placement_groups = c.get_placement_group_dict()
+  existing_placement_groups = u.get_placement_group_dict()
 
   group = existing_placement_groups.get(group_name, None)
   if group:
     assert group.state == 'available'
     assert group.strategy == 'cluster'
+    print("Reusing group ", group.name)
     return group
 
-  ec2 = c.create_ec2_resource()
+  print("Creating group "+group_name)
+  ec2 = u.create_ec2_resource()
   group = ec2.create_placement_group(GroupName=group_name, Strategy='cluster')
   return group
 
@@ -195,15 +197,38 @@ def main():
   DISABLE_PLACEMENT_GROUP = True   # t2.micro doesn't allow them
   placement_group_name = args.name
 
-  vpc, subnet, security_group = network_setup()
+  vpc, security_group = network_setup()
   keypair = keypair_setup()  # saves private key locally to KEYPAIR_LOCATION
-  placement_group = placement_group_setup(placement_group_name)
 
-  ec2 = c.create_ec2_resource()
-  if DISABLE_PLACEMENT_GROUP:
-    placement_arg = {}
+  # create EFS
+  efss = u.get_efs_dict()
+  efs_id = efss.get(DEFAULT_NAME, '')
+  if not efs_id:
+    print("Creating EFS "+DEFAULT_NAME)
+    u.create_efs(DEFAULT_NAME)
   else:
-    placement_arg = {'GroupName': placement_group.name}
+    print("Reusing EFS "+DEFAULT_NAME)
+    
+  efs_client = u.create_efs_client()
+
+  # create mount target for each subnet in the VPC
+
+  # added retries because efs is not immediately available
+  MAX_FAILURES = 1
+  RETRY_INTERVAL_SEC = 1
+  for subnet in vpc.subnets.all():
+    for retry_attempt in range(MAX_FAILURES):
+      try:
+        print("Creating efs mount target for "+subnet.availability_zone)
+        response = efs_client.create_mount_target(FileSystemId=efs_id,
+                                                  SubnetId=subnet.id,
+                                                  SecurityGroups=[security_group.id])
+        if u.is_good_response(response):
+          break
+      except Exception as e:
+        print("Failed with %s, retrying in %s sec"%(str(e), RETRY_INTERVAL_SEC))
+        time.sleep(RETRY_INTERVAL_SEC)
+    
     
 
 if __name__=='__main__':

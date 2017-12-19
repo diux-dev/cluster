@@ -93,9 +93,10 @@ def main():
     task.run('ray stop || echo "ray not started, ignoring"')
     task.run("ray start --redis-address %s:%d --num-gpus=4 --num-cpus=4 --num-workers=0" % (head_task.ip, REDIS_PORT))
 
-  # download benchmark script and exeucte it on head node
+  # download benchmark script and execute it on head node
   head_task.run("rm -f "+SCRIPT_NAME) # todo: remove?
   head_task.upload(SCRIPT_NAME)
+  # todo: make sure "dim" arg is actually getting used
   head_task.run("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
