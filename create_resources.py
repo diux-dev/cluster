@@ -146,7 +146,22 @@ def network_setup():
     # so must use more complicated syntax
     # https://github.com/boto/boto3/issues/158
 
-    for protocol in ['tcp', 'udp', 'icmp']:
+    for protocol in ['icmp']:
+      try:
+        rule ={'FromPort': -1,
+               'IpProtocol': protocol,
+               'IpRanges': [],
+               'PrefixListIds': [],
+               'ToPort': -1,
+               'UserIdGroupPairs': [{'GroupId': security_group.id}]}
+        security_group.authorize_ingress(IpPermissions=[rule])
+      except Exception as e:
+        if e.response['Error']['Code']=='InvalidPermission.Duplicate':
+          print("Warning, got "+str(e))
+        else:
+          assert False, "Failed while authorizing ingress with "+str(e)
+
+    for protocol in ['tcp', 'udp']:
       try:
         rule ={'FromPort': 0,
                'IpProtocol': protocol,
@@ -154,7 +169,7 @@ def network_setup():
                'PrefixListIds': [],
                'ToPort': 65535,
                'UserIdGroupPairs': [{'GroupId': security_group.id}]}
-        security_group.authorize_ingress(IpPermissions=[new_rule])
+        security_group.authorize_ingress(IpPermissions=[rule])
       except Exception as e:
         if e.response['Error']['Code']=='InvalidPermission.Duplicate':
           print("Warning, got "+str(e))
@@ -171,11 +186,12 @@ def keypair_setup():
   
   existing_keypairs = u.get_keypair_dict()
   keypair = existing_keypairs.get(KEYPAIR_NAME, None)
+  keypair_fn = u.get_keypair_fn(KEYPAIR_NAME)
   if keypair:
     print("Reusing keypair "+KEYPAIR_NAME)
     # check that local pem file exists and is readable
-    assert os.path.exists(KEYPAIR_LOCATION)
-    keypair_contents = open(KEYPAIR_LOCATION).read()
+    assert os.path.exists(keypair_fn)
+    keypair_contents = open(keypair_fn).read()
     assert len(keypair_contents)>0
     # todo: check that fingerprint matches keypair.key_fingerprint
     return keypair
@@ -184,9 +200,6 @@ def keypair_setup():
   print("Creating keypair "+KEYPAIR_NAME)
   ec2 = u.create_ec2_resource()
   keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
-  KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
-  keypair_fn = "%s/%s-%s.pem" % (os.environ["HOME"], DEFAULT_NAME,
-                                          os.environ['AWS_DEFAULT_REGION'],)
   assert not os.path.exists(keypair_fn), "previous, keypair exists, delete it with 'sudo rm %s'"%(keypair_fn)
   
   open(keypair_fn, 'w').write(keypair.key_material)
@@ -214,11 +227,12 @@ def placement_group_setup(group_name):
 
   
 def main():
-  DISABLE_PLACEMENT_GROUP = True   # t2.micro doesn't allow them
-  placement_group_name = args.name
+
+  region = os.environ['AWS_DEFAULT_REGION']
+  print("Creating %s resources in region %s"%(args.name, region,))
 
   vpc, security_group = network_setup()
-  keypair = keypair_setup()  # saves private key locally to KEYPAIR_LOCATION
+  keypair = keypair_setup()  # saves private key locally to keypair_fn
 
   # create EFS
   efss = u.get_efs_dict()
