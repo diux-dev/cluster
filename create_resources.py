@@ -262,6 +262,10 @@ def main():
           print("success")
           break
       except Exception as e:
+        if 'already exists' in str(e): # ignore "already exists" errors
+          print('already exists')
+          continue
+        
         print("Failed with %s, retrying in %s sec"%(str(e), RETRY_INTERVAL_SEC))
         time.sleep(RETRY_INTERVAL_SEC)
     else:
