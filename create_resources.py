@@ -64,9 +64,9 @@ def network_setup():
 
     # enable DNS on the VPC
     response = vpc.modify_attribute(EnableDnsHostnames={"Value":True})
-    assert is_good_response(response)
+    assert u.is_good_response(response)
     response = vpc.modify_attribute(EnableDnsSupport={"Value":True})
-    assert is_good_response(response)
+    assert u.is_good_response(response)
     
     vpc.create_tags(Tags=u.make_name(VPC_NAME))
     vpc.wait_until_available()
