@@ -26,6 +26,10 @@ import os
 from datetime import datetime
 from operator import itemgetter
 
+import util as u
+
+RESOURCE_NAME='nexus'
+
 
 def toseconds(dt):
   # to invert:
@@ -66,13 +70,17 @@ def main():
 
   sorted_instance_list = sorted(instance_list, key=itemgetter(0))
   cmd = ''
+  region = os.environ['AWS_DEFAULT_REGION']
   for (ts, instance) in reversed(sorted_instance_list):
     if fragment in instance['InstanceId'] or fragment in get_name(instance):
       
       localtime = instance['LaunchTime'].astimezone(get_localzone())
       keyname = instance.get('KeyName','none')
-      print("Connecting to %s launched at %s with key %s" % (instance['InstanceId'], localtime, keyname))
-      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (os.environ['SSH_KEY_PATH'], username, instance['PublicIpAddress'])
+      assert keyname == RESOURCE_NAME
+      keypair_fn = u.get_keypair_fn(keyname)
+
+      print("Connecting to %s in %s launched at %s with key %s" % (instance['InstanceId'], region, localtime, keyname))
+      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance['PublicIpAddress'])
       break
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))

@@ -63,9 +63,9 @@ TIMEOUT_SEC=5
 # global AWS vars from environment
 
 # TODO: remove need for this global var
-KEY_NAME = os.environ['KEY_NAME']
-SSH_KEY_PATH = os.environ['SSH_KEY_PATH']
-SECURITY_GROUP = os.environ['SECURITY_GROUP']
+KEY_NAME = os.environ.get('KEY_NAME', '')
+SSH_KEY_PATH = os.environ.get('SSH_KEY_PATH', '')
+SECURITY_GROUP = os.environ.get('SECURITY_GROUP', '')
 
 # TODO: add support for running install scripts on all instances in parallel
 INSTALL_IN_PARALLEL=False
@@ -230,9 +230,9 @@ def lookup_aws_instances(name):
     key_name = i.key_name
 
     if inst_name == name:
-      if key_name != KEY_NAME:
-        print("name matches, but key name %s doesn't match %s, skipping"%(key_name, KEY_NAME))
-        continue
+      # if key_name != KEY_NAME:
+      #   print("name matches, but key name %s doesn't match %s, skipping"%(key_name, KEY_NAME))
+      #   continue
       result.append(i)
 
     ec2 = boto3.resource('ec2')
@@ -252,9 +252,9 @@ def lookup_aws_instances(name):
     else:
       inst_name = ''
     if inst_name == name:
-      if key_name != KEY_NAME:
-        print("name matches, but key name %s doesn't match %s, skipping"%(key_name, KEY_NAME))
-        continue
+      # if key_name != KEY_NAME:
+      #   print("name matches, but key name %s doesn't match %s, skipping"%(key_name, KEY_NAME))
+      #   continue
       result.append(i)
   return result
 
@@ -315,6 +315,7 @@ def _check_security_group_exists(group_name):
   return False
 
 
+# TODO: deprecate this or remove reliance on env vars
 def simple_job(name, num_tasks=1, instance_type=None, install_script='',
                placement_group='', ami='', linux_type='ubuntu'):
   """Creates simple job on AWS cluster. If job with same name already
