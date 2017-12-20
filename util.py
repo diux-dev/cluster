@@ -385,3 +385,10 @@ def get_mount_targets_dict(efs_id):
     result[zone] = id
     
   return result
+
+
+def get_keypair_fn(keypair_name):
+  """Generate canonical location for .pem file for given keypair and
+  default region."""
+  return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
+                           os.environ['AWS_DEFAULT_REGION'],)

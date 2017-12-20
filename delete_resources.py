@@ -30,7 +30,6 @@ DEFAULT_NAME=args.name
 VPC_NAME=DEFAULT_NAME
 SECURITY_GROUP_NAME=DEFAULT_NAME
 ROUTE_TABLE_NAME=DEFAULT_NAME
-KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
 KEYPAIR_NAME=DEFAULT_NAME
 EFS_NAME=DEFAULT_NAME
 
@@ -38,6 +37,9 @@ import util as u
 
 
 def main():
+  # TODO: also bring down all the instances and wait for them to come down
+  region = os.environ['AWS_DEFAULT_REGION']
+  print("Deleting %s resources in region %s"%(args.name, region,))
   existing_vpcs = u.get_vpc_dict()
   client = u.create_ec2_client()
   ec2 = u.create_ec2_resource()
@@ -129,9 +131,10 @@ def main():
       sys.stdout.write('failed\n')
       u.loge(str(e)+'\n')
 
-  if os.path.exists(KEYPAIR_LOCATION):
-    print("Deleting local keypair file %s" % (KEYPAIR_LOCATION,))
-    os.system('rm -f '+KEYPAIR_LOCATION)
+  keypair_fn = u.get_keypair_fn(KEYPAIR_NAME)
+  if os.path.exists(keypair_fn):
+    print("Deleting local keypair file %s" % (keypair_fn,))
+    os.system('rm -f '+keypair_fn)
     
 
 
