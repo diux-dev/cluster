@@ -141,6 +141,26 @@ def network_setup():
                                                   FromPort=port,ToPort=port)
       assert u.is_good_response(response)
 
+    # allow ingress within security group
+    # Authorizing ingress doesn't work with names in a non-default VPC,
+    # so must use more complicated syntax
+    # https://github.com/boto/boto3/issues/158
+
+    for protocol in ['tcp', 'udp', 'icmp']:
+      try:
+        rule ={'FromPort': 0,
+               'IpProtocol': protocol,
+               'IpRanges': [],
+               'PrefixListIds': [],
+               'ToPort': 65535,
+               'UserIdGroupPairs': [{'GroupId': security_group.id}]}
+        security_group.authorize_ingress(IpPermissions=[new_rule])
+      except Exception as e:
+        if e.response['Error']['Code']=='InvalidPermission.Duplicate':
+          print("Warning, got "+str(e))
+        else:
+          assert False, "Failed while authorizing ingress with "+str(e)
+      
   return vpc, security_group
 
 
