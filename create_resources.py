@@ -61,6 +61,13 @@ def network_setup():
     print("Creating VPC "+VPC_NAME)
     ec2 = u.create_ec2_resource()
     vpc = ec2.create_vpc(CidrBlock='192.168.0.0/16')
+
+    # enable DNS on the VPC
+    response = vpc.modify_attribute(EnableDnsHostnames={"Value":True})
+    assert is_good_response(response)
+    response = vpc.modify_attribute(EnableDnsSupport={"Value":True})
+    assert is_good_response(response)
+    
     vpc.create_tags(Tags=u.make_name(VPC_NAME))
     vpc.wait_until_available()
 
