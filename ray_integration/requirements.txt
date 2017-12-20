@@ -1,4 +1,1 @@
-awscli
-boto3
-paramiko
-pyyaml
+../requirements.txt
