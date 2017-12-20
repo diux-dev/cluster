@@ -146,7 +146,7 @@ def get_keypair_dict():
     assert keypair_name not in result, "Duplicate key "+keypair_name
     result[keypair_name] = ec2.KeyPair(keypair_name)
   return result
-
+  
 
 def get_efs_dict():
   """Returns dictionary of {efs_name: efs_id}"""

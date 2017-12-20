@@ -28,7 +28,6 @@ DEFAULT_NAME=args.name
 VPC_NAME=DEFAULT_NAME
 SECURITY_GROUP_NAME=DEFAULT_NAME
 ROUTE_TABLE_NAME=DEFAULT_NAME
-KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
 KEYPAIR_NAME=DEFAULT_NAME
 EFS_NAME=DEFAULT_NAME
 
@@ -158,10 +157,13 @@ def keypair_setup():
   print("Creating keypair "+KEYPAIR_NAME)
   ec2 = u.create_ec2_resource()
   keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
-  assert not os.path.exists(KEYPAIR_LOCATION), "previous, keypair exists, delete it with 'sudo rm %s'"%(KEYPAIR_LOCATION,)
+  KEYPAIR_LOCATION=os.environ["HOME"]+'/'+DEFAULT_NAME+'.pem'
+  keypair_fn = "%s/%s-%s.pem" % (os.environ["HOME"], DEFAULT_NAME,
+                                          os.environ['AWS_DEFAULT_REGION'],)
+  assert not os.path.exists(keypair_fn), "previous, keypair exists, delete it with 'sudo rm %s'"%(keypair_fn)
   
-  open(KEYPAIR_LOCATION, 'w').write(keypair.key_material)
-  os.system('chmod 400 '+KEYPAIR_LOCATION)
+  open(keypair_fn, 'w').write(keypair.key_material)
+  os.system('chmod 400 '+keypair_fn)
   return keypair
 
 
@@ -212,7 +214,6 @@ def main():
       try:
         sys.stdout.write("Creating efs mount target for %s ... "%(subnet.availability_zone,))
         sys.stdout.flush()
-        
         response = efs_client.create_mount_target(FileSystemId=efs_id,
                                                   SubnetId=subnet.id,
                                                   SecurityGroups=[security_group.id])

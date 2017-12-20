@@ -37,6 +37,9 @@ import os
 import sys
 import argparse
 import time
+
+import util as u
+
 parser = argparse.ArgumentParser(description='Ray parameter server experiment')
 
 # turn off placement for less maintainance

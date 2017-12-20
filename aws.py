@@ -28,6 +28,7 @@ import boto3
 import yaml
 import paramiko
 
+import util as u
 
 # TODO: improve errors when root script hangs, ie tmux install can send
 # Another app is currently holding the yum lock; waiting for it to exit...
@@ -60,6 +61,8 @@ TIMEOUT_SEC=5
 # 
 
 # global AWS vars from environment
+
+# TODO: remove need for this global var
 KEY_NAME = os.environ['KEY_NAME']
 SSH_KEY_PATH = os.environ['SSH_KEY_PATH']
 SECURITY_GROUP = os.environ['SECURITY_GROUP']
@@ -216,6 +219,23 @@ def lookup_aws_instances(name):
   """Returns all AWS instances for given job."""
   
   ec2 = boto3.resource('ec2')
+
+  # TODO: add waiting so that instances that "initializing" are supported
+  instances = ec2.instances.filter(
+    Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+
+  result = []
+  for i in instances.all():
+    inst_name = u.get_name(i.tags)
+    key_name = i.key_name
+
+    if inst_name == name:
+      if key_name != KEY_NAME:
+        print("name matches, but key name %s doesn't match %s, skipping"%(key_name, KEY_NAME))
+        continue
+      result.append(i)
+
+    ec2 = boto3.resource('ec2')
   instances = ec2.instances.filter(
     Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
 
@@ -360,6 +380,96 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
             linux_type=linux_type)
   return job
 
+def server_job(name, num_tasks=1, instance_type=None, install_script='',
+               placement_group='', ami='', availability_zone='',
+               linux_type='ubuntu'):
+  """Creates a job on AWS cluster with publicly facing ports.
+
+  Reuse requires that that job launched previous under same name has identical
+  settings (number of tasks/instace type/placement group)
+  """
+
+  global SSH_KEY_PATH
+
+  DEFAULT_NAME = 'nexus'
+  security_group = u.get_security_group_dict()[DEFAULT_NAME]
+  keypair = u.get_keypair_dict()[DEFAULT_NAME]
+  # get availability zone -> subnet dictionary
+  vpc = u.get_vpc_dict()['nexus']
+  subnet_dict = {}
+  for subnet in vpc.subnets.all():
+    zone = subnet.availability_zone
+    assert zone not in subnet_dict, "More than one subnet in %s, why?" %(zone,)
+    subnet_dict[zone] = subnet
+  subnet = subnet_dict[availability_zone]
+  
+  global ROOT_INSTALL_SCRIPT
+  if linux_type == 'ubuntu':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_UBUNTU
+  elif linux_type == 'debian':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_DEBIAN
+  else:
+    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
+
+  if instance_type is None:
+    instance_type = 'c5.large'
+  instances = lookup_aws_instances(name)
+
+  # todo: get rid of this global variable?
+  SSH_KEY_PATH = "%s/%s-%s.pem" % (os.environ["HOME"], DEFAULT_NAME,
+                                          os.environ['AWS_DEFAULT_REGION'],)
+
+  if instances:
+    assert len(instances) == num_tasks, ("Found job with same name, but number"
+       " of tasks %d doesn't match requested %d, kill job manually."%(len(instances), num_tasks))
+    print("Found existing job "+name)
+  else:
+    print("Launching new job "+name)
+
+    ec2 = boto3.resource('ec2')
+    if placement_group:
+      _maybe_create_placement_group(placement_group)
+      
+    print("Requesting %d %s" %(num_tasks, instance_type))
+
+    if not ami:
+      ami = os.environ.get('AMI', '')
+
+    assert ami, "No AMI specified, need AMI env-var or explicit parameter"
+
+    args = {'ImageId': ami,
+            'InstanceType': instance_type,
+            'MinCount': num_tasks,
+            'MaxCount': num_tasks,
+            'KeyName': keypair.name}
+
+    # network setup
+    args['NetworkInterfaces'] = [{'SubnetId': subnet.id,
+                                 'DeviceIndex': 0,
+                                 'AssociatePublicIpAddress': True,
+                                 'Groups': [security_group.id]}]
+    
+    placement_arg = {'AvailabilityZone': availability_zone}
+    if placement_group: placement_arg['GroupName'] = placement_group
+    args['Placement'] = placement_arg
+      
+    instances = ec2.create_instances(**args)
+
+    # todo: use task index in name
+    for instance in instances:
+      tag = ec2.create_tags(
+        Resources=[instance.id], Tags=[{
+            'Key': 'Name',
+            'Value': name
+        }])
+
+    assert len(instances) == num_tasks
+    print('{} Instances created'.format(len(instances)))
+
+  job = Job(name, instances=instances, install_script=install_script,
+            linux_type=linux_type)
+  return job
+
 
 def _ssh_to_host(hostname,
               ssh_key=None,
@@ -414,7 +524,7 @@ class Job:
     for task in self.tasks:
       task.initialize()  # todo: make initialization run in parallel
 
-      
+  # todo: rename to initialize
   def wait_until_ready(self):
     """Waits until all tasks in the job are available and initialized."""
     for task in self.tasks:
@@ -564,7 +674,7 @@ class Task:
     self.connect_instructions = """
 ssh -i %s -o StrictHostKeyChecking=no %s@%s
 tmux a
-""".strip() % (os.environ['SSH_KEY_PATH'], self.username, self.public_ip)
+""".strip() % (SSH_KEY_PATH, self.username, self.public_ip)
 
     # wait for things to install
     while True:

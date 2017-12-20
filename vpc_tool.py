@@ -29,11 +29,22 @@ def list_vpcs():
     print(region)
     print('='*80)
     client = boto3.client('ec2', region_name=region)
+    ec2 = boto3.resource('ec2', region_name=region)
     response = client.describe_vpcs()
 
     for vpc_response in response['Vpcs']:
       key = _get_name(vpc_response.get('Tags', []))
-      print("%10s %10s" %(vpc_response['VpcId'], key))
+      vpc = ec2.Vpc(vpc_response['VpcId'])
+      print("%-16s %-16s" %(vpc.id, key))
+      print('-'*40)
+      subnets = list(vpc.subnets.all())
+      if not subnets:
+        print("<no subnets>")
+      else:
+        for subnet in subnets:
+          print("%-16s %-16s"%(subnet.id, subnet.availability_zone))
+      print()
+      
 
 def _create_ec2_client():
   REGION = os.environ['AWS_DEFAULT_REGION']

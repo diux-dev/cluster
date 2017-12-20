@@ -32,8 +32,9 @@ def list_efss():
       tags_response = efs_client.describe_tags(FileSystemId=efs_id)
       assert u.is_good_response(tags_response)
       key = u.get_name(tags_response.get('Tags', ''))
-      print("%10s %10s" %(efs_id, key))
-      
+      print("%-16s %-16s" %(efs_id, key))
+      print('-'*40)
+
       # list mount points
       response = efs_client.describe_mount_targets(FileSystemId=efs_id)
       ec2 = boto3.resource('ec2', region_name=region)
@@ -46,7 +47,7 @@ def list_efss():
          state = mount_response['LifeCycleState']
          id = mount_response['MountTargetId']
          ip = mount_response['IpAddress']
-         print('%-14s %-14s %-14s %-14s' %(zone, ip, id, state, ))
+         print('%-16s %-16s %-16s %-16s' %(zone, ip, id, state, ))
         
       print()
       
