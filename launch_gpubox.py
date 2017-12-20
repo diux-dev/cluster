@@ -77,6 +77,7 @@ def main():
     subnet = subnet_dict[args.zone]
     print("Chose %-16s %-16s"%(subnet.id, subnet.availability_zone))
 
+  print("Launching %s in %s" %(args.name, args.zone))
   zone = subnet.availability_zone
   security_group = u.get_security_group_dict()[RESOURCE_NAME]
   keypair = u.get_keypair_dict()[RESOURCE_NAME]
