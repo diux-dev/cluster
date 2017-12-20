@@ -20,6 +20,7 @@ import os
 LIMIT_TO_KEY = os.environ.get("KEY_NAME", "dontkillanything")
 
 def main():
+  global LIMIT_TO_KEY
   if len(sys.argv)>1:
     if sys.argv[1] == 'CLEANSLATE': # kill everything
       prefix = ''
