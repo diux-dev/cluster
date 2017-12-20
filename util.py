@@ -4,7 +4,9 @@ import argparse
 import boto3
 import sys
 import time
+
 from collections import OrderedDict
+from collections import defaultdict
 
 # shortcuts to refer to util module, this lets move external code into
 # this module unmodified
@@ -329,3 +331,57 @@ def get_instance_ip_map():
     ec2info[instance.id] = instance.private_ip_address
     
   return ec2info
+
+def get_instance_dict():
+  """Returns dictionary of {name: [instance, instance, ..]}"""
+  
+  ec2 = boto3.resource('ec2')
+
+  result = OrderedDict()
+  for i in ec2.instances.all():
+    name = u.get_name(i.tags)
+    if i.state['Name'] != 'running':
+      continue
+    instance_list = result.setdefault(name, [])
+    instance_list.append(i)
+
+  return result
+
+def get_mount_targets_list(efs_id):
+  """Returns list of all mount targets for given EFS id."""
+  efs_client = u.create_efs_client()
+  ec2 = u.create_ec2_resource()
+  
+  response = efs_client.describe_mount_targets(FileSystemId=efs_id)
+  assert u.is_good_response(response)
+
+  result = []
+  for mount_response in response['MountTargets']:
+    subnet = ec2.Subnet(mount_response['SubnetId'])
+    zone = subnet.availability_zone
+    state = mount_response['LifeCycleState']
+    id = mount_response['MountTargetId']
+    ip = mount_response['IpAddress']
+    result.append(id)
+    
+  return result
+
+def get_mount_targets_dict(efs_id):
+  """Returns dict of {zone: mount_target_id} for given EFS id."""
+  efs_client = u.create_efs_client()
+  ec2 = u.create_ec2_resource()
+  
+  response = efs_client.describe_mount_targets(FileSystemId=efs_id)
+  assert u.is_good_response(response)
+
+  result = OrderedDict()
+  for mount_response in response['MountTargets']:
+    subnet = ec2.Subnet(mount_response['SubnetId'])
+    zone = subnet.availability_zone
+    state = mount_response['LifeCycleState']
+    id = mount_response['MountTargetId']
+    ip = mount_response['IpAddress']
+    assert zone not in result
+    result[zone] = id
+    
+  return result
