@@ -16,7 +16,7 @@ This creates necessary resources and launches p2.xlarge machine in zone us-west-
 
 To clean-up resources, first terminate all the instances using following command
 ```
-terminate CLEANSLATE
+terminate gpubox
 ```
 
 Then issue
