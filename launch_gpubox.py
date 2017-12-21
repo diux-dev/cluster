@@ -46,12 +46,17 @@ args = parser.parse_args()
 assert 'AWS_DEFAULT_REGION' in os.environ
 assert os.environ.get("AWS_DEFAULT_REGION") in ami_dict
 
-INSTALL_SCRIPT="""
-sudo apt-get install -y nfs-common
-python --version
-sudo mkdir /efs
-sudo chmod 777 /efs
+# TODO(y): add locking, install fails while main script is installing things
+# P2 instances: sudo nvidia-smi -ac 2505,875
+# P3 instances: sudo nvidia-smi -ac 877,1530
+# G3 instances: sudo nvidia-smi -ac 2505,1177
+# sudo nvidia-smi -ac 877,1530
 
+INSTALL_SCRIPT="""
+# sudo apt-get install -y nfs-common
+python --version
+sudo mkdir -p /efs
+sudo chmod 777 /efs
 """
 
 RESOURCE_NAME='nexus'
