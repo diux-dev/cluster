@@ -7,6 +7,7 @@ Usage:
 ./terminate.py gpu   # terminates all instances matching "gpu*"
 
 # TODO: also delete corresponding placement groups
+# TODO: filter by IAM instead of key name
 """
 
 import boto3
