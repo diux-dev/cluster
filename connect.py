@@ -28,8 +28,6 @@ from operator import itemgetter
 
 import util as u
 
-RESOURCE_NAME='nexus'
-
 
 def toseconds(dt):
   # to invert:
@@ -51,37 +49,39 @@ def main():
     assert len(names)==1
     return names[0]
 
-  ec2 = boto3.client('ec2')
-  response = ec2.describe_instances()
+  region = os.environ['AWS_DEFAULT_REGION']
+  client = boto3.client('ec2', region_name=region)
+  ec2 = boto3.resource('ec2', region_name=region)
+  response = client.describe_instances()
 
   username = os.environ.get("EC2_USER", "ubuntu")
   print("Using username '%s'"%(username,))
     
-  
   instance_list = []
-  for reservation in response['Reservations']:
-    for instance in reservation['Instances']:
-      if instance["State"]["Name"] != "running":
-        continue
-      instance_list.append((toseconds(instance['LaunchTime']), instance))
+  for instance in ec2.instances.all():
+    if instance.state['Name'] != 'running':
+      continue
+    
+    name = u.get_name(instance.tags)
+    if (fragment in name or fragment in instance.public_ip_address or
+        fragment in instance.id):
+      instance_list.append((toseconds(instance.launch_time), instance))
       
   import pytz
   from tzlocal import get_localzone # $ pip install tzlocal
 
   sorted_instance_list = sorted(instance_list, key=itemgetter(0))
   cmd = ''
-  region = os.environ['AWS_DEFAULT_REGION']
+  print("Using region ", region)
   for (ts, instance) in reversed(sorted_instance_list):
-    if fragment in instance['InstanceId'] or fragment in get_name(instance):
-      
-      localtime = instance['LaunchTime'].astimezone(get_localzone())
-      keyname = instance.get('KeyName','none')
-      assert keyname == RESOURCE_NAME
-      keypair_fn = u.get_keypair_fn(keyname)
+    localtime = instance.launch_time.astimezone(get_localzone())
+    assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(keyname, u.RESOURCE_NAME)
+    keypair_fn = u.get_keypair_fn(instance.key_name)
 
-      print("Connecting to %s in %s launched at %s with key %s" % (instance['InstanceId'], region, localtime, keyname))
-      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance['PublicIpAddress'])
-      break
+    print("Connecting to %s in %s launched at %s with key %s" % (instance.id, region, localtime, instance.key_name))
+    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+    break
+  
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
   else:
