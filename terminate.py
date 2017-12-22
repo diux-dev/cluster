@@ -50,7 +50,7 @@ def main():
 
   instances_to_kill = []
   for (name, instance_response) in instance_list:
-    if not name.startswith(prefix):
+    if not prefix in name:
       continue
     key = instance_response.get('KeyName', '')
     if LIMIT_TO_KEY and LIMIT_TO_KEY != key:
