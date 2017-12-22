@@ -59,12 +59,10 @@ sudo mkdir -p /efs
 sudo chmod 777 /efs
 """
 
-RESOURCE_NAME='nexus'
-  
 def main():
   region = os.environ.get("AWS_DEFAULT_REGION")
   ami = ami_dict[region]
-  vpc = u.get_vpc_dict()[RESOURCE_NAME]
+  vpc = u.get_vpc_dict()[u.RESOURCE_NAME]
   
   subnets = list(vpc.subnets.all())
   if not subnets:
@@ -80,12 +78,13 @@ def main():
       #      print("%-16s %-16s"%(subnet.id, subnet.availability_zone))
       
     subnet = subnet_dict[args.zone]
+    print("Available zones: %" %(', '.join(sorted(subnet_dict.keys()))))
     print("Chose %-16s %-16s"%(subnet.id, subnet.availability_zone))
 
   print("Launching %s in %s" %(args.name, args.zone))
   zone = subnet.availability_zone
-  security_group = u.get_security_group_dict()[RESOURCE_NAME]
-  keypair = u.get_keypair_dict()[RESOURCE_NAME]
+  security_group = u.get_security_group_dict()[u.RESOURCE_NAME]
+  keypair = u.get_keypair_dict()[u.RESOURCE_NAME]
     
   job = aws.server_job(args.name, ami=ami, num_tasks=1,
                        instance_type=args.instance_type,
@@ -97,7 +96,7 @@ def main():
 
   # this needs DNS to be enabled on VPC
   # alternative way is to provide direct IP from efs_tool.py
-  efs_id = u.get_efs_dict()[RESOURCE_NAME]
+  efs_id = u.get_efs_dict()[u.RESOURCE_NAME]
   dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
 
   task.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,))
