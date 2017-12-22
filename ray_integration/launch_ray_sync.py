@@ -39,7 +39,7 @@ ls -ltr /var/lib/dpkg/lock || echo "ignoring"
 
 
 # delete confirmation file to always reinstall things
-rm -f /tmp/install_finished
+# rm -f /tmp/install_finished
 
 # comment-out, causes "dpg lock" errors for next command
 # sudo apt update -y
