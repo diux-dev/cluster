@@ -1,5 +1,25 @@
 #!/usr/bin/env python
 
+# https://aws.amazon.com/blogs/ai/new-aws-deep-learning-amis-for-machine-learning-practitioners/
+
+# Ubuntu Conda based Amazon Deep Learning AMI
+# US East (N. Virginia)	ami-9ba7c4e1
+# US East (Ohio)        ami-69f6df0c
+# US West (Oregon)	ami-3b6bce43
+# EU (Ireland)	        ami-5bf34b22
+# Asia Pacific (Sydney)	ami-4fa3542d
+# Asia Pacific (Seoul)	ami-7d872113
+# Asia Pacific (Tokyo)	ami-90b432f6
+
+ami_dict = {
+    "us-west-2": "ami-3b6bce43",
+    "us-east-1": "ami-9ba7c4e1",
+}
+LINUX_TYPE = "ubuntu"  # linux type determines username to use to login
+AMI_USERNAME = 'ubuntu'  # ami-specific username needed to login
+          # ubuntu for Ubuntu images, ec2-user for Amazon Linux images
+
+
 # Launch Ray distributed benchmark from ray_sync.py
 # https://gist.github.com/robertnishihara/87aa7a9a68ef8fa0f3184129346cffc3
 SCRIPT_NAME='ray_sync.py'
@@ -8,10 +28,41 @@ SCRIPT_NAME='ray_sync.py'
 INSTALL_SCRIPT="""
 tmux set-option -g history-limit 250000
 
-rm -f /tmp/install_finished
-sudo apt update -y
+# work-around for lock file being taken on initial login
+# https://console.aws.amazon.com/support/v1?region=us-east-1#/case/?displayId=4755926091&language=en
 
-# install ray and dependencies
+ps aux | grep apt-get
+pstree -a
+ls -ltr /var/lib/dpkg/lock || echo "ignoring"
+sudo killall apt-get || echo "nothing running"
+sudo rm -f /var/lib/dpkg/lock
+
+
+# delete confirmation file to always reinstall things
+rm -f /tmp/install_finished
+
+# comment-out, causes "dpg lock" errors for next command
+# sudo apt update -y
+
+# more work-around for install failures
+sudo apt install -y pssh || echo "failed 1"
+sleep 1
+sudo apt install -y pssh || echo "failed 2"
+sleep 1
+sudo apt install -y pssh || echo "failed 3"
+sleep 1
+sudo apt install -y pssh || echo "failed 4"
+sleep 1
+sudo apt install -y pssh || echo "failed 5"
+sleep 1
+sudo apt install -y pssh || echo "failed 6"
+sleep 1
+sudo apt install -y pssh || echo "failed 7"
+sleep 1
+sudo apt install -y pssh || echo "failed 8"
+sleep 1
+sudo apt install -y pssh || echo "failed 9"
+sleep 1
 sudo apt install -y pssh
 
 # make Python3 the default
@@ -24,7 +75,18 @@ sudo ln -s /usr/bin/pip3 /usr/bin/pip
 sudo mv /usr/bin/python /usr/bin/python.old || echo
 sudo ln -s /usr/bin/python3 /usr/bin/python
 
-pip install https://s3-us-west-2.amazonaws.com/ray-wheels/20d6b74aa6c034fdf35422e6805e2283c672e03f/ray-0.3.0-cp35-cp35m-manylinux1_x86_64.whl
+#pip install https://s3-us-west-2.amazonaws.com/ray-wheels/20d6b74aa6c034fdf35422e6805e2283c672e03f/ray-0.3.0-cp35-cp35m-manylinux1_x86_64.whl
+
+#pip install https://s3-us-west-2.amazonaws.com/ray-wheels/20d6b74aa6c034fdf35422e6805e2283c672e03f/ray-0.3.0-cp36-cp36m-manylinux1_x86_64.whl
+
+# commit right before pyarrow ugprade
+pip install https://s3-us-west-2.amazonaws.com/ray-wheels/772527caa484bc04169c54959b6a0c5001650bf6/ray-0.3.0-cp36-cp36m-manylinux1_x86_64.whl
+
+#export local_services=/home/ubuntu/anaconda3/lib/python3.6/site-packages/ray/services.py
+#export remote_services=https://raw.githubusercontent.com/ray-project/ray/3a301c3d56743956cfb4d0a4d30e3bd3157946e9/python/ray/services.py
+# rm $local_services
+# wget $remote_services -O $local_services
+
 pip install numpy
 pip install jupyter ipywidgets bokeh
 
@@ -38,6 +100,8 @@ import sys
 import argparse
 import time
 
+module_path=os.path.dirname(os.path.abspath(__file__))
+sys.path.append(module_path+'/..')
 import util as u
 
 parser = argparse.ArgumentParser(description='Ray parameter server experiment')
@@ -58,6 +122,8 @@ parser.add_argument("--dim", default=25000, type=int,
                     help="Number of parameters.")
 parser.add_argument('--name', type=str, default='sync',
                      help="name of the current run")
+parser.add_argument('--zone', type=str, default='us-east-1c',
+                    help='which availability zone to use')
 args = parser.parse_args()
 
 
@@ -66,6 +132,9 @@ def main():
   sys.path.append(module_path+'/..')
   import aws
   
+  region = os.environ.get("AWS_DEFAULT_REGION")
+  ami = ami_dict[region]
+  
   # job launches are asynchronous, can spin up multiple jobs in parallel
   if args.placement:
     placement_name = args.name
@@ -73,9 +142,10 @@ def main():
     placement_name = ''
   print("Launching job")
   num_tasks = 1 + args.num_workers + args.num_ps
-  job = aws.simple_job(args.name, num_tasks=num_tasks,
+  job = aws.server_job(args.name, ami=ami, num_tasks=num_tasks,
                        instance_type=args.instance_type,
                        install_script=INSTALL_SCRIPT,
+                       availability_zone=args.zone,
                        placement_group=placement_name)
 
   # block until things launch to run commands
@@ -94,7 +164,7 @@ def main():
   # start workers
   for task in job.tasks[1:]:
     task.run('ray stop || echo "ray not started, ignoring"')
-    task.run("ray start --redis-address %s:%d --num-gpus=4 --num-cpus=4 --num-workers=0" % (head_task.ip, REDIS_PORT))
+    task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
 
   # download benchmark script and execute it on head node
   head_task.run("rm -f "+SCRIPT_NAME) # todo: remove?

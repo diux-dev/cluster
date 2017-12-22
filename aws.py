@@ -53,6 +53,7 @@ from pprint import pprint as pp
 DEFAULT_PORT = 3000
 LOCAL_TASKLOGDIR_PREFIX='/tmp/tasklogs'
 TIMEOUT_SEC=5
+DEFAULT_LINUX_TYPE='ubuntu'
 
 # TODO: document KEY_NAME restriction a bit better
 # TODO: move installation script to run under tmux for easier debugging of
@@ -383,7 +384,7 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
 
 def server_job(name, num_tasks=1, instance_type=None, install_script='',
                placement_group='', ami='', availability_zone='',
-               linux_type='ubuntu'):
+               linux_type=DEFAULT_LINUX_TYPE):
   """Creates a job on AWS cluster with publicly facing ports.
 
   Reuse requires that that job launched previous under same name has identical
