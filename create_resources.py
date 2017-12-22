@@ -74,6 +74,9 @@ def network_setup():
     ig.create_tags(Tags=u.make_name(DEFAULT_NAME))
 
     # check that attachment succeeded
+    # TODO: sometimes get
+    # AssertionError: vpc vpc-33d0804b is in state None
+
     attach_state = u.get1(ig.attachments, State=-1, VpcId=vpc.id)
     assert attach_state == 'available', "vpc %s is in state %s"%(vpc.id,
                                                                  attach_state)

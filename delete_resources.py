@@ -19,6 +19,8 @@ import boto3
 import time
 from collections import OrderedDict
 
+import util as u
+
 parser = argparse.ArgumentParser(description='launch simple')
 parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
@@ -31,7 +33,6 @@ ROUTE_TABLE_NAME=u.RESOURCE_NAME
 KEYPAIR_NAME=u.RESOURCE_NAME
 EFS_NAME=u.RESOURCE_NAME
 
-import util as u
 
 
 def main():
