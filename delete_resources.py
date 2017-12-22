@@ -20,18 +20,16 @@ import time
 from collections import OrderedDict
 
 parser = argparse.ArgumentParser(description='launch simple')
-parser.add_argument('--name', type=str, default='nexus',
-                     help="name to use for resources")
 parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
 args = parser.parse_args()
 
-DEFAULT_NAME=args.name
-VPC_NAME=DEFAULT_NAME
-SECURITY_GROUP_NAME=DEFAULT_NAME
-ROUTE_TABLE_NAME=DEFAULT_NAME
-KEYPAIR_NAME=DEFAULT_NAME
-EFS_NAME=DEFAULT_NAME
+DEFAULT_NAME=u.RESOURCE_NAME
+VPC_NAME=u.RESOURCE_NAME
+SECURITY_GROUP_NAME=u.RESOURCE_NAME
+ROUTE_TABLE_NAME=u.RESOURCE_NAME
+KEYPAIR_NAME=u.RESOURCE_NAME
+EFS_NAME=u.RESOURCE_NAME
 
 import util as u
 
