@@ -98,6 +98,9 @@ def network_setup():
       if route.destination_cidr_block == dest_cidr:
         break
     else:
+      # sometimes get
+      #      AssertionError: Route for 0.0.0.0/0 not found in [ec2.Route(route_table_id='rtb-cd9153b0', destination_cidr_block='192.168.0.0/16')]
+      # TODO: add a wait/retry?
       assert False, "Route for %s not found in %s"%(dest_cidr,
                                                     route_table.routes)
 

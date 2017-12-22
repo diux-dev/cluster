@@ -393,11 +393,11 @@ def server_job(name, num_tasks=1, instance_type=None, install_script='',
 
   global SSH_KEY_PATH
 
-  DEFAULT_NAME = 'nexus'
+  DEFAULT_NAME = u.RESOURCE_NAME
   security_group = u.get_security_group_dict()[DEFAULT_NAME]
   keypair = u.get_keypair_dict()[DEFAULT_NAME]
   # get availability zone -> subnet dictionary
-  vpc = u.get_vpc_dict()['nexus']
+  vpc = u.get_vpc_dict()[DEFAULT_NAME]
   subnet_dict = {}
   for subnet in vpc.subnets.all():
     zone = subnet.availability_zone
