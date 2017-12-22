@@ -426,7 +426,7 @@ def server_job(name, num_tasks=1, instance_type=None, install_script='',
        " of tasks %d doesn't match requested %d, kill job manually."%(len(instances), num_tasks))
     print("Found existing job "+name)
   else:
-    print("Launching new job "+name)
+    print("Launching new job %s into VPC %s" %(name, DEFAULT_NAME))
 
     ec2 = boto3.resource('ec2')
     if placement_group:
