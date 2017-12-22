@@ -11,8 +11,6 @@ import time
 from collections import OrderedDict
 
 parser = argparse.ArgumentParser(description='launch simple')
-parser.add_argument('--name', type=str, default='nexus',
-                     help="name to use for resources")
 parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
 args = parser.parse_args()
@@ -24,12 +22,12 @@ DEBUG=True
 
 # Names of Amazon resources that are created. These settings are fixed across
 # all runs, and correspond to resources created once per user per region.
-DEFAULT_NAME=args.name
-VPC_NAME=DEFAULT_NAME
-SECURITY_GROUP_NAME=DEFAULT_NAME
-ROUTE_TABLE_NAME=DEFAULT_NAME
-KEYPAIR_NAME=DEFAULT_NAME
-EFS_NAME=DEFAULT_NAME
+DEFAULT_NAME=u.RESOURCE_NAME
+VPC_NAME=u.RESOURCE_NAME
+SECURITY_GROUP_NAME=u.RESOURCE_NAME
+ROUTE_TABLE_NAME=u.RESOURCE_NAME
+KEYPAIR_NAME=u.RESOURCE_NAME
+EFS_NAME=u.RESOURCE_NAME
 
 PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
                     6379,              # redis port
@@ -229,7 +227,7 @@ def placement_group_setup(group_name):
 def main():
 
   region = os.environ['AWS_DEFAULT_REGION']
-  print("Creating %s resources in region %s"%(args.name, region,))
+  print("Creating %s resources in region %s"%(DEFAULT_NAME, region,))
 
   vpc, security_group = network_setup()
   keypair = keypair_setup()  # saves private key locally to keypair_fn

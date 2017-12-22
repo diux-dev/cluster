@@ -17,7 +17,7 @@ WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
 # global default name for AWS resources (VPC name, keypair name, etc)
-RESOURCE_NAME='nexus'
+RESOURCE_NAME=os.environ.get('RESOURCE_NAME', 'nexus')
 
 
 def get_name(tags):
