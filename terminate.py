@@ -16,9 +16,9 @@ import sys
 import os
 
 # By default only touch instances launched with LIMIT_TO_KEY
-# this is to prevent accidentally wiping all jobs on the account (been there)
+# this is to prevent accidentally wiping all jobs on the account
 # set to '' to remove this restriction
-LIMIT_TO_KEY = os.environ.get("KEY_NAME", "dontkillanything")
+LIMIT_TO_KEY = os.environ.get("LIMIT_TO_KEY", "dontkillanything")
 
 def main():
   global LIMIT_TO_KEY
