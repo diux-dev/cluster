@@ -38,7 +38,7 @@ EFS_NAME=u.RESOURCE_NAME
 def main():
   # TODO: also bring down all the instances and wait for them to come down
   region = os.environ['AWS_DEFAULT_REGION']
-  print("Deleting %s resources in region %s"%(args.name, region,))
+  print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
   existing_vpcs = u.get_vpc_dict()
   client = u.create_ec2_client()
   ec2 = u.create_ec2_resource()
