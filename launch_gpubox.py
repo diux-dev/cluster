@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 #
-# Launch a single GPU instance
+# Launch a single GPU instance:
+#
+availability_mapping = {'g3': ['us-east-1a', 'us-east-1b', 'us-east-1e',
+                               'us-east-1c'],
+                        'p2': ['us-east-1f'],
+                        'p3': ['us-east-1f']}
+
+# ./launch_gpubox.py --instance_type=g3.4xlarge --zone=us-east-1f
 #
 # https://aws.amazon.com/blogs/ai/new-aws-deep-learning-amis-for-machine-learning-practitioners/
 
@@ -36,9 +43,9 @@ import aws
 parser = argparse.ArgumentParser(description='launch simple')
 parser.add_argument('--name', type=str, default='gpubox00',
                      help="name of the current run")
-parser.add_argument('--instance_type', type=str, default='p2.8xlarge',
+parser.add_argument('--instance_type', type=str, default='p2.xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='us-east-1c',
+parser.add_argument('--zone', type=str, default='',
                     help='which availability zone to use')
 args = parser.parse_args()
 
@@ -75,13 +82,20 @@ def main():
       zone = subnet.availability_zone
       assert zone not in subnet_dict, "More than one subnet in %s, why?" %(zone,)
       subnet_dict[zone] = subnet
-      #      print("%-16s %-16s"%(subnet.id, subnet.availability_zone))
-      
-    subnet = subnet_dict[args.zone]
-    print("Available zones: %" %(', '.join(sorted(subnet_dict.keys()))))
-    print("Chose %-16s %-16s"%(subnet.id, subnet.availability_zone))
 
-  print("Launching %s in %s" %(args.name, args.zone))
+    if not args.zone:
+      machine_class = args.instance_type[:2]
+      zone = availability_mapping[machine_class][0]
+      print("Chose %s based on availability mapping for %s"%(zone,
+                                                             machine_class))
+    else:
+      zone = args.zone
+      
+    subnet = subnet_dict[zone]
+    print("Available zones: %s" %(', '.join(sorted(subnet_dict.keys()))))
+    print("Using %-16s %-16s"%(subnet.id, subnet.availability_zone))
+
+  print("Launching %s in %s" %(args.name, zone))
   zone = subnet.availability_zone
   security_group = u.get_security_group_dict()[u.RESOURCE_NAME]
   keypair = u.get_keypair_dict()[u.RESOURCE_NAME]
@@ -99,7 +113,7 @@ def main():
   efs_id = u.get_efs_dict()[u.RESOURCE_NAME]
   dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
 
-  task.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,))
+  task.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs && sudo chmod 777 /efs"%(dns,))
 
   # connect instructions
   print("To connect:")
