@@ -34,8 +34,8 @@ tmux set-option -g history-limit 250000
 ps aux | grep apt-get
 pstree -a
 ls -ltr /var/lib/dpkg/lock || echo "ignoring"
-sudo killall apt-get || echo "nothing running"
-sudo rm -f /var/lib/dpkg/lock
+# sudo killall apt-get || echo "nothing running"
+# sudo rm -f /var/lib/dpkg/lock
 
 
 # delete confirmation file to always reinstall things
