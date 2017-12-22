@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Script to kill all instances whose name matches given prefix
+Script to kill all instances whose name matches given fragment
 
 Usage:
 
@@ -24,12 +24,12 @@ def main():
   global LIMIT_TO_KEY
   if len(sys.argv)>1:
     if sys.argv[1] == 'CLEANSLATE': # kill everything
-      prefix = ''
+      fragment = ''
       LIMIT_TO_KEY = ''
     else:
-      prefix = sys.argv[1]
+      fragment = sys.argv[1]
   else:
-    prefix = ''
+    fragment = ''
     
   ec2 = boto3.client('ec2')
   response = ec2.describe_instances()
@@ -50,7 +50,7 @@ def main():
 
   instances_to_kill = []
   for (name, instance_response) in instance_list:
-    if not prefix in name:
+    if not fragment in name:
       continue
     key = instance_response.get('KeyName', '')
     if LIMIT_TO_KEY and LIMIT_TO_KEY != key:
@@ -74,8 +74,8 @@ def main():
     from pprint import pprint as pp
     print("Current instances:")
     pp(valid_names)
-    print("No match found: Prefix '%s', key '%s'"%
-          (prefix, LIMIT_TO_KEY))
+    print("No match found: Fragment '%s', key '%s'"%
+          (fragment, LIMIT_TO_KEY))
     return
   
   answer = input("%d instances found, terminate? (Y/n) " % (
