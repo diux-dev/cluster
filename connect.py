@@ -75,7 +75,7 @@ def main():
   print("Using region ", region)
   for (ts, instance) in reversed(sorted_instance_list):
     localtime = instance.launch_time.astimezone(get_localzone())
-    assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(keyname, u.RESOURCE_NAME)
+    assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(instance.keyname, u.RESOURCE_NAME)
     keypair_fn = u.get_keypair_fn(instance.key_name)
 
     print("Connecting to %s in %s launched at %s with key %s" % (instance.id, region, localtime, instance.key_name))
