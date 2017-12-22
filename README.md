@@ -12,7 +12,11 @@ pip install -r requirements.txt
 ./launch_gpubox.py --instance_type=p2.xlarge --zone=us-west-2a
 ```
 
-This creates necessary resources and launches p2.xlarge machine in zone us-west-2a with several ports open to outside traffic (8888, 8889, 8890, 6379, 6006, 6007, 6008) and EFS mounted at /efs.
+This creates necessary resources and launches p2.xlarge machine in zone us-west-2a with several ports open to outside traffic (8888, 8889, 8890, 6379, 6006, 6007, 6008) and EFS mounted at /efs. The script will print `ssh` instructions to use to connect, but also you can use `connect` utility in this folder to get in.
+
+```
+./connect gpubox
+```
 
 To bring down the instance, issue following command
 ```
