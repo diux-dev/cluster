@@ -64,7 +64,7 @@ def main():
     
     name = u.get_name(instance.tags)
     if (fragment in name or fragment in instance.public_ip_address or
-        fragment in instance.id):
+        fragment in instance.id or fragment in instance.private_ip_address):
       instance_list.append((toseconds(instance.launch_time), instance))
       
   import pytz
