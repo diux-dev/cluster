@@ -22,7 +22,7 @@ parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--num-parameter-servers", default=2, type=int,
                     help="The number of parameter servers to use.")
-parser.add_argument("--dim", default=1000, type=int,
+parser.add_argument("--dim", default=25000000, type=int,
                     help="The number of parameters.")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
@@ -33,10 +33,12 @@ args = parser.parse_args()
 class CNN(object):
     def __init__(self, dim):
         self.dim = dim
+        self.fixed = np.ones(self.dim, dtype=np.float32)
 
     def get_gradients(self):
-        time.sleep(0.16)
-        return np.ones(self.dim, dtype=np.float32)
+      #        time.sleep(0.16)
+      #        return np.ones(self.dim, dtype=np.float32)
+      return self.fixed
 
     def set_weights(self, weights):
         pass
@@ -50,8 +52,8 @@ class ParameterServer(object):
         self.params = np.zeros(dim)
 
     def update_and_get_new_weights(self, *gradients):
-        for grad in gradients:
-            self.params += grad
+      #        for grad in gradients:
+      #            self.params += grad
         return self.params
 
     def ip(self):
@@ -63,11 +65,13 @@ class Worker(object):
     def __init__(self, num_ps, dim):
         self.net = CNN(dim)
         self.num_ps = num_ps
+        self.fixed = np.zeros(dim)
 
     @ray.method(num_return_vals=args.num_parameter_servers)
     def compute_gradient(self, *weights):
-        all_weights = np.concatenate(weights)
-        self.net.set_weights(all_weights)
+      #        all_weights = np.concatenate(weights)
+      #        self.net.set_weights(all_weights)
+        self.net.set_weights(self.fixed)
         gradient = self.net.get_gradients()
         if self.num_ps == 1:
             return gradient
@@ -109,7 +113,8 @@ if __name__ == "__main__":
         print("worker ips:")
         for (i, worker) in enumerate(workers):
             print(i, worker.ip.remote(), ray.get([worker.ip.remote()]))
-        assert len(all_ips) == len(set(all_ips))
+        if len(all_ips) != len(set(all_ips)):
+            print("Warning, some IPs are reused")
 
     while True:
         t1 = time.time()

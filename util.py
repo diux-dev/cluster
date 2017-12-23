@@ -198,6 +198,7 @@ def create_efs(name):
   start_time = time.time()
   while True:
     try:
+
       response = efs_client.create_file_system(CreationToken=token,
                                                PerformanceMode='generalPurpose')
       assert is_good_response(response)

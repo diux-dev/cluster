@@ -118,12 +118,14 @@ parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
 parser.add_argument("--num-ps", default=2, type=int,
                     help="The number of parameter servers workers to use.")
-parser.add_argument("--dim", default=25000, type=int,
+parser.add_argument("--dim", default=25000000, type=int,
                     help="Number of parameters.")
 parser.add_argument('--name', type=str, default='sync',
                      help="name of the current run")
 parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
+parser.add_argument('--local', type=int, default=0,
+                    help='set to 1 to run locally')
 args = parser.parse_args()
 
 
@@ -131,9 +133,7 @@ def main():
   module_path=os.path.dirname(os.path.abspath(__file__))
   sys.path.append(module_path+'/..')
   import aws
-  
-  region = os.environ.get("AWS_DEFAULT_REGION")
-  ami = ami_dict[region]
+  import tmux
   
   # job launches are asynchronous, can spin up multiple jobs in parallel
   if args.placement:
@@ -142,11 +142,17 @@ def main():
     placement_name = ''
   print("Launching job")
   num_tasks = 1 + args.num_workers + args.num_ps
-  job = aws.server_job(args.name, ami=ami, num_tasks=num_tasks,
-                       instance_type=args.instance_type,
-                       install_script=INSTALL_SCRIPT,
-                       availability_zone=args.zone,
-                       placement_group=placement_name)
+
+  if args.local:
+    job = tmux.server_job(args.name, num_tasks=num_tasks)
+  else:
+    region = os.environ.get("AWS_DEFAULT_REGION")
+    ami = ami_dict[region]
+    job = aws.server_job(args.name, ami=ami, num_tasks=num_tasks,
+                         instance_type=args.instance_type,
+                         install_script=INSTALL_SCRIPT,
+                         availability_zone=args.zone,
+                         placement_group=placement_name)
 
   # block until things launch to run commands
   job.wait_until_ready()
@@ -160,11 +166,15 @@ def main():
   # TODO: add locking to remove need for sleep
   # https://github.com/tmux/tmux/issues/1185
   time.sleep(2)
-  
-  # start workers
-  for task in job.tasks[1:]:
-    task.run('ray stop || echo "ray not started, ignoring"')
-    task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
+
+  if args.local:
+    job.tasks[1].run("ray start --redis-address %s:%d --num-gpus=%d --num-cpus=%d --num-workers=%d" % (head_task.ip, REDIS_PORT, num_tasks, num_tasks, num_tasks))
+
+  else:
+    # start workers
+    for task in job.tasks[1:]:
+      task.run('ray stop || echo "ray not started, ignoring"')
+      task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
 
   # download benchmark script and execute it on head node
   head_task.run("rm -f "+SCRIPT_NAME) # todo: remove?
@@ -174,7 +184,7 @@ def main():
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
-                    --dim=25000".format(script=SCRIPT_NAME,
+                    --dim={dim}".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,

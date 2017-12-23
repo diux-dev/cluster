@@ -72,6 +72,30 @@ def tf_job(name, num_tasks):
 
   return job
 
+# for compatibility with aws.py
+def server_job(name, num_tasks):
+  """Simple local TensorFlow job launcher."""
+  
+  assert num_tasks>0
+  
+  _ossystem('tmux kill-session -t ' + name)
+
+  tmux_windows = [name+":"+str(0)]
+  _ossystem('tmux new-session -s %s -n %d -d' % (name, 0))
+  
+  for task_id in range(1, num_tasks):
+    _ossystem("tmux new-window -t {} -n {}".format(name, task_id))
+    tmux_windows.append(name+":"+str(task_id))
+
+  # todo: remove num_tasks
+  job = Job(name, num_tasks, tmux_windows)
+
+  # todo: logdir is shared across jobs, so set it up in experiment launcher
+  _setup_logdir(name)
+  job.logdir = _setup_logdir(name)
+
+  return job
+  
 
 class Job:
   def __init__(self, name, num_tasks, tmux_windows):
@@ -81,6 +105,9 @@ class Job:
     for task_id, tmux_window in enumerate(tmux_windows):
       self.tasks.append(Task(tmux_window, self, task_id))
 
+  def wait_until_ready(self):
+    for task in self.tasks:
+      task.wait_until_ready()
 
 class Task:
   """Local tasks interacts with tmux session where session name is derived
@@ -96,13 +123,29 @@ class Task:
 
     self.last_stdout = '<unavailable>'  # compatiblity with aws.py:Task
     self.last_stderr = '<unavailable>'
+    
+    import time
+    ts = str(int(time.time()*1e6)) # micros since epoch
+    self.local_dir = '/tmp/tasklogs/'+ts
+    self.run('mkdir -p '+self.local_dir)
+    self.run('cd '+self.local_dir)
 
   def run(self, cmd):
     _ossystem("tmux send-keys -t {} '{}' Enter".format(self.tmux_window, cmd))
 
-  def upload(self, cmd):  # compatiblity with aws.py:Task
-    pass
+  def upload(self, fn):  # compatiblity with aws.py:Task
+    self.run("cp %s ." %(os.path.abspath(fn),))
 
+  def write_to_file(self, contents, fn):
+    local_fn = self.local_dir + '/'+fn
+    with open(local_fn, 'w') as f:
+      f.write(contents)
+    self.upload(local_fn)
+
+  def wait_until_ready(self):
+    return
+         
+  # TODO: get rid?
   def tf_env_setup(self, full_cluster_spec, task_spec):
     # full cluster config
     # todo: not needed
