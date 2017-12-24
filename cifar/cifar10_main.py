@@ -68,6 +68,8 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
     weight_decay = params.weight_decay
     momentum = params.momentum
 
+    tf.summary.image('images', features[0], max_outputs=6)
+
     tower_features = features
     tower_labels = labels
     tower_losses = []
