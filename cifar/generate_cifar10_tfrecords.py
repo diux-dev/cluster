@@ -32,6 +32,8 @@ import tarfile
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
+MAX_RECORDS=1000
+
 CIFAR_FILENAME = 'cifar-10-python.tar.gz'
 CIFAR_DOWNLOAD_URL = 'https://www.cs.toronto.edu/~kriz/' + CIFAR_FILENAME
 CIFAR_LOCAL_FOLDER = 'cifar-10-batches-py'
@@ -79,6 +81,7 @@ def read_pickle_from_file(filename):
 def convert_to_tfrecord(input_files, output_file):
   """Converts a file to TFRecords."""
   print('Generating %s' % output_file)
+  i = 0
   with tf.python_io.TFRecordWriter(output_file) as record_writer:
     for input_file in input_files:
       data_dict = read_pickle_from_file(input_file)
@@ -92,6 +95,9 @@ def convert_to_tfrecord(input_files, output_file):
                 'label': _int64_feature(labels[i])
             }))
         record_writer.write(example.SerializeToString())
+        if i>MAX_RECORDS:
+          break
+        i+=1
 
 
 def main(data_dir):

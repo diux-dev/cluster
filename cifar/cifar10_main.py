@@ -341,7 +341,8 @@ def get_experiment_fn(data_dir,
         batch_size=hparams.eval_batch_size,
         num_shards=num_gpus)
 
-    num_eval_examples = cifar10.Cifar10DataSet.num_examples_per_epoch('eval')
+    # num_eval_examples = cifar10.Cifar10DataSet.num_examples_per_epoch('eval')
+    num_eval_examples = hparams.eval_batch_size
     if num_eval_examples % hparams.eval_batch_size != 0:
       raise ValueError(
           'validation set size must be multiple of eval_batch_size')
@@ -417,7 +418,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-layers',
       type=int,
-      default=44,
+      default=8,
       help='The number of layers of the model.')
   parser.add_argument(
       '--train-steps',
