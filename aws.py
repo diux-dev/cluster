@@ -30,6 +30,8 @@ import paramiko
 
 import util as u
 
+# TODO: my task ip address changes every time I do instance.load
+
 # TODO: improve errors when root script hangs, ie tmux install can send
 # Another app is currently holding the yum lock; waiting for it to exit...
 #  The other application is: yum
@@ -54,6 +56,10 @@ DEFAULT_PORT = 3000
 LOCAL_TASKLOGDIR_PREFIX='/tmp/tasklogs'
 TIMEOUT_SEC=5
 DEFAULT_LINUX_TYPE='ubuntu'
+
+#TASKDIR_PREFIX='/temp/tasklogs'
+LOGDIR_PREFIX='/efs/runs'
+
 
 # TODO: document KEY_NAME restriction a bit better
 # TODO: move installation script to run under tmux for easier debugging of
@@ -115,9 +121,11 @@ class timeit:
     print("%s took %.2f seconds"%(self.tag, interval_sec))
 
 
-def setup_local_logdir(run):
-  logdir = LOCAL_LOGDIR_PREFIX + '/' + run
-  os.system('rm -Rf '+logdir)
+# TODO: logging with timestamps
+def setup_logdir(name):
+  logdir = LOGDIR_PREFIX + '/' + name
+  if os.path.exists(logdir):
+    print("Warning, %s exists"%(logdir,))
   os.system('mkdir -p '+logdir)
   return logdir
 
@@ -594,7 +602,7 @@ class Task:
 
     if args:
       message = message % args
-    print("%s task %d: %s"%(ts, self.id, message))
+    print("%s %s:%d: (%s) %s"%(ts, self.job.name, self.id, self.ip, message))
     
   # todo: rename wait_until_ready to wait_until_initialized
   def wait_until_ready(self):
@@ -701,6 +709,7 @@ tmux a
 
   def _is_initialized_file_present(self):
     self.log("Checking for initialized file")
+    # TODO: replace this with file_read()
     try:
       # construct unique local name
       fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
@@ -766,71 +775,105 @@ tmux a
     self.run_sync('tmux kill-session -t tmux')
     self.run_sync('tmux new-session -s tmux -n 0 -d')
 
-  def run(self, cmd):
+  def run(self, cmd, max_wait_sec=600, check_interval=1, ignore_errors=False):
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
 
+    #    assert self.initialized, ("Trying to run command on task that's not "
+    #                              "initialized")
     self.cmd_idx+=1
     
-    self._setup_tasklogdir()
+    #    self._setup_tasklogdir()
     # todo: switch from encoded floats to integer micros
+    
     self.log("tmux> %s", cmd)
 
     # todo: allow sending files to specific locations
-    if cmd.startswith("send "):
-      _, fname = cmd.split()
-      fname = fname.replace("~", os.environ["HOME"])
-      self.upload(fname)
+    # if cmd.startswith("upload "):
+    #   _, fname = cmd.split()
+    #   fname = fname.replace("~", os.environ["HOME"])
+    #   self.upload(fname)
+    #   return
+    
     timestamp = _encode_float(time.time())
     stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
     stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
     self.last_stdout = stdout_fn
     self.last_stderr = stderr_fn
 
-    window = 'tmux:0'
-    tmux_cmd = "tmux send-keys -t {} '{}' Enter".format(window, cmd)
-    self.log("actual> %s"%(tmux_cmd,))
-    stdin, stdout, stderr = self.ssh_client.exec_command(tmux_cmd+"&& echo $?", get_pty=True)
-    stdout_str = stdout.read().decode('ascii')
-    stderr_str = stderr.read().decode('ascii')
-    stdin.channel.shutdown_write()  # workaround for occasional breakage
-    self.log("Got "+stdout_str)
+    self.run_sync('mkdir -p /tmp/tmux')
+    ts = str(u.now_micros())
+    cmd_fn_in  = '/tmp/tmux/'+str(self.cmd_idx)+'.'+ts+'.in'
+    cmd_fn_out = '/tmp/tmux/'+str(self.cmd_idx)+'.'+ts+'.out'
 
-    if ENABLE_MIRRORING:
-      cmd = 'echo "%s" > %03d.txt'%(tmux_cmd, self.cmd_idx)
-      stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
-      stdout_str = stdout.read().decode('ascii')
-      stderr_str = stderr.read().decode('ascii')
-      stdin.channel.shutdown_write()  # workaround for occasional breakage
-      
+    self.file_write(cmd_fn_in, cmd+'\n')
+    modified_cmd = '%s; echo $? > %s'%(cmd, cmd_fn_out)
+    tmux_window = 'tmux:0'
+    tmux_cmd = "tmux send-keys -t {} '{}' Enter".format(tmux_window,
+                                                        modified_cmd)
+    self.run_sync(tmux_cmd)
     
-    #    self.log("Got result " + stdout_str)
+    start_time = time.time()
 
-    # workaround for https://github.com/tmux/tmux/issues/1185
-    # doesn't work if commands take longer than 2 seconds and prints stuff
-    time.sleep(2)
-    return stdout_str, stderr_str
+    while True:
+      if time.time() - start_time > max_wait_sec:
+        assert False, "Timeout %s exceeded for %s" %(max_wait_sec, cmd)
+      if not self.file_exists(cmd_fn_out):
+        print("waiting %s for %s"%(check_interval, cmd))
+        time.sleep(check_interval)
+        continue
     
+      contents = self.file_read(cmd_fn_out)
+      # if empty wait a bit to allow for race condition
+      if len(contents) == 0:
+        time.sleep(check_interval)
+        contents = task.file_read(cmd_fn_out)
 
-  def upload(self, local_file, remote_file=None):
+      contents = contents.strip()
+      if contents != '0':
+        if not ignore_errors:
+          assert False, "Command %s returned status %s"%(cmd, contents)
+        else:
+          self.log("Warning: command %s returned status %s"(cmd, contents))
+      break    
+
+
+  def upload(self, local_fn, remote_fn=None):
     """Uploads file to remote instance. If location not specified, dumps it
     in default directory with same name."""
     # TODO: self.ssh_client is sometimes None
     sftp = self.ssh_client.open_sftp()
-    if remote_file is None:
-      remote_file = os.path.basename(local_file)
-    sftp.put(local_file, remote_file)
+    if remote_fn is None:
+      remote_fn = os.path.basename(local_fn)
+    sftp.put(local_fn, remote_fn)
 
-  def _upload_directory(self, local_directory, remote_directory):
-    assert False, "Not implemented"
-
-  def download(self, remote_file, local_file=None):
+  def download(self, remote_fn, local_fn=None):
     # TODO: self.ssh_client is sometimes None
     sftp = self.ssh_client.open_sftp()
-    if local_file is None:
-      local_file = os.path.basename(local_file)
-    self.log("downloading %s to %s"%(remote_file, local_file))
-    sftp.get(remote_file, local_file)
+    if local_fn is None:
+      local_fn = os.path.basename(local_fn)
+    self.log("downloading %s to %s"%(remote_fn, local_fn))
+    sftp.get(remote_fn, local_fn)
+
+  def file_exists(self, remote_fn):
+    try:
+      self.file_read(remote_fn)
+    except:
+      return False
+    return True
+  
+  def file_write(self, remote_fn, contents):
+    # TODO: create tasklogdir for everything for given job
+    tmp_fn = '/tmp/tmux/'+str(u.now_micros())
+    open(tmp_fn, 'w').write(contents)
+    self.upload(tmp_fn, remote_fn)
+  
+
+  def file_read(self, remote_fn):
+    # TODO: create tasklogdir for everything for given job
+    tmp_fn = '/tmp/tmux/'+str(u.now_micros())
+    self.download(remote_fn, tmp_fn)
+    return open(tmp_fn).read()  
 
   
   @property

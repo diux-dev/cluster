@@ -68,6 +68,12 @@ class Job:
       task.wait_until_ready()
 
 
+# TODO: need, task.file_write
+# need: task.file_exists
+# need: task.file_read
+
+# TODO: dedup "cmd_idx:aws.py" with "tmux_counter:tmux.py"
+
 tmux_counter = 0
 def tmux_run_sync(tmux_window, cmd, check_interval=0.2, max_wait_sec=600):
   """Uses tmux send-keys command, adds file locking to block until command
