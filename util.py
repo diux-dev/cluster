@@ -19,6 +19,10 @@ WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 # global default name for AWS resources (VPC name, keypair name, etc)
 RESOURCE_NAME=os.environ.get('RESOURCE_NAME', 'nexus')
 
+def now_micros():
+  """Return current micros since epoch as integer."""
+  return int(time.time()*1e6)
+
 
 def get_name(tags):
   """Helper utility to extract name out of tags dictionary.
