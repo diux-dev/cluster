@@ -165,7 +165,7 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       tensors_to_log = {'learning_rate': learning_rate, 'loss': loss}
 
       logging_hook = tf.train.LoggingTensorHook(
-          tensors=tensors_to_log, every_n_iter=100)
+          tensors=tensors_to_log, every_n_iter=1)
 
       train_hooks = [logging_hook, examples_sec_hook]
 
@@ -381,8 +381,19 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
       intra_op_parallelism_threads=num_intra_threads,
       gpu_options=tf.GPUOptions(force_gpu_compatible=True))
 
+  # override default 100 steps. 122 e/sec = 4 steps/second
   config = cifar10_utils.RunConfig(
-      session_config=sess_config, model_dir=job_dir)
+      session_config=sess_config, model_dir=job_dir, save_summary_steps=1)
+
+  # change event flush seconds to 1
+  from tensorflow.python.summary.writer.writer import FileWriter
+  old_init = FileWriter.__init__
+  def newinit(*args, **kwargs):
+    print("Overriding FileWriter flush_secs")
+    kwargs['flush_secs']=1
+    old_init(*args, **kwargs)
+  FileWriter.__init__=newinit
+
   tf.contrib.learn.learn_runner.run(
       get_experiment_fn(data_dir, num_gpus, variable_strategy,
                         use_distortion_for_training),
@@ -428,7 +439,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--train-batch-size',
       type=int,
-      default=128,
+      default=32,
       help='Batch size for training.')
   parser.add_argument(
       '--eval-batch-size',
@@ -469,7 +480,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-intra-threads',
       type=int,
-      default=0,
+      default=1,
       help="""\
       Number of threads to use for intra-op parallelism. When training on CPU
       set to 0 to have the system pick the appropriate number or alternatively
@@ -478,7 +489,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-inter-threads',
       type=int,
-      default=0,
+      default=1,
       help="""\
       Number of threads to use for inter-op parallelism. If set to 0, the
       system will pick an appropriate number.\
@@ -506,6 +517,12 @@ if __name__ == '__main__':
       type=float,
       default=1e-5,
       help='Epsilon for batch norm.')
+  parser.add_argument(
+      '--label',
+      type=str,
+      default='',
+      help='arbitrary string, used for debugging')
+  
   args = parser.parse_args()
 
   if args.num_gpus < 0:
