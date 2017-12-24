@@ -1,10 +1,5 @@
-
-#import util as myutil
-from collections import OrderedDict
-from collections import defaultdict
 from pprint import pprint as pp
 import argparse
-import base64
 import base64
 import boto3
 import json
@@ -16,91 +11,54 @@ import shlex
 import struct
 import subprocess
 import sys
-import sys
 import tensorflow as tf
 import threading
-import threading
-import time
 import time
 import yaml
 
-LOCAL_TASKLOGDIR_PREFIX='/temp/tasklogs'
-LOCAL_LOGDIR_PREFIX='/temp/logs'
+import util as u
 
-def _setup_logdir(job_name):
-  """Creates appropriate logdir for given job."""
-  run_name = job_name.rsplit('-',1)[0]  # somerun-11-ps -> somerun-11
-  logdir = '/temp/logs/'+run_name
+TASKDIR_PREFIX='/temp/tasklogs'
+LOGDIR_PREFIX='/temp/runs' # use same name for remote/local?
+
+# TODO: add locking to tmux commands
+
+def setup_logdir(name):
+  """Creates appropriate logdir for given run."""
+  logdir = LOGDIR_PREFIX+'/'+name
   os.system('rm -Rf '+logdir)
   os.system('mkdir -p '+logdir)
   return logdir
-
 
 
 def _ossystem(cmd):
   print(cmd)
   os.system(cmd)
 
-def kill_job(name):
-  """Simple local TensorFlow job launcher."""
-  
-  _ossystem('tmux kill-session -t ' + name)
 
-def tf_job(name, num_tasks):
-  """Simple local TensorFlow job launcher."""
-  
-  DEFAULT_NAME = '0'
-  _ossystem('tmux kill-session -t ' + name)
-
-  # TODO: don't need default name
-  tmux_windows = [name+":"+str(0)]
-  _ossystem('tmux new-session -s %s -n %s -d '% (name, DEFAULT_NAME))
-  _ossystem('tmux rename-window -t %s %s '%(DEFAULT_NAME, '0'))
-  for task_id in range(1, num_tasks):
-    _ossystem("tmux new-window -t {} -n {}".format(name, task_id))
-    tmux_windows.append(name+":"+str(task_id))
-
-  # todo: remove num_tasks
-  job = Job(name, num_tasks, tmux_windows)
-  # setup environment
-  for task in job.tasks:
-    task.run('source activate sep22')
-
-  # todo: logdir is shared across jobs, so set it up in experiment launcher
-  _setup_logdir(name)
-  job.logdir = _setup_logdir(name)
-
-  return job
-
-# for compatibility with aws.py
 def server_job(name, num_tasks):
-  """Simple local TensorFlow job launcher."""
-  
-  assert num_tasks>0
+  assert num_tasks>=0
   
   _ossystem('tmux kill-session -t ' + name)
-
-  tmux_windows = [name+":"+str(0)]
-  _ossystem('tmux new-session -s %s -n %d -d' % (name, 0))
   
+  tmux_windows = []
+  print("Creating %s with %s"%(name, num_tasks))
+  if num_tasks>0:
+    _ossystem('tmux new-session -s %s -n %d -d' % (name, 0))
+    tmux_windows.append(name+":"+str(0))
   for task_id in range(1, num_tasks):
     _ossystem("tmux new-window -t {} -n {}".format(name, task_id))
     tmux_windows.append(name+":"+str(task_id))
 
   # todo: remove num_tasks
-  job = Job(name, num_tasks, tmux_windows)
-
-  # todo: logdir is shared across jobs, so set it up in experiment launcher
-  _setup_logdir(name)
-  job.logdir = _setup_logdir(name)
+  job = Job(name, tmux_windows)
 
   return job
   
 
 class Job:
-  def __init__(self, name, num_tasks, tmux_windows):
+  def __init__(self, name, tmux_windows):
     self.name = name
-    #    self.num_tasks = num_tasks
     self.tasks = []
     for task_id, tmux_window in enumerate(tmux_windows):
       self.tasks.append(Task(tmux_window, self, task_id))
@@ -109,84 +67,79 @@ class Job:
     for task in self.tasks:
       task.wait_until_ready()
 
+
+tmux_counter = 0
+def tmux_run_sync(tmux_window, cmd, check_interval=0.2, max_wait_sec=600):
+  """Uses tmux send-keys command, adds file locking to block until command
+  finishes executing."""
+  global tmux_counter
+  if not os.path.exists('/tmp/tmux'):
+    _ossystem('mkdir -p /tmp/tmux')
+  ts = str(u.now_micros())
+  cmd_fn_in  = '/tmp/tmux/'+str(tmux_counter)+'.'+ts+'.in'
+  cmd_fn_out = '/tmp/tmux/'+str(tmux_counter)+'.'+ts+'.out'
+  open(cmd_fn_in, 'w').write(cmd+'\n')
+  modified_cmd = '%s && echo $? > %s'%(cmd, cmd_fn_out)
+  start_time = time.time()
+  
+  _ossystem("tmux send-keys -t {} '{}' Enter".format(tmux_window, modified_cmd))
+
+  while True:
+    if time.time() - start_time > max_wait_sec:
+      assert False, "Timeout %s exceeded for %s" %(max_wait_sec, cmd)
+    if not os.path.exists(cmd_fn_out):
+      time.sleep(check_interval)
+      continue
+    
+    contents = open(cmd_fn_out).read()
+    # if empty wait a bit to allow for race condition
+    if len(contents) == 0:
+      time.sleep(check_interval)
+      contents = open(cmd_fn_out).read()
+
+    contents = contents.strip()
+    assert contents == '0', "Command %s returned status %s"%(cmd, contents)
+    break
+    
+  
 class Task:
   """Local tasks interacts with tmux session where session name is derived
-  from job name, and windows are task ids."""
+  from job name, and window names are task ids."""
 
   def __init__(self, tmux_window, job, task_id):
     self.tmux_window = tmux_window
     self.job = job
-    self.ip = '127.0.0.1' # hostname/ip address
+    self.ip = '127.0.0.1'  # hostname/ip address
     self.id = task_id
     self.port = portpicker.pick_unused_port()
+    print("Assigning %s:%s to port %s"%(self.job.name, self.id, self.port))
     self.connect_instructions = 'tmux a -t '+self.tmux_window
 
     self.last_stdout = '<unavailable>'  # compatiblity with aws.py:Task
     self.last_stderr = '<unavailable>'
     
-    import time
-    ts = str(int(time.time()*1e6)) # micros since epoch
-    self.local_dir = '/tmp/tasklogs/'+ts
-    self.run('mkdir -p '+self.local_dir)
-    self.run('cd '+self.local_dir)
+    self.taskdir = "{}/{}.{}/{}".format(
+      TASKDIR_PREFIX, job.name, u.now_micros(), self.id)
+    self.run('mkdir -p '+self.taskdir)
+    self.run('cd '+self.taskdir)
 
   def run(self, cmd):
+    tmux_run_sync(self.tmux_window, cmd)
+
+  def run_async(self, cmd):
     _ossystem("tmux send-keys -t {} '{}' Enter".format(self.tmux_window, cmd))
 
-  def upload(self, fn):  # compatiblity with aws.py:Task
-    self.run("cp %s ." %(os.path.abspath(fn),))
+  def upload(self, source_fn, target_fn='.'):
+    print("%s/%s uploading %s to %s"%(self.job.name, self.id, source_fn,
+                                      target_fn))
+    source_fn_full = os.path.abspath(source_fn)
+    self.run("cp %s %s" %(source_fn_full, target_fn))
 
   def write_to_file(self, contents, fn):
-    local_fn = self.local_dir + '/'+fn
+    local_fn = '/tmp/'+str(u.now_micros())
     with open(local_fn, 'w') as f:
       f.write(contents)
-    self.upload(local_fn)
+    self.upload(local_fn, os.path.basename(fn))
 
   def wait_until_ready(self):
     return
-         
-  # TODO: get rid?
-  def tf_env_setup(self, full_cluster_spec, task_spec):
-    # full cluster config
-    # todo: not needed
-    #    cluster_config = {'cluster': cluster_spec, 'task': task_spec}
-
-    task_type = task_spec['type']
-    task_id = task_spec['index']
-    print("Task id is %r"%(task_id,))
-    host = full_cluster_spec[task_type][task_id]
-
-    # every worker needs its own location
-    sparse_cluster_spec = defaultdict(dict)
-    sparse_cluster_spec[task_type][task_id] = host
-    
-    # worker workers know about all ps workers
-    if task_type == 'worker':
-      sparse_cluster_spec['ps'] = full_cluster_spec['ps']
-      
-    # ps workers know about all worker workers
-    if task_type == 'ps':
-      pass
-      sparse_cluster_spec['worker'] = full_cluster_spec['worker']
-      #sparse_cluster_spec['worker'] = {0: full_cluster_spec['worker'][0]}
-
-    sparse_cluster_config = {'cluster': sparse_cluster_spec,
-                             'task': task_spec}
-    print("Cluster config for %s %s is %s"%(task_type, task_id,
-                                            sparse_cluster_spec))
-    json_string = json.dumps(sparse_cluster_config)
-    json_string_encoded = base64.b16encode(json_string.encode('ascii'))
-    json_string_encoded = json_string_encoded.decode('ascii')
-    export_command = "export TF_CONFIG_BASE16=%s"%(json_string_encoded,)
-    self.run(export_command)
-
-    # json has problem with sparse clusterspec (0 can't be key, only "0")
-    # therefore also dump clusterspec as pickle object
-    pickle_string = pickle.dumps(sparse_cluster_config)
-    pickle_string_encoded = base64.b16encode(pickle_string)
-    pickle_string_encoded = pickle_string_encoded.decode('ascii')
-    export_command = "export TF_PICKLE_BASE16=%s"%(pickle_string_encoded,)
-    self.run(export_command)
-    
-    logdir = LOCAL_LOGDIR_PREFIX + '/' + FLAGS.run
-    self.run("export LOGDIR="+logdir)
