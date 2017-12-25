@@ -2,6 +2,7 @@
 import os
 import argparse
 import boto3
+import paramiko
 import sys
 import time
 
@@ -399,3 +400,56 @@ def get_keypair_fn(keypair_name):
   default region."""
   return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
                            os.environ['AWS_DEFAULT_REGION'],)
+
+class SshClient:
+  def __init__(self,
+               hostname,
+               ssh_key=None,
+               username=None,
+               retry=1):
+    """Create ssh connection to host
+
+    Creates and returns and ssh connection to the host passed in.  
+
+    Args:
+      hostname: host name or ip address of the system to connect to.
+      retry: number of time to retry.
+      ssh_key: full path to the ssk hey to use to connect.
+      username: username to connect with.
+
+    returns SSH client connected to host.
+    """
+
+    print("ssh_to_host %s@%s"%(username, hostname))
+    k = paramiko.RSAKey.from_private_key_file(ssh_key)
+
+    self.ssh_client = paramiko.SSHClient()
+    self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    counter = retry
+    while counter > 0:
+      try:
+        self.ssh_client.connect(hostname=hostname, username=username, pkey=k)
+        break
+      except Exception as e:
+        counter = counter - 1
+        print('Exception connecting to host via ssh (could be a timeout):'.format(e))
+        if counter == 0:
+          return None
+
+  def run(self, cmd):
+    """Runs given cmd in the task, returns stdout/stderr as strings.
+    Because it blocks until cmd is done, use it for short cmds.
+
+    Also, because this can run before task is initialized, use it
+    for running initialization commands in sequence.
+
+    This is a barebones method to be used during initialization that have
+    minimal dependencies (no tmux)
+    """
+    print("run_sync: %s"%(cmd,))
+    stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
+    stdout_str = stdout.read().decode('ascii')
+    stderr_str = stderr.read().decode('ascii')
+    print("run_sync returned: " + stdout_str)
+    return stdout_str, stderr_str

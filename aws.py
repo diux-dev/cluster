@@ -9,11 +9,13 @@ task.run("python %s --role=worker" % (__file__,)) # runs script and streams outp
 """
 
 # list current jobs
-# todo: print the command currently being executed to tmux
-# todo: ability to ssh into head node (task:0)
 # todo: ability to delete is_initialized on a bunch of nodes
-# todo: file better bug for https://github.com/tmux/tmux/issues/1186
 # todo: use task id as part of instance name
+
+# TODO: document all uses of local files (tasklogdir?)
+# TODO: document initialization markers
+# TODO: redirect output to files to make available locally
+# TODO: make instance initialization happen in parallel
 
 import argparse
 import base64
@@ -25,13 +27,13 @@ import shlex
 import time
 
 import boto3
-import yaml
 import paramiko
+import yaml
 
 import util as u
 
-# TODO: my task ip address changes every time I do instance.load
 
+# TODO: add | tee to make things show up both in emacs, and in console
 # TODO: improve errors when root script hangs, ie tmux install can send
 # Another app is currently holding the yum lock; waiting for it to exit...
 #  The other application is: yum
@@ -41,6 +43,7 @@ import util as u
 # then launch install script which does "sudo yum install -y tmux"
 # this will hang because of lock issues, but error is not printed anyhwere
 # until the command finishes. Need to make printing asynchronous
+
 
 # TODO: for robustness, redirect install command output somewhere
 # tmux seems to drop "send-keys" commands sometimes
@@ -701,6 +704,7 @@ tmux a
       # construct unique local name
       local_fn = "%d-%d.is_initialized"%(self.id, int(time.time()*1e6))
       local_fn = LOCAL_TASKLOGDIR_PREFIX+'/'+local_fn
+      # todo: replace with file_read()
       self.download(remote_fn, local_fn)
       return 'ok' in open(local_fn).read()
     except Exception as e:
@@ -720,6 +724,7 @@ tmux a
       return False
 
 
+  # TODO: rename to run_ssh (vs run_tmux, run->run_tmux)
   def run_sync(self, cmd):
     """Runs given cmd in the task, returns stdout/stderr as strings.
     Because it blocks until cmd is done, use it for short cmds.
@@ -730,8 +735,6 @@ tmux a
     This is a barebones method to be used during initialization that have
     minimal dependencies (no tmux)
     """
-    # TODO: run doesn't preserve tty
-    # find paramiko recipe to use tty and use that
     self.log("run_sync: %s"%(cmd,))
     stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
     stdout_str = stdout.read().decode('ascii')
@@ -742,76 +745,38 @@ tmux a
   def _setup_tasklogdir(self):
     if not os.path.exists(self.local_tasklogdir):
       os.system('mkdir -p '+self.local_tasklogdir)
-      
-  def run_old(self, cmd, mirror_output=False):
-    """Runs given command in the task, streams stdout/stderr to local files."""
 
-    assert self.initialized, ("Trying to run command on task that's not "
-                              "initialized")
-    
-    self._setup_tasklogdir()
-    # todo: switch from encoded floats to integer micros
-    print("---", cmd)
-    timestamp = _encode_float(time.time())
-    stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
-    stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
-    self.last_stdout = stdout_fn
-    self.last_stderr = stderr_fn
-
-    if mirror_output:
-      def line_extractor(line):
-        print(line)
-    else:
-      line_extractor = None
-      
-    _ExecuteCommandInThread(ssh_client=self.ssh_client,
-                            cmd=cmd,
-                            stdout_file=stdout_fn,
-                            stderr_file=stderr_fn,
-                            line_extractor=line_extractor)
 
   def _setup_tmux(self):
     # shell command will fail if session exists, but it's ok
     self.run_sync('tmux kill-session -t tmux')
     self.run_sync('tmux new-session -s tmux -n 0 -d')
 
-  def run(self, cmd, max_wait_sec=600, check_interval=1, ignore_errors=False):
+  def run(self, cmd, max_wait_sec=600, check_interval=1, ignore_errors=False,
+          wait_to_finish=True):
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
 
-    #    assert self.initialized, ("Trying to run command on task that's not "
-    #                              "initialized")
     self.cmd_idx+=1
-    
-    #    self._setup_tasklogdir()
-    # todo: switch from encoded floats to integer micros
-    
     self.log("tmux> %s", cmd)
 
-    # todo: allow sending files to specific locations
-    # if cmd.startswith("upload "):
-    #   _, fname = cmd.split()
-    #   fname = fname.replace("~", os.environ["HOME"])
-    #   self.upload(fname)
-    #   return
-    
-    timestamp = _encode_float(time.time())
-    stdout_fn = "%s/%s.stdout"%(self.local_tasklogdir, timestamp)
-    stderr_fn = "%s/%s.stderr"%(self.local_tasklogdir, timestamp)
-    self.last_stdout = stdout_fn
-    self.last_stderr = stderr_fn
+    if cmd.startswith("upload "):
+      _, fname = cmd.split()
+      fname = fname.replace("~", os.environ["HOME"])
+      self.upload(fname)
 
+    # locking to wait for command to finish
     self.run_sync('mkdir -p /tmp/tmux')
     ts = str(u.now_micros())
-    cmd_fn_in  = '/tmp/tmux/'+str(self.cmd_idx)+'.'+ts+'.in'
     cmd_fn_out = '/tmp/tmux/'+str(self.cmd_idx)+'.'+ts+'.out'
 
-    self.file_write(cmd_fn_in, cmd+'\n')
     modified_cmd = '%s; echo $? > %s'%(cmd, cmd_fn_out)
     tmux_window = 'tmux:0'
     tmux_cmd = "tmux send-keys -t {} '{}' Enter".format(tmux_window,
                                                         modified_cmd)
     self.run_sync(tmux_cmd)
+    if not wait_to_finish:
+      return
     
     start_time = time.time()
 
@@ -834,18 +799,21 @@ tmux a
         if not ignore_errors:
           assert False, "Command %s returned status %s"%(cmd, contents)
         else:
-          self.log("Warning: command %s returned status %s"(cmd, contents))
+          self.log("Warning: command %s returned status %s"%(cmd, contents))
       break    
 
 
   def upload(self, local_fn, remote_fn=None):
     """Uploads file to remote instance. If location not specified, dumps it
-    in default directory with same name."""
+    in default directory."""
     # TODO: self.ssh_client is sometimes None
     sftp = self.ssh_client.open_sftp()
     if remote_fn is None:
       remote_fn = os.path.basename(local_fn)
-    sftp.put(local_fn, remote_fn)
+    if self.file_exists(remote_fn):
+      self.log("Remote file %s exists, skipping"%(remote_fn,))
+    else:
+      sftp.put(local_fn, remote_fn)
 
   def download(self, remote_fn, local_fn=None):
     # TODO: self.ssh_client is sometimes None
@@ -856,11 +824,14 @@ tmux a
     sftp.get(remote_fn, local_fn)
 
   def file_exists(self, remote_fn):
-    try:
-      self.file_read(remote_fn)
-    except:
+    stdin, stdout, stderr = self.ssh_client.exec_command('stat '+remote_fn,
+                                                    get_pty=True)
+    stdout_str = stdout.read().decode('ascii')
+    stderr_str = stderr.read().decode('ascii')
+    if 'No such file' in stdout_str:
       return False
-    return True
+    else:
+      return True
   
   def file_write(self, remote_fn, contents):
     # TODO: create tasklogdir for everything for given job

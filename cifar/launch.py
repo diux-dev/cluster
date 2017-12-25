@@ -40,8 +40,6 @@ ami_dict = {
     "us-west-2": "ami-3b6bce43",
     "us-east-1": "ami-9ba7c4e1",
 }
-LINUX_TYPE = "ubuntu"  # linux type determines username to use to login
-AMI_USERNAME = 'ubuntu'  # ami-specific username needed to login
 
 AWS_INSTALL_SCRIPT="""
 tmux set-option -g history-limit 250000
@@ -63,6 +61,9 @@ def launch_tmux():
   logdir = tmux.setup_logdir(args.name)
     
   for task in all_tasks:
+    task.upload('generate_cifar10_tfrecords.py')
+    task.upload('cifar10_download_and_extract.py')
+
     task.upload('cifar10.py')
     task.upload('cifar10_main.py')
     task.upload('cifar10_model.py')
@@ -133,18 +134,22 @@ def launch_aws():
 
   master_job = aws.server_job(args.name+'-master', num_tasks=1,
                               instance_type=args.gpu_instance_type,
+                              install_script=AWS_INSTALL_SCRIPT,
                               availability_zone=args.zone,
                               ami=ami)
   worker_job = aws.server_job(args.name+'-worker', num_tasks=args.num_workers-1,
                               instance_type=args.gpu_instance_type,
+                              install_script=AWS_INSTALL_SCRIPT,
                               availability_zone=args.zone,
                               ami=ami)
   ps_job = aws.server_job(args.name+'-ps', num_tasks=args.num_ps,
                           instance_type=args.cpu_instance_type,
+                          install_script=AWS_INSTALL_SCRIPT,
                           availability_zone=args.zone,
                           ami=ami)
   tb_job = aws.server_job(args.name+'-tb', num_tasks=1, instance_type=
                           args.cpu_instance_type,
+                          install_script=AWS_INSTALL_SCRIPT,
                           availability_zone=args.zone,
                           ami=ami)
   all_jobs = [master_job, worker_job, ps_job, tb_job]
@@ -211,28 +216,35 @@ def launch_aws():
   for task in master_job.tasks:
     task_spec = {'type': task_type, 'index': task.id}
     tf_env_setup(task, cluster_spec, task_spec)
-    task.run_async(tf_cmd+' --label='+task.job.name+':'+str(task.id))
+    # todo: add option to not wait
+    task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id),
+             wait_to_finish=False)
 
   task_type = 'worker' 
   for task in worker_job.tasks:
     task_spec = {'type': task_type, 'index': task.id}
     tf_env_setup(task, cluster_spec, task_spec)
-    task.run_async(tf_cmd+' --label='+task.job.name+':'+str(task.id))
+    task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id),
+             wait_to_finish=False)
 
   # launch parameter server tasks
   task_type = 'ps'
   for task in ps_job.tasks:
     task_spec = {'type': task_type, 'index': task.id}
     tf_env_setup(task, cluster_spec, task_spec)
-    task.run_async(tf_cmd+' --label='+task.job.name+':'+str(task.id))
+    task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id),
+             wait_to_finish=False)
+
 
   # Launch tensorboard visualizer.
   tb_task = tb_job.tasks[0]
   tb_cmd = "tensorboard --logdir={logdir} --port={port}".format(
     logdir=logdir, port=tb_task.port)
-  tb_task.run_async(tb_cmd)
+  tb_task.run(tb_cmd,
+              wait_to_finish=False)
 
-  print("See tensorboard at http://%s:%s"%(tb_task.ip, tb_task.port))
+
+  print("See tensorboard at http://%s:%s"%(tb_task.public_ip, tb_task.port))
 
 
 def main():
