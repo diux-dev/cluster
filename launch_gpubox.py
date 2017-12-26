@@ -30,13 +30,12 @@
 # Asia Pacific (Mumbai)	       ami-6ce8a103
 
 # TODO: determine availability zones automatically
-availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b', 'us-east-1e',
-                                         'us-east-1c'],
+availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b', 'us-east-1e', 'us-east-1c'],
                                   'p2': ['us-east-1f'],
                                   'p3': ['us-east-1f']}
 availability_mapping_us_west_2 = {'g3': ['us-west-2a'],
                                   'p2': ['us-west-2a', 'us-west-2b'],
-                                  'p3': ['us-west-2a']}
+                                  'p3': ['us-west-2b', 'us-west-2c']}
 availability_mapping = {'us-east-1': availability_mapping_us_east_1,
                         'us-west-2': availability_mapping_us_west_2}
 
