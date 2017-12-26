@@ -90,12 +90,12 @@ BULK_INSTALL=True
 # through regular shell
 ROOT_INSTALL_SCRIPT_UBUNTU="""
 """
-ROOT_INSTALL_SCRIPT_DEBIAN="""
+ROOT_INSTALL_SCRIPT_AMAZON="""
 sudo yum install -y tmux
 """
 
 USERNAME_UBUNTU="ubuntu"
-USERNAME_DEBIAN="ec2-user"
+USERNAME_AMAZON="ec2-user"
 USERNAME="username_is_not_defined"
 
 
@@ -340,10 +340,10 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
   global ROOT_INSTALL_SCRIPT
   if linux_type == 'ubuntu':
     ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_UBUNTU
-  elif linux_type == 'debian':
-    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_DEBIAN
+  elif linux_type == 'amazon':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_AMAZON
   else:
-    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
+    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'amazon'."
 
   if instance_type is None:
     instance_type = 'c5.large'
@@ -393,6 +393,8 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
             linux_type=linux_type)
   return job
 
+# TODO: remove requirement to specify availability zones
+# TODO: add checks on instance_type when launching into existing job
 def server_job(name, num_tasks=1, instance_type=None, install_script='',
                placement_group='', ami='', availability_zone='',
                linux_type=DEFAULT_LINUX_TYPE):
@@ -419,10 +421,10 @@ def server_job(name, num_tasks=1, instance_type=None, install_script='',
   global ROOT_INSTALL_SCRIPT
   if linux_type == 'ubuntu':
     ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_UBUNTU
-  elif linux_type == 'debian':
-    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_DEBIAN
+  elif linux_type == 'amazon':
+    ROOT_INSTALL_SCRIPT = ROOT_INSTALL_SCRIPT_AMAZON
   else:
-    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
+    assert False, "Unknown linux type '%s', expected 'ubuntu' or 'amazon'."
 
   if instance_type is None:
     instance_type = 'c5.large'
@@ -593,10 +595,10 @@ class Task:
     # ec2-user or ubuntu
     if linux_type == 'ubuntu':
       self.username = USERNAME_UBUNTU
-    elif linux_type == 'debian':
-      self.username = USERNAME_DEBIAN
+    elif linux_type == 'amazon':
+      self.username = USERNAME_AMAZON
     else:
-      assert False, "Unknown linux type '%s', expected 'ubuntu' or 'debian'."
+      assert False, "Unknown linux type '%s', expected 'ubuntu' or 'amazon'."
 
 
   def log(self, message, args=None):
@@ -784,7 +786,7 @@ tmux a
       if time.time() - start_time > max_wait_sec:
         assert False, "Timeout %s exceeded for %s" %(max_wait_sec, cmd)
       if not self.file_exists(cmd_fn_out):
-        print("waiting %s for %s"%(check_interval, cmd))
+        self.log("waiting %s for %s"%(check_interval, cmd))
         time.sleep(check_interval)
         continue
     
@@ -826,8 +828,10 @@ tmux a
   def file_exists(self, remote_fn):
     stdin, stdout, stderr = self.ssh_client.exec_command('stat '+remote_fn,
                                                     get_pty=True)
-    stdout_str = stdout.read().decode('ascii')
-    stderr_str = stderr.read().decode('ascii')
+    stdout_bytes = stdout.read()
+    stdout_str = stdout_bytes.decode()
+    stderr_bytes = stderr.read()
+    stderr_str = stderr_bytes.decode()
     if 'No such file' in stdout_str:
       return False
     else:
