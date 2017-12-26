@@ -24,6 +24,8 @@ parser.add_argument('--cpu-instance-type', type=str, default='c5.xlarge',
                     help='default instance type')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
+parser.add_argument("--num-gpus", default=1, type=int,
+                    help="Number of GPUs to use per worker.")
 parser.add_argument("--num-ps", default=1, type=int,
                     help="The number of parameter servers workers to use.")
 parser.add_argument('--name', type=str, default='cifar',
@@ -101,7 +103,7 @@ def launch_tmux():
     del cluster_spec['worker']
   
   # Launch tensorflow tasks.
-  tf_cmd = "python cifar10_main.py --data-dir=. --job-dir={logdir} --log-device-placement".format(logdir=logdir)
+  tf_cmd = "python cifar10_main.py --data-dir=. --job-dir={logdir} --num-gpus={num_gpus} --log-device-placement".format(logdir=logdir, num_gpus:args.num_gpus)
   
   task_type = 'master' 
   for task in master_job.tasks:
