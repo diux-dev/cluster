@@ -238,13 +238,9 @@ def launch_aws():
 
   # Launch tensorboard visualizer.
   tb_task = tb_job.tasks[0]
-  tb_cmd = "tensorboard --logdir={logdir} --port={port}".format(
-    logdir=logdir, port=tb_task.port)
-  tb_task.run(tb_cmd,
-              wait_to_finish=False)
-
-
-  print("See tensorboard at http://%s:%s"%(tb_task.public_ip, tb_task.port))
+  tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=logdir)
+  tb_task.run(tb_cmd, wait_to_finish=False)
+  print("See tensorboard at http://%s:%s"%(tb_task.public_ip, 6006))
 
 
 def main():
