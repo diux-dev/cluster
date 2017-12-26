@@ -387,7 +387,7 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
 
   # override default 100 steps. 122 e/sec = 4 steps/second
   config = cifar10_utils.RunConfig(
-      session_config=sess_config, model_dir=job_dir, save_summary_steps=1)
+      session_config=sess_config, model_dir=job_dir, save_summary_steps=10)
 
   # change event flush seconds to 1
   from tensorflow.python.summary.writer.writer import FileWriter
@@ -493,7 +493,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-intra-threads',
       type=int,
-      default=1,
+      default=0,
       help="""\
       Number of threads to use for intra-op parallelism. When training on CPU
       set to 0 to have the system pick the appropriate number or alternatively
@@ -502,7 +502,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-inter-threads',
       type=int,
-      default=1,
+      default=0,
       help="""\
       Number of threads to use for inter-op parallelism. If set to 0, the
       system will pick an appropriate number.\
