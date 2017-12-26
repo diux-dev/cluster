@@ -160,6 +160,7 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
                                                   boundaries, staged_lr)
 
       loss = tf.reduce_mean(tower_losses, name='loss')
+      loss_summary = tf.summary.scalar('TheLoss', loss)
 
       examples_sec_hook = cifar10_utils.ExamplesPerSecondHook(
           params.train_batch_size, every_n_steps=10)
@@ -167,8 +168,9 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       tensors_to_log = {'learning_rate': learning_rate, 'loss': loss}
 
       logging_hook = tf.train.LoggingTensorHook(
-          tensors=tensors_to_log, every_n_iter=1)
+          tensors=tensors_to_log, every_n_iter=10)
 
+      # TODO: figure out why train hooks no longer do anything
       train_hooks = [logging_hook, examples_sec_hook]
 
       optimizer = tf.train.MomentumOptimizer(
@@ -391,8 +393,10 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
   from tensorflow.python.summary.writer.writer import FileWriter
   old_init = FileWriter.__init__
   def newinit(*args, **kwargs):
-    print("Overriding FileWriter flush_secs")
-    kwargs['flush_secs']=1
+    new_flush_secs = hparams['event_flush_secs']
+    print("Overriding FileWriter flush_secs to "+str(new_flush_secs))
+    kwargs['flush_secs']=new_flush_secs
+    #    kwargs['flush_secs']=1
     old_init(*args, **kwargs)
   FileWriter.__init__=newinit
 
@@ -407,6 +411,13 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
+  parser.add_argument(
+    '--event-flush-secs',
+    type=int,
+    default=5,
+    help='how often to flush event files'
+    )
+  
   parser.add_argument(
       '--data-dir',
       type=str,
@@ -436,7 +447,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--train-steps',
       type=int,
-      default=80000,
+      default=8000000,
       help='The number of steps to use for training.')
   parser.add_argument(
       '--train-batch-size',
