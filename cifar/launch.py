@@ -1,3 +1,4 @@
+# script to launch Cifar-10 training with a small set
 import argparse
 import json
 import os
@@ -61,6 +62,7 @@ def launch_tmux():
   logdir = tmux.setup_logdir(args.name)
     
   for task in all_tasks:
+    task.run('source activate cifar')
     task.upload('generate_cifar10_tfrecords.py')
     task.upload('cifar10_download_and_extract.py')
 
