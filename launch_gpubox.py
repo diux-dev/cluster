@@ -44,8 +44,8 @@ ami_dict_ubuntu = {
     "us-east-1": "ami-9ba7c4e1",
 }
 ami_dict_amazon = {
-    "us-west-2": "ami-3b6bce43",
-    "us-east-1": "ami-9ba7c4e1",
+    "us-west-2": "ami-5c60c524",
+    "us-east-1": "ami-3a533040"
 }
 
 # instance name restrictions
@@ -142,7 +142,8 @@ def main():
   job = aws.server_job(args.name, ami=ami, num_tasks=1,
                        instance_type=args.instance_type,
                        install_script=install_script,
-                       availability_zone=zone)
+                       availability_zone=zone,
+                       linux_type=args.linux_type)
 
   job.wait_until_ready()
   task = job.tasks[0]
