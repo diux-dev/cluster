@@ -54,7 +54,7 @@ def main():
   ec2 = boto3.resource('ec2', region_name=region)
   response = client.describe_instances()
 
-  username = os.environ.get("EC2_USER", "ubuntu")
+  username = os.environ.get("USERNAME", "ubuntu")
   print("Using username '%s'"%(username,))
     
   instance_list = []
