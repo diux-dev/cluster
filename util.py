@@ -47,6 +47,9 @@ def make_name(name):
   return [{'Key': 'Name', 'Value': name}]
 
 
+def get_region():
+  return os.environ['AWS_DEFAULT_REGION']
+
 def create_ec2_client():
   REGION = os.environ['AWS_DEFAULT_REGION']
   return boto3.client('ec2', region_name=REGION)

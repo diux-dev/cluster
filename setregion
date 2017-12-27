@@ -1,0 +1,2 @@
+export AWS_DEFAULT_REGION=us-east-1
+export KEY_NAME=nexus
