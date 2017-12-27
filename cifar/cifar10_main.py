@@ -43,6 +43,17 @@ import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
+def variable_summaries(var):
+ """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+ with tf.name_scope('summaries'):
+   mean = tf.reduce_mean(var)
+   tf.summary.scalar('mean', mean)
+   with tf.name_scope('stddev'):
+     stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+   tf.summary.scalar('stddev', stddev)
+   tf.summary.scalar('max', tf.reduce_max(var))
+   tf.summary.scalar('min', tf.reduce_min(var))
+   tf.summary.histogram('histogram', var)
 
 def get_model_fn(num_gpus, variable_strategy, num_workers):
   """Returns a function that will build the resnet model."""
@@ -142,6 +153,9 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
           else:
             avg_grad = tf.multiply(tf.add_n(grads), 1. / len(grads))
         gradvars.append((avg_grad, var))
+        # This creates a lot of summaries
+        # with tf.name_scope(var.op.name+"-grad"):
+        #   variable_summaries(avg_grad)
 
     # Device that runs the ops to apply global gradient updates.
     consolidation_device = '/gpu:0' if variable_strategy == 'GPU' else '/cpu:0'
@@ -158,7 +172,7 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
 
       learning_rate = tf.train.piecewise_constant(tf.train.get_global_step(),
                                                   boundaries, staged_lr)
-
+      learning_rate_summary = tf.summary.scalar('learning_rate', learning_rate)
       loss = tf.reduce_mean(tower_losses, name='loss')
       loss_summary = tf.summary.scalar('TheLoss', loss)
 
@@ -345,8 +359,8 @@ def get_experiment_fn(data_dir,
         batch_size=hparams.eval_batch_size,
         num_shards=num_gpus)
 
-    # num_eval_examples = cifar10.Cifar10DataSet.num_examples_per_epoch('eval')
-    num_eval_examples = hparams.eval_batch_size
+    num_eval_examples = cifar10.Cifar10DataSet.num_examples_per_epoch('eval')
+    # num_eval_examples = hparams.eval_batch_size
     if num_eval_examples % hparams.eval_batch_size != 0:
       raise ValueError(
           'validation set size must be multiple of eval_batch_size')
@@ -538,6 +552,8 @@ if __name__ == '__main__':
   
   args = parser.parse_args()
 
+  if args.num_gpus>0:
+    assert tf.test.is_gpu_available(), "Requested GPUs but none found."
   if args.num_gpus < 0:
     raise ValueError(
         'Invalid GPU count: \"--num-gpus\" must be 0 or a positive integer.')

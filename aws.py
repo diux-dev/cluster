@@ -9,6 +9,9 @@ task.run("python %s --role=worker" % (__file__,)) # runs script and streams outp
 """
 
 # list current jobs
+
+# TODO: simplify connecting to existing jobs (remove need to call wait_until..)
+# TODO: add ability to check for whether SSH has been initialized
 # todo: ability to delete is_initialized on a bunch of nodes
 # todo: use task id as part of instance name
 
@@ -67,8 +70,6 @@ LOGDIR_PREFIX='/efs/runs'
 # TODO: document KEY_NAME restriction a bit better
 # TODO: move installation script to run under tmux for easier debugging of
 # installation failures
-
-# 
 
 # global AWS vars from environment
 
@@ -472,11 +473,20 @@ def server_job(name, num_tasks=1, instance_type=None, install_script='',
 
     # todo: use task index in name
     for instance in instances:
-      tag = ec2.create_tags(
-        Resources=[instance.id], Tags=[{
-            'Key': 'Name',
-            'Value': name
-        }])
+      while True:
+        try:
+          # sometimes get "An error occurred (InvalidInstanceID.NotFound)"
+          tag = ec2.create_tags(
+            Resources=[instance.id], Tags=[{
+                'Key': 'Name',
+                'Value': name
+            }])
+          break
+        except Exception as e:
+          self.log("create_tags failed with %s, retrying in %d seconds"%(
+            str(e), TIMEOUT_SEC))
+          time.sleep(TIMEOUT_SEC)
+
 
     assert len(instances) == num_tasks
     print('{} Instances created'.format(len(instances)))
@@ -751,6 +761,7 @@ tmux a
 
   def _setup_tmux(self):
     # shell command will fail if session exists, but it's ok
+    self.run_sync('mkdir -p /tmp/tmux')
     self.run_sync('tmux kill-session -t tmux')
     self.run_sync('tmux new-session -s tmux -n 0 -d')
 
@@ -768,7 +779,6 @@ tmux a
       self.upload(fname)
 
     # locking to wait for command to finish
-    self.run_sync('mkdir -p /tmp/tmux')
     ts = str(u.now_micros())
     cmd_fn_out = '/tmp/tmux/'+str(self.cmd_idx)+'.'+ts+'.out'
 
@@ -805,14 +815,14 @@ tmux a
       break    
 
 
-  def upload(self, local_fn, remote_fn=None):
+  def upload(self, local_fn, remote_fn=None, skip_existing=False):
     """Uploads file to remote instance. If location not specified, dumps it
     in default directory."""
     # TODO: self.ssh_client is sometimes None
     sftp = self.ssh_client.open_sftp()
     if remote_fn is None:
       remote_fn = os.path.basename(local_fn)
-    if self.file_exists(remote_fn):
+    if skip_existing and self.file_exists(remote_fn):
       self.log("Remote file %s exists, skipping"%(remote_fn,))
     else:
       sftp.put(local_fn, remote_fn)
@@ -848,7 +858,15 @@ tmux a
     # TODO: create tasklogdir for everything for given job
     tmp_fn = '/tmp/tmux/'+str(u.now_micros())
     self.download(remote_fn, tmp_fn)
-    return open(tmp_fn).read()  
+    return open(tmp_fn).read()
+
+  def mount_efs(self):
+    region = u.get_region()
+    efs_id = u.get_efs_dict()[u.RESOURCE_NAME]
+    dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
+    self.run('sudo mkdir -p /efs')
+    self.run('sudo chmod 777 /efs')
+    self.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,), ignore_errors=True) # error on remount
 
   
   @property
