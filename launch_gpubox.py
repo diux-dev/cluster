@@ -60,6 +60,8 @@ import util as u
 import aws
 
 parser = argparse.ArgumentParser(description='launch simple')
+parser.add_argument('--ami', type=str, default='',
+                     help="name of custom AMI to use ")
 parser.add_argument('--name', type=str, default='gpubox00',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='p2.xlarge',
@@ -97,6 +99,7 @@ sudo chmod 777 /efs
 """
 
 def main():
+  region = os.environ.get("AWS_DEFAULT_REGION")
   if args.linux_type == 'ubuntu':
     install_script = INSTALL_SCRIPT_UBUNTU
     ami_dict = ami_dict_ubuntu
@@ -106,9 +109,20 @@ def main():
   else:
     assert False, "Unknown linux type "+args.linux_type
 
-  region = os.environ.get("AWS_DEFAULT_REGION")
-  ami = ami_dict[region]
-  
+  if args.ami:
+    ami = args.ami
+  else:
+    ami = ami_dict[region]
+
+  if args.linux_type == 'ubuntu':
+    install_script = INSTALL_SCRIPT_UBUNTU
+    ami_dict = ami_dict_ubuntu
+  elif args.linux_type == 'amazon':
+    install_script = INSTALL_SCRIPT_AMAZON
+    ami_dict = ami_dict_amazon
+  else:
+    assert False, "Unknown linux type "+args.linux_type
+
   # #  vpc = u.get_vpc_dict()[u.RESOURCE_NAME]
 
   # # pick AZ to use for instance based on available subnets
