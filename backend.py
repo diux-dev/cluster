@@ -1,0 +1,123 @@
+"""Interface for job launching backend."""
+
+import util as u
+
+# aws_backend.py
+# tmux_backend.py
+
+"""
+backend = aws_backend # alternatively, backend=tmux_backend to launch jobs locally in separate tmux sessions
+run = backend.make_run("helloworld")  # sets up /efs/runs/helloworld
+worker_job = run.make_job("worker", instance_type="g3.4xlarge", num_tasks=4, ami=ami, setup_script=setup_script)
+ps_job = run.make_job("ps", instance_type="c5.xlarge", num_tasks=4, ami=ami, setup_script=setup_script)
+setup_tf_config(worker_job, ps_job)
+ps_job.run("python cifar10_main.py --num_gpus=0")  # runs command on each task
+worker_job.run("python cifar10_main.py --num_gpus=4")
+
+tb_job = run.make_job("tb", instance_type="m4.xlarge", num_tasks=1, public_port=6006)
+tb_job.run("tensorboard --logdir=%s --port=%d" %(run.logdir, 6006))
+# when job has one task, job.task[0].ip can be accessed as job.ip
+print("See TensorBoard progress on %s:%d" %(tb_job.ip, 6006))
+print("To interact with workers: %s" %(worker_job.connect_instructions))
+
+
+To reconnect to existing job:
+
+"""
+
+# todo: rename to "start_run" instead of setup_run?
+def make_run(name):
+  """Sets up "run" with given name, such as "training run"."""
+  raise NotImplementedError()
+
+# def make_job(run_name, job_name, **kwargs):
+#   """Initializes Job object. It will reuse existing cluster resources if the job with given parameters has already been launched."""
+#   raise NotImplementedError()
+
+
+class Run:
+  """Run is a collection of jobs that share statistics. IE, training run will contain gradient worker job, parameter server job, and TensorBoard visualizer job. These jobs will use the same shared directory to store checkpoints and event files."""
+
+  def __init__(self, name, install_script=None):
+    """Creates a run. If install_script is specified, it's used as default
+    install_script for all jobs (can be overridden by Job constructor)"""
+    raise NotImplementedError()
+  
+  def make_job(self, name, num_tasks=1, install_script=None, **kwargs):
+    """Creates job in the given run. If install_script is None, uses
+    install_script associated with the Run."""
+    raise NotImplementedError()
+  
+
+class Job:
+  def __init__(self):
+    self.tasks = []
+
+  def run(self, cmd, *args, **kwargs):
+    """Runs command on every task in the job."""
+    
+    for task in self.tasks:
+      task.run(cmd, *args, **kwargs)
+  
+  # these methods redirect to the first task
+  @property
+  def ip(self):
+    return self.tasks[0].ip
+  
+  @property
+  def port(self):
+    return self.tasks[0].port
+  
+    
+class Task:
+  def run(cmd, sync, ignore_errors):
+    """Runs command on given task."""
+    raise NotImplementedError()    
+
+
+  def upload(self, local_fn, remote_fn=None, skip_existing=False):
+    """Uploads given file to the task. If remote_fn is not specified, dumps it
+    into task current directory with the same name."""
+    raise NotImplementedError()    
+
+
+  def download(self, remote_fn, local_fn=None):
+    """Downloads remote file to current directory."""
+    raise NotImplementedError()
+
+  @property
+  def ip(self):
+    return self._ip
+
+  @property
+  def public_ip(self):
+    """Helper method to provide a publicly facing ip for given task when
+    tasks run on a different network than user (ie, AWS internal vs. user's
+    laptop)"""
+    raise NotImplementedError()
+
+  
+  @property
+  def port(self):
+    """This is (the main) internal port that this task will use for
+    communicating with other tasks. When using TensorFlow, this would be the 
+    port on which TensorFlow server is listening."""
+    return self._port
+
+
+  def log(self, message, *args):
+    """Log to client console."""
+    ts = u.current_timestamp()
+    if args:
+      message = message % args
+
+    print("%s %s:%d: (%s) %s"%(ts, self.job.name, self.id, self.ip, message))
+
+  def file_write(self, fn, contents):
+    """Write string contents to file fn in task."""
+    raise NotImplementedError()
+
+  def file_read(self, fn):
+    """Read contents of file and return it as string."""
+    raise NotImplementedError()
+    
