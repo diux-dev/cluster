@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # script to launch Cifar-10 training with a small set
 import argparse
 import json
@@ -37,6 +38,8 @@ parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
 parser.add_argument('--cluster', type=str, default='tmux',
                     help='tmux or aws')
+parser.add_argument('--sync', type=int, default=0,
+                    help='whether to enable sync mode')
 
 args = parser.parse_args()
 assert args.num_workers>0  # need non-empty for both worker and master jobs
@@ -208,6 +211,8 @@ def launch_aws(backend, install_script):
 
   # Launch tensorflow tasks.
   tf_cmd = "python cifar10_main.py --data-dir=/efs/cifar-10-data --job-dir={logdir}".format(logdir=run.logdir)
+  if args.sync:
+    tf_cmd = tf.cmd+' --sync'
   
   task_type = 'master' 
   for task in master_job.tasks:
