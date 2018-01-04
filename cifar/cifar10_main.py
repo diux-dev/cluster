@@ -550,6 +550,9 @@ if __name__ == '__main__':
       default='',
       help='arbitrary string, used for debugging')
   
+  parser.add_argument('--synthetic', type=int, default=1,
+                      help='turn on to use synthetic data')
+
   args = parser.parse_args()
 
   if args.num_gpus>0:

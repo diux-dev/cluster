@@ -187,16 +187,7 @@ def launch_aws(backend, install_script):
 
 
   for task in all_tasks:
-    task.upload('generate_cifar10_tfrecords.py', skip_existing=True)
-    task.upload('cifar10_download_and_extract.py', skip_existing=True)
-    task.upload('cifar10.py', skip_existing=True)
-    task.upload('cifar10_main.py', skip_existing=True)
-    task.upload('cifar10_model.py', skip_existing=True)
-    task.upload('cifar10_utils.py', skip_existing=True)
-    task.upload('model_base.py', skip_existing=True)
-    #    task.upload('eval.tfrecords', skip_existing=True)
-    #    task.upload('train.tfrecords', skip_existing=True)
-    #    task.upload('validation.tfrecords', skip_existing=True)
+    task.upload('cifar10_main.py')
     task.run('source activate mxnet_p36')
     
 
