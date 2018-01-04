@@ -76,13 +76,13 @@ def main():
     assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(instance.key_name, u.RESOURCE_NAME)
     keypair_fn = u.get_keypair_fn(instance.key_name)
 
-  print("Connecting to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
+    print("Found to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
 
-  if args.skip_tmux:
-    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
-  else:
-    cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username,
-                                        instance.public_ip_address)
+    if args.skip_tmux:
+      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+    else:
+      cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username,
+                                          instance.public_ip_address)
   
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
