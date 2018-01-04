@@ -20,6 +20,8 @@ import os
 # set to '' to remove this restriction
 #LIMIT_TO_KEY = os.environ.get("LIMIT_TO_KEY", "dontkillanything")
 LIMIT_TO_KEY=''
+SKIP_TENSORBOARD=True  # true to avoid killing tensorboard jobs
+SKIP_STOPPED=True  # don't terminate stopped jobs
 
 def main():
   global LIMIT_TO_KEY
@@ -53,6 +55,13 @@ def main():
   for (name, instance_response) in instance_list:
     if not fragment in name:
       continue
+    if SKIP_TENSORBOARD and '.tb.' in name:
+      print("Not killing tensorboard job", name)
+      continue
+    if SKIP_STOPPED and instance_response['State']['Name'] == 'stopped':
+      print("Not killing stopped job", name)
+      continue
+    
     key = instance_response.get('KeyName', '')
     if LIMIT_TO_KEY and LIMIT_TO_KEY != key:
       print("instance %s matches but key %s doesn't match desired key %s, "
