@@ -71,7 +71,7 @@ def main():
   sorted_instance_list = sorted(instance_list, key=itemgetter(0))
   cmd = ''
   print("Using region ", region)
-  for (ts, instance) in reversed(sorted_instance_list):
+  for (ts, instance) in sorted_instance_list:
     localtime = instance.launch_time.astimezone(get_localzone())
     assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(instance.key_name, u.RESOURCE_NAME)
     keypair_fn = u.get_keypair_fn(instance.key_name)
