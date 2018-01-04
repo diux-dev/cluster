@@ -23,7 +23,7 @@ parser.add_argument('--placement', type=int, default=0,
 # TODO: rename to gradient instance type
 parser.add_argument('--gpu-instance-type', type=str, default='g3.4xlarge',
                     help='instance to use for gradient workers')
-parser.add_argument('--cpu-instance-type', type=str, default='c5.xlarge',
+parser.add_argument('--cpu-instance-type', type=str, default='c5.large',
                     help='default instance type')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
@@ -98,7 +98,7 @@ source activate mxnet_p36  # env with cuda 9
 export wheel=https://pypi.python.org/packages/86/f9/7b773ba67997b5c001ca57c4681d618f62d3743b7ee4b32ce310c1100cd7/tf_nightly_gpu-1.5.0.dev20171221-cp36-cp36m-manylinux1_x86_64.whl#md5=d126089a6fbbd81b104d303baeb649ff
 
 # --upgrade-strategy=only-if-needed prevents wiping of Intel MKL numpy
-pip install $wheel --upgrade-strategy=only-if-needed
+# pip install $wheel --upgrade-strategy=only-if-needed
 
 #%upload *.py
 #%upload *.tfrecords
