@@ -110,8 +110,6 @@ source activate cifar
 %upload *.tfrecords
 """
 
-
-
 def launch_tmux(backend, install_script):
   run = backend.make_run(args.name, install_script=install_script)
   master_job = run.make_job('master', 1)
@@ -196,9 +194,9 @@ def launch_aws(backend, install_script):
     task.upload('cifar10_model.py', skip_existing=True)
     task.upload('cifar10_utils.py', skip_existing=True)
     task.upload('model_base.py', skip_existing=True)
-    task.upload('eval.tfrecords', skip_existing=True)
-    task.upload('train.tfrecords', skip_existing=True)
-    task.upload('validation.tfrecords', skip_existing=True)
+    #    task.upload('eval.tfrecords', skip_existing=True)
+    #    task.upload('train.tfrecords', skip_existing=True)
+    #    task.upload('validation.tfrecords', skip_existing=True)
     task.run('source activate mxnet_p36')
     
 
@@ -218,7 +216,7 @@ def launch_aws(backend, install_script):
     del cluster_spec['worker']
 
   # Launch tensorflow tasks.
-  tf_cmd = "python cifar10_main.py --data-dir=. --job-dir={logdir} --log-device-placement".format(logdir=run.logdir)
+  tf_cmd = "python cifar10_main.py --data-dir=/efs/cifar-10-data --job-dir={logdir}".format(logdir=run.logdir)
   
   task_type = 'master' 
   for task in master_job.tasks:
