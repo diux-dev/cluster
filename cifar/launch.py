@@ -212,7 +212,7 @@ def launch_aws(backend, install_script):
   # Launch tensorflow tasks.
   tf_cmd = "python cifar10_main.py --data-dir=/efs/cifar-10-data --job-dir={logdir}".format(logdir=run.logdir)
   if args.sync:
-    tf_cmd = tf.cmd+' --sync'
+    tf_cmd = tf_cmd+' --sync'
   
   task_type = 'master' 
   for task in master_job.tasks:
