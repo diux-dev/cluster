@@ -79,7 +79,9 @@ def main():
     keypair_fn = u.get_keypair_fn(instance.key_name)
 
     print("Connecting to %s in %s launched at %s with key %s" % (instance.id, region, localtime, instance.key_name))
-    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+    #    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+    cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username,
+                                        instance.public_ip_address)
     break
   
   if not cmd:
