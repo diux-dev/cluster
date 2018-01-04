@@ -28,6 +28,14 @@ from operator import itemgetter
 
 import util as u
 
+import argparse
+parser = argparse.ArgumentParser(description='Launch CIFAR training')
+parser.add_argument('--skip-tmux', type=int, default=0,
+                    help='whether to skip TMUX launch')
+parser.add_argument('--fragment', type=str, default='',
+                    help='fragment to filter by')
+args = parser.parse_args()
+
 
 def toseconds(dt):
   # to invert:
@@ -37,17 +45,7 @@ def toseconds(dt):
   return time.mktime(dt.utctimetuple())
 
 def main():
-  fragment = ''
-  if len(sys.argv)>1:
-    fragment = sys.argv[1]
-
-  def get_name(instance_response):
-    names = [entry['Value'] for entry in instance_response.get('Tags',[]) if
-             entry['Key']=='Name']
-    if not names:
-      names = ['']
-    assert len(names)==1
-    return names[0]
+  fragment = args.fragment
 
   region = os.environ['AWS_DEFAULT_REGION']
   client = boto3.client('ec2', region_name=region)
@@ -78,11 +76,13 @@ def main():
     assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(instance.key_name, u.RESOURCE_NAME)
     keypair_fn = u.get_keypair_fn(instance.key_name)
 
-    print("Connecting to %s in %s launched at %s with key %s" % (instance.id, region, localtime, instance.key_name))
-    #    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+  print("Connecting to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
+
+  if args.skip_tmux:
+    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
+  else:
     cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username,
                                         instance.public_ip_address)
-    break
   
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))

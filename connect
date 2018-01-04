@@ -1,1 +1,3 @@
-connect.py
+#!/bin/bash
+# syntax shortcut to connect to instance
+connect.py --skip-tmux=0 --fragment=$1
