@@ -2,6 +2,7 @@
 import os
 import argparse
 import boto3
+import shlex
 import paramiko
 import sys
 import time
@@ -17,7 +18,7 @@ u = util
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
-# global default name for AWS resources (VPC name, keypair name, etc)
+# global default name for singleton AWS resources (VPC name, keypair name, etc)
 RESOURCE_NAME=os.environ.get('RESOURCE_NAME', 'nexus')
 
 def now_micros():
@@ -41,6 +42,30 @@ def get_name(tags):
   if len(names)>1:
     assert False, "have more than one name: "+str(names)
   return names[0]
+
+
+def parse_job_name(name):
+  """Parses job name of the form "run.job.taskid" and returns components
+  run.job and taskid.
+  If name does not have given form, returns Nones."""
+  toks = name.split('.')
+  if len(toks)!=3:
+    return None, None
+  run, job, task_id = toks
+  task_id = int(task_id)
+  return run+'.'+job, task_id
+
+
+def get_parsed_job_name(tags):
+  """Return jobname,task_id for given aws instance tags."""
+  return parse_job_name(get_name(tags))
+
+def format_job_name(run, role):
+  return "{}.{}".format(run, role)
+
+def format_task_name(run, role, task_id):
+  assert int(task_id) == task_id
+  return "{}.{}.{}".format(run, role, task_id)
 
 
 def make_name(name):
@@ -291,7 +316,7 @@ def get1(items, **kwargs):
     return result[0]
   return None
 
-def _current_timestamp():
+def current_timestamp():
   # timestamp logic from https://github.com/tensorflow/tensorflow/blob/155b45698a40a12d4fef4701275ecce07c3bb01a/tensorflow/core/platform/default/logging.cc#L80
   current_seconds=time.time();
   remainder_micros=int(1e6*(current_seconds-int(current_seconds)))
@@ -377,6 +402,16 @@ def get_mount_targets_list(efs_id):
     
   return result
 
+def get_subnet_dict(vpc):
+  """Returns dictionary of "availability zone" -> subnet for given VPC."""
+  subnet_dict = {}
+  for subnet in vpc.subnets.all():
+    zone = subnet.availability_zone
+    assert zone not in subnet_dict, "More than one subnet in %s, why?" %(zone,)
+    subnet_dict[zone] = subnet
+  return subnet_dict
+
+
 def get_mount_targets_dict(efs_id):
   """Returns dict of {zone: mount_target_id} for given EFS id."""
   efs_client = u.create_efs_client()
@@ -456,3 +491,132 @@ class SshClient:
     stderr_str = stderr.read().decode('ascii')
     print("run_sync returned: " + stdout_str)
     return stdout_str, stderr_str
+
+def _add_echo(script):
+  """Goes over each line script, adds "echo cmd" in front of each cmd.
+
+  ls a
+
+  becomes
+
+  echo * ls a
+  ls a
+  """
+  new_script = ""
+  for cmd in script.split('\n'):
+    cmd = cmd.strip()
+    if not cmd:
+      continue
+    new_script+="echo \\* " + shlex.quote(cmd) + "\n"
+    new_script+=cmd+"\n"
+  return new_script
+
+def lookup_aws_instances(job_name):
+  """Returns all AWS instances for given AWS job name, like
+   simple.worker"""
+  
+  ec2 = u.create_ec2_resource()
+
+  # TODO: add waiting so that instances in state "initializing" are supported
+  instances = ec2.instances.filter(
+    Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+
+  result = []
+  for i in instances.all():
+    current_job_name, task_id = u.get_parsed_job_name(i.tags)
+
+    if  current_job_name == job_name:
+      result.append(i)
+
+  return result
+
+def maybe_create_placement_group(name=''):
+  """Creates placement group or reuses existing one. crash if unable to create
+  placement group. If name is empty, ignores request."""
+  
+  if not name:
+    return
+  
+  client = u.create_ec2_client()
+  try:
+    # TODO: check that the error is actually about placement group
+    client.describe_placement_groups(GroupNames=[name])
+  except boto3.exceptions.botocore.exceptions.ClientError as e:
+    print("Creating placement group: "+name)
+    res = client.create_placement_group(GroupName=name, Strategy='cluster')
+
+  counter = 0
+  while True:
+    try:
+      res = client.describe_placement_groups(GroupNames=[name])
+      if res['PlacementGroups'][0]['State'] == 'available':
+        print("Found placement group: "+name)
+        assert res['Strategy'] == 'cluster'
+        break
+    except Exception as e:
+      print(e)
+    counter = counter + 1
+    if counter >= MAX_RETRIES:
+      assert False, 'Failed to create placement group ' + name
+    time.sleep(TIMEOUT_SEC)
+
+
+def merge_kwargs(kwargs1, kwargs2):
+  """Merges two dictionaries, assert fails if there's overlap in keys."""
+  assert kwargs1.keys().isdisjoint(kwargs2.keys())
+  kwargs3 = {}
+  kwargs3.update(kwargs1)
+  kwargs3.update(kwargs2)
+  return kwargs3
+
+
+
+def install_pdb_handler():
+  """Make CTRL+\ break into gdb."""
+  
+  import signal
+  import pdb
+
+  def handler(signum, frame):
+    pdb.set_trace()
+  signal.signal(signal.SIGQUIT, handler)
+
+
+# TODO: merge with u.SshClient
+def ssh_to_host(hostname,
+                ssh_key=None,
+                username=None,
+                retry=1):
+
+  """Create ssh connection to host
+
+  Creates and returns and ssh connection to the host passed in.  
+
+  Args:
+    hostname: host name or ip address of the system to connect to.
+    retry: number of time to retry.
+    ssh_key: full path to the ssk hey to use to connect.
+    username: username to connect with.
+
+  returns Paramiko SSH client connected to host.
+
+  """
+
+  print("ssh_to_host %s@%s" % (username, hostname))
+  k = paramiko.RSAKey.from_private_key_file(ssh_key)
+  
+  ssh_client = paramiko.SSHClient()
+  ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+  counter = retry
+  while counter > 0:
+    try:
+      ssh_client.connect(hostname=hostname, username=username, pkey=k)
+      break
+    except Exception as e:
+      counter = counter - 1
+      print('Exception connecting to host via ssh (could be a timeout):'.format(e))
+      if counter == 0:
+        return None
+
+  return ssh_client

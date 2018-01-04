@@ -10,9 +10,9 @@ task.run("python %s --role=worker" % (__file__,)) # runs script and streams outp
 
 # list current jobs
 
+# TODO: look up how sagemaker allocates machines
 # TODO: simplify connecting to existing jobs (remove need to call wait_until..)
 # TODO: add ability to check for whether SSH has been initialized
-# todo: ability to delete is_initialized on a bunch of nodes
 # todo: use task id as part of instance name
 
 # TODO: document all uses of local files (tasklogdir?)
@@ -542,7 +542,8 @@ class Job:
     self.tasks = []
     # todo: make task_ids asignment deterministic
     for task_id, instance in enumerate(instances):
-      self.tasks.append(Task(instance, self, task_id, install_script,
+      self.tasks.append(Task(instance, self, task_id,
+                             install_script=install_script,
                              linux_type=linux_type))
 
   def initialize(self):
@@ -860,6 +861,7 @@ tmux a
     self.download(remote_fn, tmp_fn)
     return open(tmp_fn).read()
 
+  # TODO: make private
   def mount_efs(self):
     region = u.get_region()
     efs_id = u.get_efs_dict()[u.RESOURCE_NAME]

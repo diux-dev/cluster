@@ -1,4 +1,6 @@
 """Interface for job launching backend."""
+import os
+import glob
 
 import util as u
 
@@ -49,6 +51,21 @@ class Run:
     raise NotImplementedError()
   
 
+  @property
+  def logdir(self):
+    """Location of shared files, ie /efs/runs/attemp1"""
+    raise NotImplementedError()
+
+
+  def log(self, message, *args):
+    """Log to client console."""
+    ts = u.current_timestamp()
+    if args:
+      message = message % args
+
+    print("%s %s: %s"%(ts, self.name, message))
+
+
 class Job:
   def __init__(self):
     self.tasks = []
@@ -63,16 +80,39 @@ class Job:
   @property
   def ip(self):
     return self.tasks[0].ip
+
+  @property
+  def public_ip(self):
+    return self.tasks[0].public_ip
   
   @property
   def port(self):
     return self.tasks[0].port
-  
+
     
 class Task:
   def run(cmd, sync, ignore_errors):
     """Runs command on given task."""
     raise NotImplementedError()    
+
+  def _upload_handler(self, line):
+    """Handle following types of commands.
+
+    Individual files, ie
+    %upload file.txt
+
+    Glob expressions, ie
+    %upload *.py"""
+
+
+    toks = line.split()
+    assert len(toks) == 2
+    assert toks[0] == '%upload'
+    fname = toks[1]
+    fname = fname.replace("~", os.environ["HOME"])
+
+    for fn in glob.glob(fname):
+      self.upload(fn)
 
 
   def upload(self, local_fn, remote_fn=None, skip_existing=False):
@@ -95,7 +135,7 @@ class Task:
     tasks run on a different network than user (ie, AWS internal vs. user's
     laptop)"""
     raise NotImplementedError()
-
+    
   
   @property
   def port(self):
@@ -111,7 +151,7 @@ class Task:
     if args:
       message = message % args
 
-    print("%s %s:%d: (%s) %s"%(ts, self.job.name, self.id, self.ip, message))
+    print("%s %s.%d: (%s) %s"%(ts, self.job.name, self.id, self.ip, message))
 
   def file_write(self, fn, contents):
     """Write string contents to file fn in task."""
@@ -120,4 +160,11 @@ class Task:
   def file_read(self, fn):
     """Read contents of file and return it as string."""
     raise NotImplementedError()
-    
+
+  def file_exists(self, fn):
+    """Return true if file exists in task current directory."""
+    raise NotImplementedError()
+
+  def _ossystem(self, cmd):
+    self.log(cmd)
+    os.system(cmd)

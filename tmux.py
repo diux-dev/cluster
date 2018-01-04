@@ -1,7 +1,6 @@
 from pprint import pprint as pp
 import argparse
 import base64
-import boto3
 import json
 import os
 import os
@@ -11,17 +10,22 @@ import shlex
 import struct
 import subprocess
 import sys
-import tensorflow as tf
 import threading
 import time
 import yaml
 
+import tensorflow as tf
+import boto3
+
 import util as u
 
-TASKDIR_PREFIX='/temp/tasklogs'
-LOGDIR_PREFIX='/temp/runs' # use same name for remote/local?
+# TODO: factor out/document abstract interface for job/task
 
-# TODO: add locking to tmux commands
+# location of output files on target machine
+TASKDIR_PREFIX='/tmp/tasklogs'
+SCRATCH_PREFIX='/tmp'
+
+LOGDIR_PREFIX='/efs_local/runs'
 
 def setup_logdir(name):
   """Creates appropriate logdir for given run."""
@@ -36,7 +40,8 @@ def _ossystem(cmd):
   os.system(cmd)
 
 
-def server_job(name, num_tasks):
+# TODO: rename to "launch_job"?
+def server_job(name, num_tasks, install_script=''):
   assert num_tasks>=0
   
   _ossystem('tmux kill-session -t ' + name)
@@ -51,24 +56,23 @@ def server_job(name, num_tasks):
     tmux_windows.append(name+":"+str(task_id))
 
   # todo: remove num_tasks
-  job = Job(name, tmux_windows)
-
+  job = Job(name, tmux_windows, install_script=install_script)
   return job
   
 
 class Job:
-  def __init__(self, name, tmux_windows):
+  def __init__(self, name, tmux_windows, install_script=""):
     self.name = name
     self.tasks = []
     for task_id, tmux_window in enumerate(tmux_windows):
-      self.tasks.append(Task(tmux_window, self, task_id))
+      self.tasks.append(Task(tmux_window, self, task_id,
+                             install_script=install_script))
 
   def wait_until_ready(self):
     for task in self.tasks:
       task.wait_until_ready()
 
 
-# TODO: need, task.file_write
 # need: task.file_exists
 # need: task.file_read
 
@@ -123,16 +127,17 @@ class Task:
 
     self.last_stdout = '<unavailable>'  # compatiblity with aws.py:Task
     self.last_stderr = '<unavailable>'
-    
+
+    self.scratch = SCRATCH_PREFIX
     self.taskdir = "{}/{}.{}/{}".format(
       TASKDIR_PREFIX, job.name, u.now_micros(), self.id)
     self.run('mkdir -p '+self.taskdir)
     self.run('cd '+self.taskdir)
 
-  def run(self, cmd):
+  def run_sync(self, cmd):
     tmux_run_sync(self.tmux_window, cmd)
 
-  def run_async(self, cmd):
+  def run(self, cmd):
     _ossystem("tmux send-keys -t {} '{}' Enter".format(self.tmux_window, cmd))
 
   def upload(self, source_fn, target_fn='.'):
@@ -141,11 +146,37 @@ class Task:
     source_fn_full = os.path.abspath(source_fn)
     self.run("cp %s %s" %(source_fn_full, target_fn))
 
-  def write_to_file(self, contents, fn):
+  def file_write(self, contents, fn):
     local_fn = '/tmp/'+str(u.now_micros())
     with open(local_fn, 'w') as f:
       f.write(contents)
     self.upload(local_fn, os.path.basename(fn))
+
+
+  def file_exists(self, remote_fn):
+    stdin, stdout, stderr = self.ssh_client.exec_command('stat '+remote_fn,
+                                                    get_pty=True)
+    stdout_bytes = stdout.read()
+    stdout_str = stdout_bytes.decode()
+    stderr_bytes = stderr.read()
+    stderr_str = stderr_bytes.decode()
+    if 'No such file' in stdout_str:
+      return False
+    else:
+      return True
+  
+  def file_write(self, remote_fn, contents):
+    # TODO: create tasklogdir for everything for given job
+    tmp_fn = '/tmp/tmux/'+str(u.now_micros())
+    open(tmp_fn, 'w').write(contents)
+    self.upload(tmp_fn, remote_fn)
+  
+
+  def file_read(self, remote_fn):
+    # TODO: create tasklogdir for everything for given job
+    tmp_fn = '/tmp/tmux/'+str(u.now_micros())
+    self.download(remote_fn, tmp_fn)
+    return open(tmp_fn).read()
 
   def wait_until_ready(self):
     return

@@ -14,6 +14,7 @@ import util as u
 TASKDIR_PREFIX='/tmp/tasklogs'
 LOGDIR_PREFIX='/efs_local/runs'
 
+# TODO: add kwargs so that tmux backend can be drop-in replacement
 def make_run(name, install_script=None):
   return Run(name, install_script)
 
@@ -23,6 +24,7 @@ class Run(backend.Run):
     self.name = name
     self.install_script = install_script
 
+  # TODO: rename job_name to role_name
   def make_job(self, job_name, num_tasks, install_script=None):
     assert num_tasks>=0
 
@@ -93,22 +95,6 @@ class Task(backend.Task):
         self.run(line)
 
 
-  def _upload_handler(self, line):
-    """Handle following types of commands.
-
-    Individual files, ie
-    %upload file.txt
-
-    Glob expressions, ie
-    %upload *.py"""
-
-    toks = line.split()
-    assert len(toks) == 2
-    assert toks[0] == '%upload'
-
-    for fn in glob.glob(toks[1]):
-      self.upload(fn)
-
   def _wait_for_file(self, fn, max_wait_sec=600, check_interval=0.02):
     start_time = time.time()
     while True:
@@ -122,10 +108,6 @@ class Task(backend.Task):
         continue
       else:
         break
-
-  def _ossystem(self, cmd):
-    self.log(cmd)
-    os.system(cmd)
 
 
   def run(self, cmd, sync=True, ignore_errors=False):
