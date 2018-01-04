@@ -177,12 +177,12 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       loss_summary = tf.summary.scalar('TheLoss', loss)
 
       examples_sec_hook = cifar10_utils.ExamplesPerSecondHook(
-          params.train_batch_size, every_n_steps=10)
+        params.train_batch_size, every_n_steps=200)
 
       tensors_to_log = {'learning_rate': learning_rate, 'loss': loss}
 
       logging_hook = tf.train.LoggingTensorHook(
-          tensors=tensors_to_log, every_n_iter=10)
+          tensors=tensors_to_log, every_n_iter=100)
 
       # TODO: figure out why train hooks no longer do anything
       train_hooks = [logging_hook, examples_sec_hook]
@@ -292,25 +292,14 @@ def input_fn(data_dir,
     use_distortion = subset == 'train' and use_distortion_for_training
     dataset = cifar10.Cifar10DataSet(data_dir, subset, use_distortion)
     image_batch, label_batch = dataset.make_batch(batch_size)
-    if num_shards <= 1:
-      # No GPU available or only 1 GPU.
-      return [image_batch], [label_batch]
 
-    # Note that passing num=batch_size is safe here, even though
-    # dataset.batch(batch_size) can, in some cases, return fewer than batch_size
-    # examples. This is because it does so only when repeating for a limited
-    # number of epochs, but our dataset repeats forever.
-    image_batch = tf.unstack(image_batch, num=batch_size, axis=0)
-    label_batch = tf.unstack(label_batch, num=batch_size, axis=0)
-    feature_shards = [[] for i in range(num_shards)]
-    label_shards = [[] for i in range(num_shards)]
-    for i in xrange(batch_size):
-      idx = i % num_shards
-      feature_shards[idx].append(image_batch[i])
-      label_shards[idx].append(label_batch[i])
-    feature_shards = [tf.parallel_stack(x) for x in feature_shards]
-    label_shards = [tf.parallel_stack(x) for x in label_shards]
-    return feature_shards, label_shards
+    if args.synthetic:
+      image_batch = tf.random_uniform((batch_size, 32, 32, 3))
+      label_batch = tf.ones((batch_size,), dtype=tf.int32)
+    
+    assert num_shards <= 1  # remove multi-gpu support for now
+    return [image_batch], [label_batch]
+
 
 
 def get_experiment_fn(data_dir,
