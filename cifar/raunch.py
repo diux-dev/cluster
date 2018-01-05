@@ -45,8 +45,6 @@ parser.add_argument('--sync', type=int, default=0,
                     help='whether to enable sync mode')
 parser.add_argument('--name', type=str, default='ray00',
                      help="name of the current run")
-parser.add_argument("--add-pause", default=0, type=int,
-                    help="Add pause to avoid melting my laptop.")
 
 args = parser.parse_args()
 assert args.num_workers>0  # need non-empty for both worker and master jobs
@@ -102,14 +100,14 @@ def launch_tmux(backend, install_script):
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
   --logdir={logdir} \
-                    --dim={dim}".format(script=SCRIPT_NAME,
+                    --dim={dim} --add-pause=1".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,
                                         num_ps=args.num_ps,
                                         logdir=run.logdir,
                                         dim=args.dim))
-  print ("Connect to head node:")
+  print("Connect to head node:")
   print(head_task.connect_instructions)
 
   print("Other nodes:")
@@ -153,16 +151,14 @@ def launch_aws(backend, install_script):
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
                     --dim={dim} \
-                    --logdir={logdir} \
-                    --add-pause={add_pause}".format(script=SCRIPT_NAME,
+                    --logdir={logdir}".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,
                                                     logdir=run.logdir,
                                         num_ps=args.num_ps,
-                                                    dim=args.dim,
-                                                    add_pause=args.add_pause))
-  print ("Connect to head node:")
+                                                    dim=args.dim))
+  print("Connect to head node:")
   print(head_task.connect_instructions)
 
   print("Other nodes:")
