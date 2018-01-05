@@ -32,7 +32,7 @@ parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--num-parameter-servers", default=2, type=int,
                     help="The number of parameter servers to use.")
-parser.add_argument("--dim", default=151190, type=int,
+parser.add_argument("--dim", default=151192, type=int,
                     help="The number of parameters, defaults to size of "
                     "TF default CIFAR10 model")
 parser.add_argument("--redis-address", default=None, type=str,
@@ -135,15 +135,13 @@ class TensorboardLogger:
 class CNN(object):
     def __init__(self, dim):
         self.dim = dim
-        self.fixed = np.ones(self.dim, dtype=np.float32)
+        self.weights = np.zeros(self.dim, dtype=np.float32)
 
     def get_gradients(self):
-      #        time.sleep(0.16)
-      #        return np.ones(self.dim, dtype=np.float32)
-      return self.fixed
+        return np.ones(self.dim, dtype=np.float32)
 
     def set_weights(self, weights):
-        pass
+        self.weights = weights
 
 
 # TODO(rkn): Once we have better custom resource support for actors, we should
@@ -154,8 +152,8 @@ class ParameterServer(object):
         self.params = np.zeros(dim)
 
     def update_and_get_new_weights(self, *gradients):
-      #        for grad in gradients:
-      #            self.params += grad
+        for grad in gradients:
+            self.params += grad
         return self.params
 
     def ip(self):
@@ -171,9 +169,8 @@ class Worker(object):
 
     @ray.method(num_return_vals=args.num_parameter_servers)
     def compute_gradient(self, *weights):
-      #        all_weights = np.concatenate(weights)
-      #        self.net.set_weights(all_weights)
-        self.net.set_weights(self.fixed)
+        all_weights = np.concatenate(weights)
+        self.net.set_weights(all_weights)
         gradient = self.net.get_gradients()
         if self.num_ps == 1:
             return gradient
