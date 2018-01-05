@@ -14,6 +14,8 @@ import util as u
 TASKDIR_PREFIX='/tmp/tasklogs'
 LOGDIR_PREFIX='/efs_local/runs'
 
+# TODO: use separate session for each task, for parity with AWS job launcher
+
 # TODO: add kwargs so that tmux backend can be drop-in replacement
 def make_run(name, install_script=None):
   return Run(name, install_script)
