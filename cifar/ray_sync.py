@@ -31,13 +31,15 @@ import cifar10_utils
 util = sys.modules[__name__]   
 u = util
 
+# TODO: do not hardwire parameter sizes/splitting
+
 parser = argparse.ArgumentParser(description="Run the synchronous parameter "
                                              "server example.")
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--num-parameter-servers", default=2, type=int,
                     help="The number of parameter servers to use.")
-parser.add_argument("--dim", default=151192, type=int,
+parser.add_argument("--dim", default=75360, type=int,
                     help="The number of parameters, defaults to size of "
                     "TF default CIFAR10 model")
 parser.add_argument("--redis-address", default=None, type=str,
@@ -143,10 +145,9 @@ class TensorboardLogger:
 class CNN(object):
     def __init__(self, dim):
         self.dim = dim
-        self.weights = np.zeros(self.dim, dtype=np.float32)
 
         # param values from cifar10_main.py
-        if tf.test.is_gpu_available():
+        if not tf.test.is_gpu_available():
             data_format = 'channels_last'
         else:
             data_format = 'channels_first'
@@ -169,6 +170,9 @@ class CNN(object):
             data_format=data_format)
         self.logits = self.model.forward_pass(image_batch,
                                               input_data_format='channels_last')
+
+        # make size of parameters multiple of 8 (75360)
+        dummy_var = tf.Variable(tf.ones((5,)))
         self.pred = {
             'classes': tf.argmax(input=self.logits, axis=1),
             'probabilities': tf.nn.softmax(self.logits)
@@ -182,6 +186,7 @@ class CNN(object):
 
         grads = tf.gradients(self.loss, self.model_params)
         self.grad = tf.concat([tf.reshape(g,[-1]) for g in grads], axis=0)
+        self.weights = np.zeros(self.grad.shape, dtype=np.float32)
 
         # TODO: make this into an op that accepts actual values
         self.set_weights_op = tf.global_variables_initializer()
@@ -192,7 +197,7 @@ class CNN(object):
 
     def get_gradients(self):
         if args.real_model:
-            return self.sess.run(grad)
+            return self.sess.run(self.grad)
         else:
             return np.ones(self.dim, dtype=np.float32)
 
