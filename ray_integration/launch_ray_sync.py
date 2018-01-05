@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+#
+# Ray sync
+# pip install https://s3-us-west-2.amazonaws.com/ray-wheels/772527caa484bc04169c54959b6a0c5001650bf6/ray-0.3.0-cp36-cp36m-macosx_10_6_intel.whl --upgrade-strategy=only-if-needed
 
 # https://aws.amazon.com/blogs/ai/new-aws-deep-learning-amis-for-machine-learning-practitioners/
 
