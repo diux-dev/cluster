@@ -32,7 +32,7 @@ parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
 parser.add_argument("--num-gpus", default=1, type=int,
                     help="Number of GPUs to use per worker.")
-parser.add_argument("--dim", default=151190, type=int,
+parser.add_argument("--dim", default=75360, type=int,
                     help="The number of parameters, defaults to size of "
                     "TF default CIFAR10 model")
 parser.add_argument("--num-ps", default=1, type=int,
@@ -151,6 +151,7 @@ def launch_aws(backend, install_script):
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
                     --dim={dim} \
+                    --real-model \
                     --logdir={logdir}".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
