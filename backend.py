@@ -91,12 +91,12 @@ class Job:
 
     
 class Task:
-  def run(cmd, sync, ignore_errors):
+  def run(self, cmd, sync, ignore_errors):
     """Runs command on given task."""
     raise NotImplementedError()    
 
-  def run_async(cmd, *args, **kwargs):
-    run(cmd, sync=False, *args, **kwargs)
+  def run_async(self, cmd, *args, **kwargs):
+    self.run(cmd, sync=False, *args, **kwargs)
     
   def _upload_handler(self, line):
     """Handle following types of commands.
