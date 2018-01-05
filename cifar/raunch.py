@@ -115,7 +115,7 @@ def launch_tmux(backend, install_script):
     
   tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
   tb_job.run(tb_cmd, sync=False)
-  print("See tensorboard at http://%s:%s"%(tb_job.ip, tb_job.port))
+  print("See tensorboard at http://%s:%s"%(tb_job.ip, 6006))
 
 def launch_aws(backend, install_script):
   region = u.get_region()
@@ -169,7 +169,7 @@ def launch_aws(backend, install_script):
 
   tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
   tb_job.run(tb_cmd, sync=False)
-  print("See tensorboard at http://%s:%s"%(tb_job.ip, tb_job.port))
+  print("See tensorboard at http://%s:%s"%(tb_job.public_ip, 6006))
 
 
 def main():
