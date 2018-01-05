@@ -158,7 +158,8 @@ if __name__ == "__main__":
         # performance?
         all_grad_ids = [grad_id for grad_id_list in grad_id_lists
                         for grad_id in grad_id_list]
-        ray.wait(all_grad_ids, num_returns=len(all_grad_ids))
+        with u.timeit('wait_compute_grads'):
+          ray.wait(all_grad_ids, num_returns=len(all_grad_ids))
 
         t2 = time.time()
 
@@ -171,7 +172,8 @@ if __name__ == "__main__":
 
         # TODO(rkn): This weight should not be removed. Does it affect
         # performance?
-        ray.wait(split_weights, num_returns=len(split_weights))
+        with u.timeit('wait_ps_add'):
+          ray.wait(split_weights, num_returns=len(split_weights))
 
         t3 = time.time()
         print("elapsed times: ", t3 - t1, t2 - t1, t3 - t2)

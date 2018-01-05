@@ -351,6 +351,29 @@ class timeit:
     interval_sec = (self.end - self.start)
     print("%s took %.2f seconds"%(self.tag, interval_sec))
 
+
+global_timeit_dict = OrderedDict()
+class timeit:
+  """Decorator to measure length of time spent in the block in millis and log
+  it to TensorBoard."""
+  
+  def __init__(self, tag=""):
+    self.tag = tag
+    
+  def __enter__(self):
+    self.start = time.perf_counter()
+    return self
+  
+  def __exit__(self, *args):
+    self.end = time.perf_counter()
+    interval_ms = 1000*(self.end - self.start)
+    global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
+    logger = u.get_last_logger(skip_existence_check=True)
+    if logger:
+      newtag = 'time/'+self.tag
+      logger(newtag, interval_ms)
+
+
 def get_instance_ip_map():
   """Return instance_id->private_ip map for all running instances."""
   
