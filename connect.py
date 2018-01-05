@@ -47,6 +47,9 @@ def toseconds(dt):
 def main():
   fragment = args.fragment
 
+  # TODO: prevent CTRL+c/CTRL+d from killing session
+  print("Launching into TMUX session, use CTRL+b d to exit")
+
   region = os.environ['AWS_DEFAULT_REGION']
   client = boto3.client('ec2', region_name=region)
   ec2 = boto3.resource('ec2', region_name=region)
