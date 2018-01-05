@@ -95,6 +95,9 @@ class Task:
     """Runs command on given task."""
     raise NotImplementedError()    
 
+  def run_async(cmd, *args, **kwargs):
+    run(cmd, sync=False, *args, **kwargs)
+    
   def _upload_handler(self, line):
     """Handle following types of commands.
 

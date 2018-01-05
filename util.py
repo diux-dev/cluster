@@ -10,6 +10,9 @@ import time
 from collections import OrderedDict
 from collections import defaultdict
 
+
+import tensorflow as tf
+
 # shortcuts to refer to util module, this lets move external code into
 # this module unmodified
 util = sys.modules[__name__]   
@@ -620,3 +623,63 @@ def ssh_to_host(hostname,
         return None
 
   return ssh_client
+
+########################################
+# Tensorboard logging
+########################################
+def chunks(l, n):
+  """Yield successive n-sized chunks from l."""
+  for i in range(0, len(l), n):
+    yield l[i:i + n]
+
+# TODO: have global experiment_base that I can use to move logging to
+# non-current directory
+GLOBAL_RUNS_DIRECTORY='runs'
+global_last_logger = None
+
+def get_last_logger(skip_existence_check=False):
+  """Returns last logger, if skip_existence_check is set, doesn't
+  throw error if logger doesn't exist."""
+  global global_last_logger
+  if not skip_existence_check:
+    assert global_last_logger
+  return global_last_logger
+
+class TensorboardLogger:
+  """Helper class to log to single tensorboard writer from multiple places.
+   logger = u.TensorboardLogger("mnist7")
+   logger = u.get_last_logger()  # gets last logger created
+   logger('svd_time', 5)  # records "svd_time" stat at 5
+   logger.next_step()     # advances step counter
+   logger.set_step(5)     # sets step counter to 5
+  """
+  
+  def __init__(self, logdir, step=0):
+    # TODO: do nothing for default run
+    
+    global global_last_logger
+    assert global_last_logger is None
+    self.logdir = logdir,
+    self.summary_writer = tf.summary.FileWriter(logdir,
+                                                flush_secs=1,
+                                                graph=tf.get_default_graph())
+    self.step = step
+    self.summary = tf.Summary()
+    global_last_logger = self
+    self.last_timestamp = time.perf_counter()
+
+  def __call__(self, *args):
+    print("Logging %s to %s"%(args[1], self.logdir,))
+    assert len(args)%2 == 0
+    for (tag, value) in chunks(args, 2):
+      self.summary.value.add(tag=tag, simple_value=float(value))
+
+  def next_step(self):
+    new_timestamp = time.perf_counter()
+    interval_ms = 1000*(new_timestamp - self.last_timestamp)
+    self.summary.value.add(tag='time/step',
+                           simple_value=interval_ms)
+    self.last_timestamp = new_timestamp
+    self.summary_writer.add_summary(self.summary, self.step)
+    self.step+=1
+    self.summary = tf.Summary()

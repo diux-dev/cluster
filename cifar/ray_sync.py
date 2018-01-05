@@ -10,22 +10,31 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+
+import argparse
 import numpy as np
+import os
+import sys
 import time
 
 import ray
+import util as u
 
-import argparse
 parser = argparse.ArgumentParser(description="Run the synchronous parameter "
                                              "server example.")
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--num-parameter-servers", default=2, type=int,
                     help="The number of parameter servers to use.")
-parser.add_argument("--dim", default=25000000, type=int,
-                    help="The number of parameters.")
+parser.add_argument("--dim", default=151190, type=int,
+                    help="The number of parameters, defaults to size of "
+                    "TF default CIFAR10 model")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
+parser.add_argument("--add-pause", default=0, type=int,
+                    help="Add pause to avoid melting my laptop.")
+parser.add_argument('--logdir', type=str, default='asdfasdfasdf',
+                     help="location of logs")
 args = parser.parse_args()
 
 
@@ -83,6 +92,10 @@ class Worker(object):
 
 
 if __name__ == "__main__":
+
+    import tensorflow as tf
+    tf.constant(1)  # dummy default graph to appease tensorboard
+    
     if args.redis_address is None:
         # Run everything locally.
         ray.init(num_gpus=args.num_parameter_servers + args.num_workers)
@@ -92,6 +105,10 @@ if __name__ == "__main__":
 
     split_weights = np.split(np.zeros(args.dim, dtype=np.float32),
                              args.num_parameter_servers)
+
+
+    # create tensorboard logger
+    logger = u.TensorboardLogger(args.logdir)
 
     # Create the parameter servers.
     pss = [ParameterServer.remote(split_weights[i].size)
@@ -116,7 +133,13 @@ if __name__ == "__main__":
         if len(all_ips) != len(set(all_ips)):
             print("Warning, some IPs are reused")
 
+    LOG_FREQUENCY = 10
+    step = 0
+    last_step = 0
+    last_time = time.time()
     while True:
+        step+=1
+        logger.next_step()
         t1 = time.time()
 
         # Compute and apply gradients.
@@ -152,3 +175,13 @@ if __name__ == "__main__":
 
         t3 = time.time()
         print("elapsed times: ", t3 - t1, t2 - t1, t3 - t2)
+        if step%LOG_FREQUENCY == 0:
+            steps_per_sec = (step - last_step)/(time.time()-last_time)
+            logger("steps_per_sec", steps_per_sec)
+            last_step = step
+            last_time = time.time()
+            
+        if args.add_pause:
+          time.sleep(0.1)
+          
+

@@ -42,6 +42,8 @@ parser.add_argument('--sync', type=int, default=0,
                     help='whether to enable sync mode')
 parser.add_argument('--name', type=str, default='ray00',
                      help="name of the current run")
+parser.add_argument("--add-pause", default=0, type=int,
+                    help="Add pause to avoid melting my laptop.")
 
 args = parser.parse_args()
 assert args.num_workers>0  # need non-empty for both worker and master jobs
@@ -91,15 +93,18 @@ def launch_tmux(backend, install_script):
   ray_job.tasks[1].run("ray start --redis-address %s:%d --num-gpus=%d --num-cpus=%d --num-workers=%d" % (head_task.ip, REDIS_PORT, num_tasks, num_tasks, num_tasks))
     
   head_task.upload(SCRIPT_NAME)
-  head_task.run("python {script} \
+  head_task.upload('../util.py')
+  head_task.run_async("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
+  --logdir={logdir} \
                     --dim={dim}".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,
                                         num_ps=args.num_ps,
+                                        logdir=run.logdir,
                                         dim=args.dim))
   print ("Connect to head node:")
   print(head_task.connect_instructions)
@@ -108,6 +113,8 @@ def launch_tmux(backend, install_script):
   for (i, task) in enumerate(ray_job.tasks[1:]):
     print(i, task.connect_instructions)
     
+  tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
+  tb_job.run(tb_cmd, sync=False)
   print("See tensorboard at http://%s:%s"%(tb_job.ip, tb_job.port))
 
 def launch_aws(backend, install_script):
@@ -137,16 +144,21 @@ def launch_aws(backend, install_script):
     task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
     
   head_task.upload(SCRIPT_NAME)
-  head_task.run("python {script} \
+  head_task.upload('../util.py')
+  head_task.run_async("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
                     --num-parameter-servers={num_ps} \
-                    --dim={dim}".format(script=SCRIPT_NAME,
+                    --dim={dim} \
+                    --logdir={logdir} \
+                    --add-pause={add_pause}".format(script=SCRIPT_NAME,
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,
+                                                    logdir=run.logdir,
                                         num_ps=args.num_ps,
-                                        dim=args.dim))
+                                                    dim=args.dim,
+                                                    add_pause=args.add_pause))
   print ("Connect to head node:")
   print(head_task.connect_instructions)
 
