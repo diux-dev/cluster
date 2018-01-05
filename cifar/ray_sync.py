@@ -22,6 +22,11 @@ from collections import defaultdict
 
 import ray
 
+
+import cifar10
+import cifar10_model
+import cifar10_utils
+
 # move some methods to util later, for now "u" points to this file
 util = sys.modules[__name__]   
 u = util
@@ -41,6 +46,9 @@ parser.add_argument("--add-pause", default=0, type=int,
                     help="Add pause to avoid melting my laptop.")
 parser.add_argument('--logdir', type=str, default='asdfasdfasdf',
                      help="location of logs")
+parser.add_argument('--real-model', action='store_true',
+                    default=False,
+                    help="use real CIFAR model for gradients?")
 args = parser.parse_args()
 
 
@@ -105,7 +113,7 @@ class TensorboardLogger:
     assert global_last_logger is None
     self.logdir = logdir,
     self.summary_writer = tf.summary.FileWriter(logdir,
-                                                flush_secs=1,
+                                                flush_secs=5,
                                                 graph=tf.get_default_graph())
     self.step = step
     self.summary = tf.Summary()
@@ -137,12 +145,62 @@ class CNN(object):
         self.dim = dim
         self.weights = np.zeros(self.dim, dtype=np.float32)
 
+        # param values from cifar10_main.py
+        if tf.test.is_gpu_available():
+            data_format = 'channels_last'
+        else:
+            data_format = 'channels_first'
+        
+
+        is_training = True
+        weight_decay = 2e-4,
+        num_layers = 8
+        batch_size = 32
+        batch_norm_decay=0.997
+        batch_norm_epsilon=1e-5
+        image_batch = tf.random_uniform((batch_size, 32, 32, 3))
+        label_batch = tf.ones((batch_size,), dtype=tf.int32)
+
+        self.model = cifar10_model.ResNetCifar10(
+            num_layers,
+            batch_norm_decay=batch_norm_decay,
+            batch_norm_epsilon=batch_norm_epsilon,
+            is_training=is_training,
+            data_format=data_format)
+        self.logits = self.model.forward_pass(image_batch,
+                                              input_data_format='channels_last')
+        self.pred = {
+            'classes': tf.argmax(input=self.logits, axis=1),
+            'probabilities': tf.nn.softmax(self.logits)
+        }
+
+        self.loss = tf.losses.sparse_softmax_cross_entropy(logits=self.logits,
+                                                      labels=label_batch)
+        self.model_params = tf.trainable_variables()
+        self.loss += weight_decay * tf.add_n(
+            [tf.nn.l2_loss(v) for v in self.model_params])
+
+        grads = tf.gradients(self.loss, self.model_params)
+        self.grad = tf.concat([tf.reshape(g,[-1]) for g in grads], axis=0)
+
+        # TODO: make this into an op that accepts actual values
+        self.set_weights_op = tf.global_variables_initializer()
+        
+        # todo(y): pad things so that it's divisible by num_ps?
+
+        self.sess = tf.Session()
+
     def get_gradients(self):
-        return np.ones(self.dim, dtype=np.float32)
+        if args.real_model:
+            return self.sess.run(grad)
+        else:
+            return np.ones(self.dim, dtype=np.float32)
 
     def set_weights(self, weights):
         self.weights = weights
-
+        # TODO, pass weights into set_weights_op
+        if args.real_model:
+            self.sess.run(self.set_weights_op)
 
 # TODO(rkn): Once we have better custom resource support for actors, we should
 # not use GPUs here.
