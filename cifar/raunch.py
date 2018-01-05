@@ -23,15 +23,18 @@ parser.add_argument('--placement', type=int, default=0,
                      help="launch all jobs inside placement group")
 # TODO: rename to gradient instance type
 parser.add_argument('--gpu-instance-type', type=str, default='g3.4xlarge',
-                    help='instance to use for gradient workers')
+                    help='instance for GPU workers')
 parser.add_argument('--cpu-instance-type', type=str, default='c5.large',
-                    help='default instance type')
+                    help='instance for CPU workers')
+parser.add_argument('--tb-instance-type', type=str, default='m3.large',
+                    help='instance for TensorBoard jobs')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
 parser.add_argument("--num-gpus", default=1, type=int,
                     help="Number of GPUs to use per worker.")
-parser.add_argument("--dim", default=25000000, type=int,
-                    help="Number of parameters.")
+parser.add_argument("--dim", default=151190, type=int,
+                    help="The number of parameters, defaults to size of "
+                    "TF default CIFAR10 model")
 parser.add_argument("--num-ps", default=1, type=int,
                     help="The number of parameter servers workers to use.")
 parser.add_argument('--zone', type=str, default='us-east-1c',
@@ -93,7 +96,7 @@ def launch_tmux(backend, install_script):
   ray_job.tasks[1].run("ray start --redis-address %s:%d --num-gpus=%d --num-cpus=%d --num-workers=%d" % (head_task.ip, REDIS_PORT, num_tasks, num_tasks, num_tasks))
     
   head_task.upload(SCRIPT_NAME)
-  head_task.upload('../util.py')
+  #  head_task.upload('../util.py')
   head_task.run_async("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
@@ -126,7 +129,7 @@ def launch_aws(backend, install_script):
                          ami=ami, availability_zone=args.zone)
   ray_job = run.make_job('worker', num_tasks,
                          instance_type=args.gpu_instance_type)
-  tb_job = run.make_job('tb', 1, instance_type=args.cpu_instance_type)
+  tb_job = run.make_job('tb', 1, instance_type=args.tb_instance_type)
   ray_job.wait_until_ready()
   tb_job.wait_until_ready()
 
@@ -144,7 +147,7 @@ def launch_aws(backend, install_script):
     task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
     
   head_task.upload(SCRIPT_NAME)
-  head_task.upload('../util.py')
+  #  head_task.upload('../util.py')
   head_task.run_async("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
