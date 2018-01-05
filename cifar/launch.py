@@ -24,7 +24,7 @@ parser.add_argument('--placement', type=int, default=0,
 # TODO: rename to gradient instance type
 parser.add_argument('--gpu-instance-type', type=str, default='g3.4xlarge',
                     help='instance to use for gradient workers')
-parser.add_argument('--cpu-instance-type', type=str, default='c5.large',
+parser.add_argument('--cpu-instance-type', type=str, default='g3.4xlarge',
                     help='default instance type')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
