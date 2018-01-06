@@ -54,6 +54,9 @@ parser.add_argument('--logdir', type=str, default='asdfasdfasdf',
 parser.add_argument('--real-model', action='store_true',
                     default=False,
                     help="use real CIFAR model for gradients?")
+parser.add_argument('--insert-pauses', action='store_true',
+                    default=False,
+                    help="Make ps0 freeze periodically")
 
 args = parser.parse_args()
 
@@ -211,10 +214,14 @@ class CNN(object):
 # not use GPUs here.
 @ray.remote(num_gpus=1)
 class ParameterServer(object):
-    def __init__(self, dim):
+    def __init__(self, dim, idx):
+        self.idx = idx
         self.params = np.zeros(dim, dtype=np.float32)
 
     def update_and_get_new_weights(self, *gradients):
+        if args.insert_pauses:
+            if self.idx == 0:
+                print("0th ps shard")
         for grad in gradients:
             self.params += grad
         return self.params
@@ -223,7 +230,7 @@ class ParameterServer(object):
         return ray.services.get_node_ip_address()
 
 
-@ray.remote(num_gpus=2)
+@ray.remote(num_gpus=1)
 class Worker(object):
     def __init__(self, num_ps, dim, time_to_wait_for_ps_ms):
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -238,12 +245,11 @@ class Worker(object):
             # This should only happen on the first call to compute_gradient.
             self.previous_params = ray.get(weights)
 
-        with u.timeit('wait_remaining'):
-          ready_ids, remaining_ids = ray.wait(
-              weights, num_returns=len(weights),
-              timeout=self.time_to_wait_for_ps_ms)
+        ready_ids, remaining_ids = ray.wait(
+            weights, num_returns=len(weights),
+            timeout=self.time_to_wait_for_ps_ms)
 
-        logger('ps_drop', len(remaining_ids))
+          #        logger('ps_drop', len(remaining_ids))
         print("Ignoring {} parameter servers.".format(len(remaining_ids)))
         ready_weights = ray.get(ready_ids)
 
@@ -296,7 +302,7 @@ if __name__ == "__main__":
                for _ in range(args.num_workers)]
 
     # Create the parameter servers.
-    pss = [ParameterServer.remote(sizes[i])
+    pss = [ParameterServer.remote(sizes[i], i)
            for i in range(args.num_parameter_servers)]
 
     # As a sanity check, make sure all workers and parameter servers are on
