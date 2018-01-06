@@ -28,7 +28,7 @@ import cifar10_model
 import cifar10_utils
 
 # move some methods to util later, for now "u" points to this file
-util = sys.modules[__name__]   
+util = sys.modules[__name__]
 u = util
 
 # TODO: do not hardwire parameter sizes/splitting
@@ -54,7 +54,7 @@ parser.add_argument('--real-model', action='store_true',
 args = parser.parse_args()
 
 
-          
+
 
 
 ########################################
@@ -69,14 +69,14 @@ global_timeit_dict = OrderedDict()
 class timeit:
   """Decorator to measure length of time spent in the block in millis and log
   it to TensorBoard."""
-  
+
   def __init__(self, tag=""):
     self.tag = tag
-    
+
   def __enter__(self):
     self.start = time.perf_counter()
     return self
-  
+
   def __exit__(self, *args):
     self.end = time.perf_counter()
     interval_ms = 1000*(self.end - self.start)
@@ -107,10 +107,10 @@ class TensorboardLogger:
    logger.next_step()     # advances step counter
    logger.set_step(5)     # sets step counter to 5
   """
-  
+
   def __init__(self, logdir, step=0):
     # TODO: do nothing for default run
-    
+
     global global_last_logger
     assert global_last_logger is None
     self.logdir = logdir,
@@ -151,7 +151,7 @@ class CNN(object):
             data_format = 'channels_last'
         else:
             data_format = 'channels_first'
-        
+
 
         is_training = True
         weight_decay = 2e-4,
@@ -190,7 +190,7 @@ class CNN(object):
 
         # TODO: make this into an op that accepts actual values
         self.set_weights_op = tf.global_variables_initializer()
-        
+
         # todo(y): pad things so that it's divisible by num_ps?
 
         self.sess = tf.Session()
@@ -212,7 +212,7 @@ class CNN(object):
 @ray.remote(num_gpus=1)
 class ParameterServer(object):
     def __init__(self, dim):
-        self.params = np.zeros(dim)
+        self.params = np.zeros(dim, dtype=np.float32)
 
     def update_and_get_new_weights(self, *gradients):
         for grad in gradients:
@@ -223,12 +223,13 @@ class ParameterServer(object):
         return ray.services.get_node_ip_address()
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(num_gpus=2)
 class Worker(object):
     def __init__(self, num_ps, dim):
         self.net = CNN(dim)
         self.num_ps = num_ps
         self.fixed = np.zeros(dim)
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
     @ray.method(num_return_vals=args.num_parameter_servers)
     def compute_gradient(self, *weights):
@@ -248,10 +249,10 @@ if __name__ == "__main__":
 
     import tensorflow as tf
     tf.constant(1)  # dummy default graph to appease tensorboard
-    
+
     if args.redis_address is None:
         # Run everything locally.
-        ray.init(num_gpus=args.num_parameter_servers + args.num_workers)
+        ray.init(num_gpus=args.num_parameter_servers + 2*args.num_workers)
     else:
         # Connect to a cluster.
         ray.init(redis_address=args.redis_address)
@@ -263,20 +264,20 @@ if __name__ == "__main__":
     # create tensorboard logger
     logger = u.TensorboardLogger(args.logdir)
 
-    # Create the parameter servers.
-    pss = [ParameterServer.remote(split_weights[i].size)
-           for i in range(args.num_parameter_servers)]
-
     # Create the workers.
     workers = [Worker.remote(args.num_parameter_servers, args.dim)
                for _ in range(args.num_workers)]
+
+    # Create the parameter servers.
+    pss = [ParameterServer.remote(split_weights[i].size)
+           for i in range(args.num_parameter_servers)]
 
     # As a sanity check, make sure all workers and parameter servers are on
     # different machines.
     if args.redis_address is not None:
         all_ips = ray.get([ps.ip.remote() for ps in pss] +
                           [w.ip.remote() for w in workers])
-        
+
         print("ps ips:")
         for (i, ps) in enumerate(pss):
             print(i, ps.ip.remote(), ray.get([ps.ip.remote()]))
@@ -335,6 +336,7 @@ if __name__ == "__main__":
             logger("steps_per_sec", steps_per_sec)
             last_step = step
             last_time = time.time()
-            
+
         if args.add_pause:
           time.sleep(0.1)
+ 

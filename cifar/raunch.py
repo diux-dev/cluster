@@ -122,30 +122,38 @@ def launch_aws(backend, install_script):
   region = u.get_region()
   ami = custom_ami_dict[region]
   
-  num_tasks = 1 + args.num_workers + args.num_ps
   run = backend.make_run(args.name, install_script=install_script,
                          ami=ami, availability_zone=args.zone)
-  ray_job = run.make_job('worker', num_tasks,
-                         instance_type=args.gpu_instance_type)
+  worker_job = run.make_job('worker', args.num_workers,
+                            instance_type=args.gpu_instance_type)
+  ps_job = run.make_job('ps', args.num_ps+1, # extra ps shard for "head node"
+                        instance_type=args.cpu_instance_type)
   tb_job = run.make_job('tb', 1, instance_type=args.tb_instance_type)
-  ray_job.wait_until_ready()
+  
+  worker_job.wait_until_ready()
+  ps_job.wait_until_ready()
   tb_job.wait_until_ready()
 
-  ray_job.run('source activate mxnet_p36')
+  worker_job.run('source activate mxnet_p36')
+  ps_job.run('source activate mxnet_p36')
   tb_job.run('source activate mxnet_p36')
   
   # task 0 is ray head node, also it is client node where main script runs
-  head_task = ray_job.tasks[0]
+  head_task = ps_job.tasks[0]
   head_task.run('ray stop || echo "ray not started, ignoring"')
   head_task.run("ray start --head --redis-port=%d --num-gpus=0 \
                            --num-cpus=10000 --num-workers=10"%(REDIS_PORT,))
-  
-  for task in ray_job.tasks[1:]:
+
+  for task in ps_job.tasks[1:]:
     task.run('ray stop || echo "ray not started, ignoring"')
     task.run("ray start --redis-address %s:%d --num-gpus=1 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
-    
+
+  # TODO: remove "num-cpus"?
+  for task in worker_job.tasks:
+    task.run('ray stop || echo "ray not started, ignoring"')
+    task.run("ray start --redis-address %s:%d --num-gpus=2 --num-cpus=1 --num-workers=0" % (head_task.ip, REDIS_PORT))
+
   head_task.upload(SCRIPT_NAME)
-  #  head_task.upload('../util.py')
   head_task.run_async("python {script} \
                     --redis-address={redis_ip}:{redis_port} \
                     --num-workers={num_workers} \
@@ -156,19 +164,14 @@ def launch_aws(backend, install_script):
                                         redis_ip=head_task.ip,
                                         redis_port=REDIS_PORT,
                                         num_workers=args.num_workers,
-                                                    logdir=run.logdir,
+                                              logdir=run.logdir,
                                         num_ps=args.num_ps,
-                                                    dim=args.dim))
+                                              dim=args.dim))
   print("Connect to head node:")
   print(head_task.connect_instructions)
 
-  print("Other nodes:")
-  for (i, task) in enumerate(ray_job.tasks[1:]):
-    print(i, task.connect_instructions)
-    
-
   tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
-  tb_job.run(tb_cmd, sync=False)
+  tb_job.run_async(tb_cmd)
   print("See tensorboard at http://%s:%s"%(tb_job.public_ip, 6006))
 
 
