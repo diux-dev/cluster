@@ -220,8 +220,11 @@ class ParameterServer(object):
 
     def update_and_get_new_weights(self, *gradients):
         if args.insert_pauses:
-            if self.idx == 0:
-                print("0th ps shard")
+            # add 10 second pause every 60 seconds
+            if time.time()-self.last_sleep > 60 and self.idx == 0:
+                time.sleep(10)
+                self.last_sleep = time.time()
+                
         for grad in gradients:
             self.params += grad
         return self.params
@@ -359,4 +362,11 @@ if __name__ == "__main__":
             split_weights.append(new_weights_id)
 
         t3 = time.time()
-        print("elapsed times: ", t3 - t1, t2 - t1, t3 - t2)
+        if step%LOG_FREQUENCY == 0:
+            steps_per_sec = (step - last_step)/(time.time()-last_time)
+            logger("steps_per_sec", steps_per_sec)
+            last_step = step
+            last_time = time.time()
+            
+        if step%100 == 0:
+          print("elapsed times: ", t3 - t1, t2 - t1, t3 - t2)
