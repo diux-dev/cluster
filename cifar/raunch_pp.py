@@ -46,8 +46,6 @@ parser.add_argument('--sync', type=int, default=0,
                     help='whether to enable sync mode')
 parser.add_argument('--name', type=str, default='ray00',
                      help="name of the current run")
-parser.add_argument('--name', type=str, default='ray00',
-                     help="name of the current run")
 parser.add_argument('--insert-pauses', action='store_true',
                     default=False,
                     help="Make ps0 freeze periodically")
