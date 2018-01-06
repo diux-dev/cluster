@@ -26,7 +26,7 @@ parser.add_argument('--gpu-instance-type', type=str, default='g3.4xlarge',
                     help='instance for GPU workers')
 parser.add_argument('--cpu-instance-type', type=str, default='c5.large',
                     help='instance for CPU workers')
-parser.add_argument('--tb-instance-type', type=str, default='m3.large',
+parser.add_argument('--tb-instance-type', type=str, default='m3.xlarge',
                     help='instance for TensorBoard jobs')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
