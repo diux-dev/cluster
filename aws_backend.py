@@ -153,7 +153,7 @@ class Task(backend.Task):
                                                    job.name, self.id,
                                                    0) # u.now_micros())
     self.remote_scratch = '/tmp/tmux'
-    self.log("Creating remote scratch dir %s", self.scratch)
+    self.log("Creating local scratch dir %s", self.scratch)
     self._ossystem('rm -Rf '+self.scratch)  # TODO: don't delete this?
     self._ossystem('mkdir -p '+self.scratch)
     #    os.chdir(self.scratch)
@@ -410,5 +410,8 @@ tmux a
 
   @property
   def ip(self):  # private ip
+    # this can fail with following
+    #    botocore.exceptions.ClientError: An error occurred (InvalidInstanceID.NotFound) when calling the DescribeInstances operation: The instance ID 'i-0de492df6b20c35fe' does not exist
+    # TODO(y): add automatic retry
     self.instance.load()
     return self.instance.private_ip_address

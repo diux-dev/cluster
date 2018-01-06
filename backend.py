@@ -70,6 +70,9 @@ class Job:
   def __init__(self):
     self.tasks = []
 
+  def run_async(self, cmd, *args, **kwargs):
+    self.run(cmd, sync=False, *args, **kwargs)
+    
   def run(self, cmd, *args, **kwargs):
     """Runs command on every task in the job."""
     
