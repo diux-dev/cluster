@@ -26,6 +26,8 @@ parser.add_argument('--gpu-instance-type', type=str, default='g3.4xlarge',
                     help='instance to use for gradient workers')
 parser.add_argument('--cpu-instance-type', type=str, default='g3.4xlarge',
                     help='default instance type')
+parser.add_argument('--tb-instance-type', type=str, default='m3.xlarge',
+                    help='instance for TensorBoard jobs')
 parser.add_argument("--num-workers", default=2, type=int,
                     help="The number of gradient workers to use.")
 parser.add_argument("--num-gpus", default=1, type=int,
@@ -181,7 +183,7 @@ def launch_aws(backend, install_script):
   worker_job = run.make_job('worker', args.num_workers-1,
                             instance_type=args.gpu_instance_type)
   ps_job = run.make_job('ps', args.num_ps, instance_type=args.cpu_instance_type)
-  tb_job = run.make_job('tb', 1, instance_type=args.cpu_instance_type)
+  tb_job = run.make_job('tb', 1, instance_type=args.tb_instance_type)
   all_jobs = [master_job, worker_job, ps_job, tb_job]
   all_tasks = [task for job in all_jobs for task in job.tasks]
 
