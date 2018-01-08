@@ -4,3 +4,4 @@ paramiko
 pyyaml
 tzlocal
 portpicker
+tensorflow
