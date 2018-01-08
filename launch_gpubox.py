@@ -99,7 +99,10 @@ sudo chmod 777 /efs
 """
 
 def main():
+  assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify default region"
   region = os.environ.get("AWS_DEFAULT_REGION")
+  assert args.zone.startswith(region), "Availability zone must be in default region."
+  os.system('mkdir -p /tmp/tmux')
   if args.linux_type == 'ubuntu':
     install_script = INSTALL_SCRIPT_UBUNTU
     ami_dict = ami_dict_ubuntu
