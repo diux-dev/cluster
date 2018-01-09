@@ -76,6 +76,7 @@ def make_name(name):
 
 
 def get_region():
+  assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
   return os.environ['AWS_DEFAULT_REGION']
 
 def create_ec2_client():
