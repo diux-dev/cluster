@@ -29,7 +29,7 @@ class Run(backend.Run):
     self.kwargs = kwargs
 
   # TODO: get rid of linux type (only login username)
-  def make_job(self, role_name, num_tasks, **kwargs):
+  def make_job(self, role_name, num_tasks=1, **kwargs):
     assert num_tasks>=0
 
     # TODO: document launch parameters

@@ -1,4 +1,7 @@
 """Interface for job launching backend."""
+# https://docs.google.com/document/d/1yTkb4IPJXOUaEWksQPCH7q0sjqHgBf3f70cWzfoFboc/edit
+# https://docs.google.com/document/d/1IbVn8_ckfVO3Z9gIiE0b9K3UrBRRiO9HYZvXSkPXGuw/edit
+
 import os
 import glob
 
@@ -91,6 +94,10 @@ class Job:
   @property
   def port(self):
     return self.tasks[0].port
+
+  @property
+  def connect_instructions(self):
+    return self.tasks[0].connect_instructions
 
     
 class Task:
