@@ -71,7 +71,7 @@ def main():
   import pytz
   from tzlocal import get_localzone # $ pip install tzlocal
 
-  sorted_instance_list = sorted(instance_list, key=itemgetter(0))
+  sorted_instance_list = reversed(sorted(instance_list, key=itemgetter(0)))
   cmd = ''
   print("Using region ", region)
   for (ts, instance) in sorted_instance_list:
