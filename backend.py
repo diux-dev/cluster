@@ -82,6 +82,12 @@ class Job:
     for task in self.tasks:
       task.run(cmd, *args, **kwargs)
   
+  def upload(self, *args, **kwargs):
+    """Runs command on every task in the job."""
+    
+    for task in self.tasks:
+      task.upload(*args, **kwargs)
+  
   # these methods redirect to the first task
   @property
   def ip(self):

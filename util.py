@@ -4,6 +4,7 @@ import argparse
 import boto3
 import shlex
 import paramiko
+import re
 import sys
 import time
 
@@ -21,14 +22,35 @@ u = util
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
-# global default name for singleton AWS resources (VPC name, keypair name, etc)
-RESOURCE_NAME=os.environ.get('RESOURCE_NAME', 'nexus')
 
 def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
 
+# http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
+aws_regexp=re.compile('^[a-zA-Z0-9+-=._:/@.]*$')
+def validate_aws_name(name):
+  assert len(name)<=127
+  # disallow unicode names to avoid pain
+  assert name == name.encode('ascii').decode('ascii')
+  assert aws_regexp.match(name)
 
+
+resource_regexp=re.compile('^[a-z0-9]*$')
+def validate_resource_name(name):
+  """Check that resource name is valid. To be conservative allow 30 chars, lowercase only."""
+  assert len(name)<=30
+  # disallow unicode names to avoid pain
+  assert resource_regexp.match(name)
+
+def get_resource_name():
+  """Gives global default name for singleton AWS resources (VPC name, keypair name, etc)."""
+  default = 'nexus'
+  name =os.environ.get('RESOURCE_NAME', default)
+  if name != default:
+    validate_resource_name(name)
+  return name
+                           
 def get_name(tags):
   """Helper utility to extract name out of tags dictionary.
       [{'Key': 'Name', 'Value': 'nexus'}] -> 'nexus'
@@ -78,6 +100,14 @@ def make_name(name):
 def get_region():
   assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
   return os.environ['AWS_DEFAULT_REGION']
+
+def get_keypair_name():
+  """Returns keypair name to use for current region and user."""
+  assert 'USER' in os.environ, "why isn't USER defined?"
+  username = os.environ['USER']
+  validate_aws_name(username) # if this fails, override USER with something nice
+  assert len(username)<30     # to avoid exceeding AWS 127 char limit
+  return u.get_resource_name() +'-'+username
 
 def create_ec2_client():
   REGION = os.environ['AWS_DEFAULT_REGION']

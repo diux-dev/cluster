@@ -10,11 +10,6 @@ import sys
 import time
 from collections import OrderedDict
 
-parser = argparse.ArgumentParser(description='launch simple')
-parser.add_argument('--instance_type', type=str, default='t2.micro',
-                     help="type of instance")
-args = parser.parse_args()
-
 import util as u
 
 DRYRUN=False
@@ -22,12 +17,14 @@ DEBUG=True
 
 # Names of Amazon resources that are created. These settings are fixed across
 # all runs, and correspond to resources created once per user per region.
-DEFAULT_NAME=u.RESOURCE_NAME
-VPC_NAME=u.RESOURCE_NAME
-SECURITY_GROUP_NAME=u.RESOURCE_NAME
-ROUTE_TABLE_NAME=u.RESOURCE_NAME
-KEYPAIR_NAME=u.RESOURCE_NAME
-EFS_NAME=u.RESOURCE_NAME
+
+# todo: move these out of default namespace?
+DEFAULT_NAME=u.get_resource_name()
+VPC_NAME=u.get_resource_name()
+SECURITY_GROUP_NAME=u.get_resource_name()
+ROUTE_TABLE_NAME=u.get_resource_name()
+KEYPAIR_NAME=u.get_keypair_name()
+EFS_NAME=u.get_resource_name()
 
 PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
                     6379,              # redis port
@@ -199,7 +196,6 @@ def keypair_setup():
     assert len(keypair_contents)>0
     # todo: check that fingerprint matches keypair.key_fingerprint
     return keypair
-
   
   print("Creating keypair "+KEYPAIR_NAME)
   ec2 = u.create_ec2_resource()
@@ -230,7 +226,7 @@ def placement_group_setup(group_name):
   return group
 
   
-def main():
+def create_resources():
 
   region = os.environ['AWS_DEFAULT_REGION']
   print("Creating %s resources in region %s"%(DEFAULT_NAME, region,))
@@ -278,8 +274,3 @@ def main():
         time.sleep(RETRY_INTERVAL_SEC)
     else:
       print("Giving up.")
-    
-    
-
-if __name__=='__main__':
-  main()

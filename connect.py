@@ -76,7 +76,7 @@ def main():
   print("Using region ", region)
   for (ts, instance) in sorted_instance_list:
     localtime = instance.launch_time.astimezone(get_localzone())
-    assert instance.key_name == u.RESOURCE_NAME, "Got key %s, expected %s"%(instance.key_name, u.RESOURCE_NAME)
+    assert instance.key_name == u.get_keypair_name(), "Got key %s, expected %s"%(instance.key_name, u.get_keypair_name())
     keypair_fn = u.get_keypair_fn(instance.key_name)
 
     print("Found to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))

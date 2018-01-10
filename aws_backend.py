@@ -48,11 +48,11 @@ class Run(backend.Run):
       assert len(instances) == num_tasks, ("Found job with same name, but number of tasks %d doesn't match requested %d, kill job manually." % (len(instances), num_tasks))
       print("Found existing job "+job_name)
     else:
-      print("Launching new job %s into VPC %s" %(job_name, u.RESOURCE_NAME))
+      print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 
-      security_group = u.get_security_group_dict()[u.RESOURCE_NAME]
-      keypair = u.get_keypair_dict()[u.RESOURCE_NAME]
-      vpc = u.get_vpc_dict()[u.RESOURCE_NAME]
+      security_group = u.get_security_group_dict()[u.get_resource_name()]
+      keypair = u.get_keypair_dict()[u.get_keypair_name()]
+      vpc = u.get_vpc_dict()[u.get_resource_name()]
       subnet = u.get_subnet_dict(vpc)[availability_zone]
       ec2 = u.create_ec2_resource()
       u.maybe_create_placement_group(placement_group)
@@ -160,7 +160,7 @@ class Task(backend.Task):
 
     # todo: create taskdir
     self.connect_instructions = "waiting for initialize()"
-    self.keypair_fn = u.get_keypair_fn(u.RESOURCE_NAME)
+    self.keypair_fn = u.get_keypair_fn(u.get_keypair_name())
 
     # username to use to ssh into instances
     # ec2-user or ubuntu
@@ -191,7 +191,7 @@ class Task(backend.Task):
   def _mount_efs(self):
     self.log("Mounting EFS")
     region = u.get_region()
-    efs_id = u.get_efs_dict()[u.RESOURCE_NAME]
+    efs_id = u.get_efs_dict()[u.get_resource_name()]
     dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
     self.run('sudo mkdir -p /efs')
     self.run('sudo chmod 777 /efs')

@@ -8,7 +8,7 @@ export AWS_SECRET_ACCESS_KEY=KAa...
 
 cd cluster
 pip install -r requirements.txt
-./create_resources.py
+./create_resources_main.py
 ./launch_gpubox.py --instance-type=p2.xlarge --zone=us-west-2a
 ```
 
