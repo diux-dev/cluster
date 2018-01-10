@@ -38,12 +38,6 @@ import time
 
 import boto3
 
-module_path=os.path.dirname(os.path.abspath(__file__))
-sys.path.append(module_path+'/..')
-import tmux_backend
-import aws_backend
-import util as u
-
 
 # map availability zones that contain given instance type
 # TODO: this mapping is randomized between username on AWS side
@@ -69,14 +63,16 @@ ami_dict_amazon = {
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
-parser.add_argument('--name', type=str, default='gpubox00',
+parser.add_argument('--name', type=str, default='box00',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='p2.xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='',
+parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
 parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
+parser.add_argument('--role', type=str, default='launcher',
+                    help='launcher or worker')
 args = parser.parse_args()
 
 # TODO: if linux type is specified, ignore ami?
@@ -94,8 +90,24 @@ sudo mkdir -p /efs
 sudo chmod 777 /efs
 """
 
-
 def main():
+  if args.role == "launcher":
+    launcher()
+  elif args.role == "worker":
+    worker()
+  else:
+    assert False, "Unknown role "+FLAGS.role
+
+
+def launcher():
+  module_path=os.path.dirname(os.path.abspath(__file__))
+  sys.path.append(module_path+'/..')
+  import tmux_backend
+  import aws_backend
+  import create_resources as create_resources_lib
+  import util as u
+
+  create_resources_lib.create_resources()
   region = u.get_region()
   assert args.zone.startswith(region), "Availability zone %s must be in default region %s." %(args.zone, region)
 
@@ -117,11 +129,60 @@ def main():
     ami = ami_dict[region]
 
   # TODO: add API to create jobs with default run
-  run = aws_backend.make_run('run', install_script=install_script,
+  run = aws_backend.make_run(args.name, install_script=install_script,
                              ami=ami, availability_zone=args.zone)
   job = run.make_job('gpubox', instance_type=args.instance_type)
-  job.wait_until_ready()
-  print(job.connect_instructions)
   
+  job.wait_until_ready()
+
+  print("Job ready for connection, run the following:")
+  print("../connect "+args.name)
+  print("Alternatively run")
+  print(job.connect_instructions)
+  print()
+  print()
+  print()
+  print()
+  
+  job.run('source activate mxnet_p36')
+  job.run('pip install tensorflow')
+  job.upload(__file__)
+  job.run('killall python || echo failed')  # kill previous run
+  job.run_async('python %s --role=worker'%(__file__,))
+
+def worker():
+  """Worker script that runs on AWS machine. Adds vectors of ones forever,
+  prints MB/s."""
+
+  import tensorflow as tf
+  
+  def session_config():
+    optimizer_options = tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)
+    config = tf.ConfigProto(
+      graph_options=tf.GraphOptions(optimizer_options=optimizer_options))
+    config.operation_timeout_in_ms = 10*1000  # abort after 10 seconds
+    return config
+
+  iters_per_step = 10
+  data_mb = 128
+  params_size = 250*1000*data_mb # 1MB is 250k floats
+  dtype=tf.float32
+  val = tf.ones((), dtype=dtype)
+  vals = tf.fill([params_size], val)
+  params = tf.Variable(vals)
+  update = params.assign_add(vals)
+  
+  sess = tf.Session(config=session_config())
+  sess.run(params.initializer)
+  
+  while True:
+    start_time = time.perf_counter()
+    for i in range(iters_per_step):
+      sess.run(update.op)
+
+    elapsed_time = time.perf_counter() - start_time
+    rate = float(iters_per_step)*data_mb/elapsed_time
+    print('%.2f MB/s'%(rate,))    
+
 if __name__=='__main__':
   main()
