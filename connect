@@ -1,3 +1,3 @@
 #!/bin/bash
 # helper to connect without launching TMUX session
-connect.py --skip-tmux=0 --fragment=$1
+./connect.py --skip-tmux=0 --fragment=$1
