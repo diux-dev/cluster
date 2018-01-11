@@ -44,6 +44,15 @@ def toseconds(dt):
   # utc.localize(datetime.fromtimestamp(seconds))
   return time.mktime(dt.utctimetuple())
 
+
+def make_cmd(keypair_fn, username, public_ip_address):
+  if args.skip_tmux:
+    cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username,public_ip_address)
+  else:
+    cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username, public_ip_address)
+  return cmd
+
+
 def main():
   fragment = args.fragment
 
@@ -81,19 +90,24 @@ def main():
 
     print("Found to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
 
-    if args.skip_tmux:
-      cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username, instance.public_ip_address)
-    else:
-      cmd = 'connect_helper.sh %s %s %s'%(keypair_fn, username,
-                                          instance.public_ip_address)
+    cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
   
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
-  else:
-    print(cmd)
-    os.system(cmd)
+    return
+  
 
-
+  print(cmd)
+  result = os.system(cmd)
+  if username == 'ubuntu':
+    username = 'ec2-user'
+  elif username == 'ec2-user':
+    username = 'ubuntu'
+    
+  if result != 0:
+    print("ssh failed with code %d, trying username %s"%(result, username))
+  cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
+  os.system(cmd)
 
 if __name__=='__main__':
   main()
