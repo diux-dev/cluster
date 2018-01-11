@@ -130,7 +130,8 @@ def launcher():
 
   # TODO: add API to create jobs with default run
   run = aws_backend.make_run(args.name, install_script=install_script,
-                             ami=ami, availability_zone=args.zone)
+                             ami=ami, availability_zone=args.zone,
+                             linux_type=args.linux_type)
   job = run.make_job('gpubox', instance_type=args.instance_type)
   
   job.wait_until_ready()
