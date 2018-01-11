@@ -178,6 +178,7 @@ class Task(backend.Task):
     self.log("Checking for initialized file")
     try:
       # TODO: either get rid of /tmp or taskdir
+      # this location is hardwired in uninitialize.py
       return 'ok' in self.file_read('/tmp/is_initialized')
     except:
       return False
