@@ -80,7 +80,7 @@ export AWS_DEFAULT_REGION=us-east-1
 launch.py --zone=us-east-1a --instance-type=p3.16xlarge
 ```
 
-You can also provide custom AMI. When doing this, make sure that "linux-type" argument is set properly because that determines the username that is used to SSH into the instance to finish setup. Linux type `amazon` uses username `ec2-user` and linux type `ubuntu` uses username `ubuntu.
+You can also provide custom AMI. When doing this, make sure that "linux-type" argument is set properly because that determines the username that is used to SSH into the instance to finish setup. Linux type `amazon` uses username `ec2-user` and linux type `ubuntu` uses username `ubuntu`.
 
 ```
 export AWS_DEFAULT_REGION=us-east-1
