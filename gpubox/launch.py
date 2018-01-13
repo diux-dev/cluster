@@ -146,7 +146,7 @@ def launcher():
   print()
   
   job.run('source activate mxnet_p36')
-  #  job.run('pip install tensorflow') # this installs CPU-only version
+  job.run('pip install tensorflow-gpu') # this installs CPU-only version
   job.upload(__file__)
   job.run('killall python || echo failed')  # kill previous run
   job.run_async('python %s --role=worker'%(__file__,))

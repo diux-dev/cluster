@@ -123,7 +123,7 @@ export RESOURCE_NAME=gpubox
 ../delete_resources.py
 ```
 
-or to delete default resources (called "nexus"0
+or to delete default resources (called "nexus")
 
 ```
 unset RESOURCE_NAME
