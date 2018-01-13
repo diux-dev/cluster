@@ -41,15 +41,15 @@ import boto3
 
 # map availability zones that contain given instance type
 # TODO: this mapping is randomized between username on AWS side
-availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b',
-                                         'us-east-1e', 'us-east-1c'],
-                                  'p2': ['us-east-1f'],
-                                  'p3': ['us-east-1f']}
-availability_mapping_us_west_2 = {'g3': ['us-west-2a'],
-                                  'p2': ['us-west-2a', 'us-west-2b'],
-                                  'p3': ['us-west-2b', 'us-west-2c']}
-availability_mapping = {'us-east-1': availability_mapping_us_east_1,
-                        'us-west-2': availability_mapping_us_west_2}
+# availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b',
+#                                          'us-east-1e', 'us-east-1c'],
+#                                   'p2': ['us-east-1f'],
+#                                   'p3': ['us-east-1f']}
+# availability_mapping_us_west_2 = {'g3': ['us-west-2a'],
+#                                   'p2': ['us-west-2a', 'us-west-2b'],
+#                                   'p3': ['us-west-2b', 'us-west-2c']}
+# availability_mapping = {'us-east-1': availability_mapping_us_east_1,
+#                         'us-west-2': availability_mapping_us_west_2}
 
 ami_dict_ubuntu = {
     "us-west-2": "ami-3b6bce43",
@@ -109,7 +109,7 @@ def launcher():
 
   create_resources_lib.create_resources()
   region = u.get_region()
-  assert args.zone.startswith(region), "Availability zone %s must be in default region %s." %(args.zone, region)
+  assert args.zone.startswith(region), "Availability zone %s must be in default region %s. Default region is taken from environment variable AWS_DEFAULT_REGION" %(args.zone, region)
 
   if args.linux_type == 'ubuntu':
     install_script = INSTALL_SCRIPT_UBUNTU
@@ -146,7 +146,7 @@ def launcher():
   print()
   
   job.run('source activate mxnet_p36')
-  job.run('pip install tensorflow')
+  #  job.run('pip install tensorflow') # this installs CPU-only version
   job.upload(__file__)
   job.run('killall python || echo failed')  # kill previous run
   job.run_async('python %s --role=worker'%(__file__,))
