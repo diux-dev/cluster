@@ -274,3 +274,7 @@ def create_resources():
         time.sleep(RETRY_INTERVAL_SEC)
     else:
       print("Giving up.")
+
+if __name__=='__main__':
+  print("Call create_resources_main.py instead")
+
