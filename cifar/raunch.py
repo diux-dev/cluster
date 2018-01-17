@@ -63,6 +63,7 @@ custom_ami_dict = {
 
 AWS_INSTALL_SCRIPT="""
 source activate mxnet_p36  # env with cuda 9
+pip install https://s3-us-west-2.amazonaws.com/ray-wheels/129007276408568ddc3fc1852e0548f8708f4f9f/ray-0.3.0-cp36-cp36m-manylinux1_x86_64.whl
 """
 
 TMUX_INSTALL_SCRIPT="""

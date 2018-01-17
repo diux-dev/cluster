@@ -25,14 +25,12 @@ parser = argparse.ArgumentParser(description='launch simple')
 parser.add_argument('--instance_type', type=str, default='t2.micro',
                      help="type of instance")
 args = parser.parse_args()
-
-DEFAULT_NAME=u.RESOURCE_NAME
-VPC_NAME=u.RESOURCE_NAME
-SECURITY_GROUP_NAME=u.RESOURCE_NAME
-ROUTE_TABLE_NAME=u.RESOURCE_NAME
-KEYPAIR_NAME=u.RESOURCE_NAME
-EFS_NAME=u.RESOURCE_NAME
-
+DEFAULT_NAME=u.get_resource_name()
+VPC_NAME=u.get_resource_name()
+SECURITY_GROUP_NAME=u.get_resource_name()
+ROUTE_TABLE_NAME=u.get_resource_name()
+KEYPAIR_NAME=u.get_keypair_name()
+EFS_NAME=u.get_resource_name()
 
 
 def main():
@@ -110,6 +108,7 @@ def main():
     def desc(security_group):
       return "%s (%s, %s)"%(security_group.id, u.get_name(security_group.tags),
                             security_group.group_name)
+    # TODO: this tries to remove default security group, maybe not remove it?
     for security_group in vpc.security_groups.all():
       sys.stdout.write('Deleting security group %s ... ' %(desc(security_group)))
       try:

@@ -16,6 +16,8 @@ To connect to most recent instance with name simple
 
 """
 
+# TODO: automatically determine RESOURCE_NAME from instance?
+# TODO: automatically determine LINUX type from instance tags?
 # todo: allow to do ls, show tags
 # todo: handle KeyError: 'PublicIpAddress'
 
