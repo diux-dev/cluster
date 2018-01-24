@@ -12,7 +12,7 @@ import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-LOGDIR_PREFIX='/efs_local/runs'
+LOGDIR_PREFIX='/efs/runs'
 
 # TODO: use separate session for each task, for parity with AWS job launcher
 
