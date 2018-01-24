@@ -154,7 +154,7 @@ class Task(backend.Task):
   def upload(self, source_fn, target_fn='.'):
     #    self.log("uploading %s to %s"%(source_fn, target_fn))
     source_fn_full = os.path.abspath(source_fn)
-    self.run("cp %s %s" %(source_fn_full, target_fn))
+    self.run("cp -R %s %s" %(source_fn_full, target_fn))
     #os.system("cp %s %s" %(source_fn_full, target_fn))
 
 
