@@ -361,7 +361,7 @@ def current_timestamp():
 
 def loge(message, args=None):
   """Log error."""
-  ts = _current_timestamp()
+  ts = current_timestamp()
   if args:
     message = message % args
   open("/tmp/nexus_errors", "a").write("%s %s\n"%(ts, message))
@@ -655,3 +655,15 @@ def ssh_to_host(hostname,
         return None
 
   return ssh_client
+
+def seconds_from_datetime(dt):
+  """Convert datetime into seconds since epochs. IE, to use for
+  instance.launch_time:
+     toseconds(instance.launch_time).
+
+  to invert:
+     import pytz
+     utc = pytz.UTC
+     utc.localize(datetime.fromtimestamp(seconds))
+  """
+  return time.mktime(dt.utctimetuple())
