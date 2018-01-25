@@ -1,9 +1,31 @@
-Self-contained launcher for single-machine CIFAR experiment.
+# CIFAR Estimator.
 
-Assumes that training/validation/eval data is in /efs/cifar-10-data
+Run TensorFlow CIFAR10 Estimator example locally or on AWS.
 
-Need following files under `/efs/cifar-10-data`
+Assumes that training/validation/eval data is in /efs/cifar-10-data (see Details)
 
+# Launching
+
+To launch locally:
+
+```
+pip install awscli boto3 paramiko pyyaml tzlocal portpicker
+python launch.py
+```
+
+To launch on AWS:
+```
+pip install awscli boto3 paramiko pyyaml tzlocal portpicker
+export AWS_DEFAULT_REGION=us-east-1
+python launch.py --backend=aws --zone=us-east-1c
+```
+
+This will train for 1000 steps and launch TensorBoard so you can visualize the results. To connect to shell session which is running training do `tmux a -t cifar00` when running locally, or `connect cifar00` when running on AWS.
+
+# Details
+This assumes that data has been is stored under  `/efs/cifar-10-data`
+
+More specifically, need the following files:
 ```
 -rw-rw-r-- 1 ubuntu ubuntu  31260000 Jan 23 23:54 eval.tfrecords
 -rw-rw-r-- 1 ubuntu ubuntu 125040000 Jan 23 23:54 train.tfrecords
@@ -13,14 +35,14 @@ Need following files under `/efs/cifar-10-data`
 Those datafiles were generated following instructions from
 https://github.com/tensorflow/models/tree/master/tutorials/image/cifar10_estimator
 
-To generate data, must do it in Python 2 environment
+Note, those instructions must be followed under Python 2 environment.
 ```
 source activate mxnet_p27
 python generate_cifar10_tfrecords.py --data-dir=/tmp/cifar-10-data
 cp -R /tmp/cifar-10-data /tmp
 ```
 
-For local sanity check
+For sanity check can run estimator example locally
 
 ```
 cd cifar10_estimator
@@ -37,17 +59,8 @@ On GTX1080 machine, this should finish in 1 minute, with final loss around 2.854
 
 <img src="local-tb.png">
 
-To launch locally using tmux backend
+On AWS g3 machine you should see something like this
 
-```
-pip install awscli boto3 paramiko pyyaml tzlocal portpicker
-python launch.py
-```
-
-To launch on AWS
-
-```
-export AWS_DEFAULT_REGION=us-east-1
-python launch.py --backend=aws
-```
+<img src="aws-tb.png">
+<img src="aws-tb2.png">
 
