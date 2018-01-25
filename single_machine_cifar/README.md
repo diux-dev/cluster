@@ -42,6 +42,13 @@ python generate_cifar10_tfrecords.py --data-dir=/tmp/cifar-10-data
 cp -R /tmp/cifar-10-data /tmp
 ```
 
+These files are also located in S3
+```
+https://s3.amazonaws.com/yaroslavvb/cifar-10-data/eval.tfrecords
+https://s3.amazonaws.com/yaroslavvb/cifar-10-data/train.tfrecords
+https://s3.amazonaws.com/yaroslavvb/cifar-10-data/validation.tfrecords
+```
+
 For sanity check can run estimator example locally
 
 ```
