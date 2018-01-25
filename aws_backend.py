@@ -40,14 +40,14 @@ class Run(backend.Run):
     assert num_tasks>=0
 
     # TODO: document launch parameters
-    job_name = u.format_job_name(self.name, role_name)
+    job_name = u.format_job_name(role_name, self.name)
     instances = u.lookup_aws_instances(job_name)
     kwargs = u.merge_kwargs(kwargs, self.kwargs)
     ami = kwargs['ami']
     instance_type = kwargs['instance_type']
     availability_zone = kwargs['availability_zone']
     placement_group = kwargs.get('placement_group', '')
-    install_script = kwargs['install_script']
+    install_script = kwargs.get('install_script','')
     linux_type = kwargs.get('linux_type', 'ubuntu')
 
     # TODO: also make sure instance type is the same
@@ -90,8 +90,8 @@ class Run(backend.Run):
         while True:
           try:
             # sometimes get "An error occurred (InvalidInstanceID.NotFound)"
-            task_name = u.format_task_name(self.name, role_name,
-                                           instance.ami_launch_index)
+            task_name = u.format_task_name(instance.ami_launch_index, role_name,
+                                           self.name)
             # TODO: use instance.create_tags instead like in create_resources.py
             ec2.create_tags(Resources=[instance.id],
                             Tags=u.make_name(task_name))
@@ -395,6 +395,7 @@ tmux a
     cmd_fn_out = self.remote_scratch+'/'+str(self._run_counter)+'.'+ts+'.out'
 
     cmd = _strip_comment(cmd)
+    assert not '&' in cmd, "cmd '%s' contains &, that breaks things"%(cmd,)
     modified_cmd = '%s; echo $? > %s'%(cmd, cmd_fn_out)
     tmux_window = 'tmux:0'
     tmux_cmd = "tmux send-keys -t {} {} Enter".format(tmux_window,

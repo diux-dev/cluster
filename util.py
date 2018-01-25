@@ -72,25 +72,28 @@ def get_name(tags):
 
 
 def parse_job_name(name):
-  """Parses job name of the form "run.job.taskid" and returns components
-  run.job and taskid.
+  """Parses job name of the form "taskid.job.run" and returns components
+  job.run and taskid.
   If name does not have given form, returns Nones."""
   toks = name.split('.')
   if len(toks)!=3:
     return None, None
-  run, job, task_id = toks
-  task_id = int(task_id)
-  return run+'.'+job, task_id
+  task_id, role, run = toks
+  try:
+    task_id = int(task_id)
+  except:
+    task_id = -1
+  return task_id, role+'.'+run
 
 
 def get_parsed_job_name(tags):
   """Return jobname,task_id for given aws instance tags."""
   return parse_job_name(get_name(tags))
 
-def format_job_name(run, role):
-  return "{}.{}".format(run, role)
+def format_job_name(role, run):
+  return "{}.{}".format(role, run)
 
-def format_task_name(run, role, task_id):
+def format_task_name(task_id, role, run):
   assert int(task_id) == task_id
   return "{}.{}.{}".format(task_id, role, run)
 
@@ -551,7 +554,10 @@ def _add_echo(script):
 def lookup_aws_instances(job_name):
   """Returns all AWS instances for given AWS job name, like
    simple.worker"""
-  
+
+  #  print("looking up", job_name)
+
+  # todo: assert fail when there are multiple instances with same name?
   ec2 = u.create_ec2_resource()
 
   # TODO: add waiting so that instances in state "initializing" are supported
@@ -560,10 +566,14 @@ def lookup_aws_instances(job_name):
 
   result = []
   for i in instances.all():
-    current_job_name, task_id = u.get_parsed_job_name(i.tags)
+    task_id, current_job_name = u.get_parsed_job_name(i.tags)
+    #    print("Obtained job name", current_job_name, "task", task_id)
 
-    if  current_job_name == job_name:
+    if current_job_name == job_name:
+      if result:
+        print("Warning, multiple instances with identical name")
       result.append(i)
+
 
   return result
 
