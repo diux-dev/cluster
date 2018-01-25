@@ -7,6 +7,8 @@ import paramiko
 import re
 import sys
 import time
+import paramiko
+import os
 
 from collections import OrderedDict
 from collections import defaultdict
@@ -667,3 +669,32 @@ def seconds_from_datetime(dt):
      utc.localize(datetime.fromtimestamp(seconds))
   """
   return time.mktime(dt.utctimetuple())
+
+
+# augmented SFTP client that can transfer directories, from
+# https://stackoverflow.com/a/19974994/419116
+def put_dir(sftp, source, target):
+  ''' Uploads the contents of the source directory to the target path. The
+            target directory needs to exists. All subdirectories in source are 
+            created under target.
+        '''
+  def _safe_mkdir(sftp, path, mode=511, ignore_existing=True):
+    ''' Augments mkdir by adding an option to not fail if the folder exists  '''
+    try:
+      sftp.mkdir(path, mode)
+    except IOError:
+      if ignore_existing:
+        pass
+      else:
+        raise
+
+  assert os.path.isdir(source)
+  _safe_mkdir(sftp, target)
+              
+  for item in os.listdir(source):
+    if os.path.isfile(os.path.join(source, item)):
+      sftp.put(os.path.join(source, item), os.path.join(target, item))
+    else:
+      _safe_mkdir(sftp, '%s/%s' % (target, item))
+      put_dir(sftp, os.path.join(source, item), '%s/%s' % (target, item))
+

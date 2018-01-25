@@ -22,6 +22,13 @@ def make_run(name, **kwargs):
   return Run(name, **kwargs)
 
 
+def _strip_comment(cmd):
+  """ hi # testing => hi"""
+  if '#' in cmd:
+    return cmd.split('#', 1)[0]
+  else:
+    return cmd
+
 
 class Run(backend.Run):
   def __init__(self, name, **kwargs):
@@ -262,18 +269,33 @@ tmux a
     Individual files, ie
     %upload file.txt
 
-    Glob expressions, ie
-    %upload *.py"""
+    Individual files with target location
+    %upload file.txt remote_dir/file.txt
 
-    fname = fname.replace("~", os.environ["HOME"])
+    #    Glob expressions, ie
+    #    %upload *.py
+    """
 
     toks = line.split()
-    assert len(toks) == 2
+    
+    # # glob expression, things copied into 
+    # if '*' in line:
+    #   assert len(toks) == 2
+    #   assert toks[0] == '%upload'
+
+    #   for fn in glob.glob(toks[1]):
+    #     fn = fn.replace("~", os.environ["HOME"])
+    #     self.upload(fn)
+
     assert toks[0] == '%upload'
-
-    for fn in glob.glob(toks[1]):
-      self.upload(fn)
-
+    source = toks[1]
+    assert len(toks) < 4
+    if len(toks)>2:
+      target = toks[2]
+    else:
+      target = None
+    self.upload(source, target)
+    
 
   def upload(self, local_fn, remote_fn=None, skip_existing=False):
     """Uploads file to remote instance. If location not specified, dumps it
@@ -281,11 +303,17 @@ tmux a
     # TODO: self.ssh_client is sometimes None
     self.log('uploading '+local_fn)
     sftp = self.ssh_client.open_sftp()
+    
     if remote_fn is None:
       remote_fn = os.path.basename(local_fn)
     if skip_existing and self.file_exists(remote_fn):
       self.log("Remote file %s exists, skipping"%(remote_fn,))
+      return
+
+    if os.path.isdir(local_fn):
+      u.put_dir(sftp, local_fn, remote_fn)
     else:
+      assert os.path.isfile(local_fn), "%s is not a file"%(local_fn,)
       sftp.put(local_fn, remote_fn)
 
 
@@ -344,8 +372,7 @@ tmux a
     stderr_str = stderr.read().decode()
     self.log("run_ssh returned: " + stdout_str)
     return stdout_str, stderr_str
-
-
+    
   def run(self, cmd, sync=True, ignore_errors=False,
           max_wait_sec=600, check_interval=1):
     """Runs command in tmux session. No need for multiple tmux sessions per
@@ -367,6 +394,7 @@ tmux a
     ts = str(u.now_micros())
     cmd_fn_out = self.remote_scratch+'/'+str(self._run_counter)+'.'+ts+'.out'
 
+    cmd = _strip_comment(cmd)
     modified_cmd = '%s; echo $? > %s'%(cmd, cmd_fn_out)
     tmux_window = 'tmux:0'
     tmux_cmd = "tmux send-keys -t {} {} Enter".format(tmux_window,
