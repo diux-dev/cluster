@@ -92,7 +92,7 @@ def format_job_name(run, role):
 
 def format_task_name(run, role, task_id):
   assert int(task_id) == task_id
-  return "{}.{}.{}".format(run, role, task_id)
+  return "{}.{}.{}".format(task_id, role, run)
 
 
 def make_name(name):
