@@ -91,9 +91,10 @@ def launch_aws(backend, install_script):
   job.run('cd cifar10_estimator')
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
                      --job-dir={logdir} \
-                     --num-gpus=1 \
+                     --num-gpus={gpus} \
                      --train-steps={steps}""".format(logdir=run.logdir,
-                                                     steps=args.steps)
+                                                     steps=args.steps,
+                                                     gpus=args.num_gpus)
 
   job.run(tf_cmd, sync=False)
 
