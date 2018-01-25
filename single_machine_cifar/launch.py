@@ -23,6 +23,8 @@ parser.add_argument("--num-gpus", default=1, type=int,
                     help="Number of GPUs to use per worker.")
 parser.add_argument('--name', type=str, default='cifar00',
                      help="name of the current run")
+parser.add_argument('--steps', type=int, default=1000,
+                     help="number of steps to run for")
 parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
 parser.add_argument('--backend', type=str, default='tmux',
@@ -71,25 +73,26 @@ def launch_aws(backend, install_script):
   run = backend.make_run(args.name, install_script=install_script,
                          ami=ami, availability_zone=args.zone)
   master_job = run.make_job('master', 1, instance_type=args.instance_type)
-  # TODO: rename to initialize or call automatically
-  master_job.wait_until_ready()
 
+  master_job.wait_until_ready()
   master_job.run("source activate tensorflow_p36  # env with cuda 8")
   master_job.upload('cifar10_estimator')
+
+  # Launch tensorboard visualizer.
+  # TODO: can't launch in background because & interferes with asdf &; echo >
+  #  tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
+  #  master_job.run(tb_cmd, sync=False)
+  #  print("See tensorboard at http://%s:%s"%(master_job.public_ip, 6006))
   
   # Launch tensorflow tasks.
   master_job.run('cd cifar10_estimator')
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
                      --job-dir={logdir} \
                      --num-gpus=1 \
-                     --train-steps=1000""".format(logdir=run.logdir)
+                     --train-steps={steps}""".format(logdir=run.logdir,
+                                                          steps=args.steps)
 
   master_job.run(tf_cmd)
-
-  # Launch tensorboard visualizer.
-  tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
-  master_job.run(tb_cmd, sync=False)
-  print("See tensorboard at http://%s:%s"%(master_job.public_ip, 6006))
 
 
 def main():
