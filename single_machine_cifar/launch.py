@@ -88,20 +88,21 @@ def launch_aws(backend, install_script):
   job.run("tmux new-session -s tb -n 0 -d")
   job.run("tmux send-keys -t tb:0 'source activate tensorflow_p36' Enter")
   job.run("tmux send-keys -t tb:0 'tensorboard --logdir {logdir}' Enter".format(logdir=run.logdir))
-  print("Tensorboard available at %s:6006"%(job.public_ip,))
 
   # Launch tensorflow tasks.
   job.run('cd cifar10_estimator')
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
-                     --job-dir={logdir} \
-                     --num-gpus={gpus} \
-                     --train-steps={steps}
-                     --synthetic={synthetic}""".format(logdir=run.logdir,
-                                                     steps=args.steps,
+  --job-dir={logdir} \
+  --num-gpus={gpus} \
+  --train-steps={steps} \
+  --synthetic={synthetic} \
+  --use-distortion-for-training=False""".format(logdir=run.logdir,
+                                                       steps=args.steps,
                                                        gpus=args.num_gpus,
                                                        synthetic=args.synthetic)
 
   job.run(tf_cmd, sync=False)
+  print("Tensorboard available at %s:6006"%(job.public_ip,))
 
 
 def main():
