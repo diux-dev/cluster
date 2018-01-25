@@ -13,7 +13,7 @@ import tmux_backend
 import aws_backend
 import util as u
 
-u.install_pdb_handler()  # drops into pdb on CTRL+c
+u.install_pdb_handler()  # drops into pdb on CTRL+\
 
 parser = argparse.ArgumentParser(description='Launch CIFAR training')
 # TODO: rename to gradient instance type
@@ -50,21 +50,23 @@ source activate oct12
 
 def launch_tmux(backend, install_script):
   run = backend.make_run(args.name, install_script=install_script)
-  master_job = run.make_job('master', 1)
+  job = run.make_job('master', 1)
   
   # Launch tensorflow tasks.
-  master_job.run('cd cifar10_estimator')
+  job.run('source activate oct12')  # must replace with local env that has TF
+  job.upload('cifar10_estimator')
+  job.run('cd cifar10_estimator')
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
                      --job-dir={logdir} \
                      --num-gpus=1 \
                      --train-steps=1000""".format(logdir=run.logdir)
 
-  master_job.run(tf_cmd)
+  job.run(tf_cmd)
   
   tb_cmd = "tensorboard --logdir={logdir} --port={port}".format(
-    logdir=run.logdir, port=master_job.port)
-  master_job.run(tb_cmd, sync=False)
-  print("See tensorboard at http://%s:%s"%(master_job.ip, master_job.port))
+    logdir=run.logdir, port=job.port)
+  job.run(tb_cmd, sync=False)
+  print("See tensorboard at http://%s:%s"%(job.ip, job.port))
 
 def launch_aws(backend, install_script):
   region = os.environ.get("AWS_DEFAULT_REGION")
@@ -72,27 +74,28 @@ def launch_aws(backend, install_script):
 
   run = backend.make_run(args.name, install_script=install_script,
                          ami=ami, availability_zone=args.zone)
-  master_job = run.make_job('master', 1, instance_type=args.instance_type)
+  job = run.make_job('master', 1, instance_type=args.instance_type)
 
-  master_job.wait_until_ready()
-  master_job.run("source activate tensorflow_p36  # env with cuda 8")
-  master_job.upload('cifar10_estimator')
+  job.wait_until_ready()
+  job.run("source activate tensorflow_p36  # env with cuda 8")
+  job.upload('cifar10_estimator')
 
-  # Launch tensorboard visualizer.
-  # TODO: can't launch in background because & interferes with asdf &; echo >
-  #  tb_cmd = "tensorboard --logdir={logdir} --port=6006".format(logdir=run.logdir)
-  #  master_job.run(tb_cmd, sync=False)
-  #  print("See tensorboard at http://%s:%s"%(master_job.public_ip, 6006))
-  
+  # Launch tensorboard visualizer in separate tmux session
+  job.run("tmux kill-session -t tb || echo ok")
+  job.run("tmux new-session -s tb -n 0 -d")
+  job.run("tmux send-keys -t tb:0 'source activate tensorflow_p36' Enter")
+  job.run("tmux send-keys -t tb:0 'tensorboard --logdir {logdir}' Enter".format(logdir=run.logdir))
+  print("Tensorboard available at %s:6006"%(job.public_ip,))
+
   # Launch tensorflow tasks.
-  master_job.run('cd cifar10_estimator')
+  job.run('cd cifar10_estimator')
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
                      --job-dir={logdir} \
                      --num-gpus=1 \
                      --train-steps={steps}""".format(logdir=run.logdir,
-                                                          steps=args.steps)
+                                                     steps=args.steps)
 
-  master_job.run(tf_cmd)
+  job.run(tf_cmd, sync=False)
 
 
 def main():
