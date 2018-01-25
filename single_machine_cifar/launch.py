@@ -29,6 +29,9 @@ parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
 parser.add_argument('--backend', type=str, default='tmux',
                     help='tmux or aws')
+parser.add_argument('--synthetic', type=int, default=0,
+                    help='use synthetic data')
+
 
 args = parser.parse_args()
 
@@ -92,9 +95,11 @@ def launch_aws(backend, install_script):
   tf_cmd = """python cifar10_main.py --data-dir=/efs/cifar-10-data \
                      --job-dir={logdir} \
                      --num-gpus={gpus} \
-                     --train-steps={steps}""".format(logdir=run.logdir,
+                     --train-steps={steps}
+                     --synthetic={synthetic}""".format(logdir=run.logdir,
                                                      steps=args.steps,
-                                                     gpus=args.num_gpus)
+                                                       gpus=args.num_gpus,
+                                                       synthetic=args.synthetic)
 
   job.run(tf_cmd, sync=False)
 

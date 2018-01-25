@@ -274,6 +274,11 @@ def input_fn(data_dir,
     use_distortion = subset == 'train' and use_distortion_for_training
     dataset = cifar10.Cifar10DataSet(data_dir, subset, use_distortion)
     image_batch, label_batch = dataset.make_batch(batch_size)
+
+    if args.synthetic:
+      image_batch = tf.random_uniform((batch_size, 32, 32, 3))
+      label_batch = tf.ones((batch_size,), dtype=tf.int32)
+
     if num_shards <= 1:
       # No GPU available or only 1 GPU.
       return [image_batch], [label_batch]
@@ -505,6 +510,8 @@ if __name__ == '__main__':
       type=float,
       default=1e-5,
       help='Epsilon for batch norm.')
+  parser.add_argument('--synthetic', type=int, default=0,
+                      help='use synthetic (random) data')
   args = parser.parse_args()
 
   if args.num_gpus < 0:
