@@ -32,6 +32,8 @@ import tarfile
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
+MAX_ENTRIES_FOR_TEST = 100
+
 CIFAR_FILENAME = 'cifar-10-python.tar.gz'
 CIFAR_DOWNLOAD_URL = 'https://www.cs.toronto.edu/~kriz/' + CIFAR_FILENAME
 CIFAR_LOCAL_FOLDER = 'cifar-10-batches-py'
@@ -86,6 +88,8 @@ def convert_to_tfrecord(input_files, output_file):
       labels = data_dict['labels']
       num_entries_in_batch = len(labels)
       for i in range(num_entries_in_batch):
+        if i>MAX_ENTRIES_FOR_TEST:
+          break
         example = tf.train.Example(features=tf.train.Features(
             feature={
                 'image': _bytes_feature(data[i].tobytes()),
