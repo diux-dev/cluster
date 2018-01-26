@@ -2,6 +2,9 @@
 
 Run TensorFlow CIFAR10 Estimator example locally or on AWS.
 
+Summary of experiments:
+https://docs.google.com/document/d/1p4jtHZWj9lVoYswP94GhMEgOL93CsGFJTMdEzbLXGsI/edit#
+
 Assumes that training/validation/eval data is in /efs/cifar-10-data (see Details)
 
 # Launching

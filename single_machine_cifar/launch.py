@@ -95,11 +95,10 @@ def launch_aws(backend, install_script):
   --job-dir={logdir} \
   --num-gpus={gpus} \
   --train-steps={steps} \
-  --synthetic={synthetic} \
-  --use-distortion-for-training=False""".format(logdir=run.logdir,
-                                                       steps=args.steps,
-                                                       gpus=args.num_gpus,
-                                                       synthetic=args.synthetic)
+  --synthetic={synthetic}""".format(logdir=run.logdir,
+                                    steps=args.steps,
+                                    gpus=args.num_gpus,
+                                    synthetic=args.synthetic)
 
   job.run(tf_cmd, sync=False)
   print("Tensorboard available at %s:6006"%(job.public_ip,))
