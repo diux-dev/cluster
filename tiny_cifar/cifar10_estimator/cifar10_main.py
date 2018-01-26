@@ -174,7 +174,6 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       def my_log(self, tensor_values):
         global vals
         vals.append(tensor_values.values()[0])
-        #        print(vals)
         old_log(self, tensor_values)
 
       tf.train.LoggingTensorHook._log_tensors = my_log
