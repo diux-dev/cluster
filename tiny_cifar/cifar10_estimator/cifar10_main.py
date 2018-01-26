@@ -44,6 +44,8 @@ import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
+vals = []
+
 def get_model_fn(num_gpus, variable_strategy, num_workers):
   """Returns a function that will build the resnet model."""
 
@@ -64,6 +66,8 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
     Returns:
       A EstimatorSpec object.
     """
+
+    global vals
     is_training = (mode == tf.estimator.ModeKeys.TRAIN)
     weight_decay = params.weight_decay
     momentum = params.momentum
@@ -162,10 +166,21 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       examples_sec_hook = cifar10_utils.ExamplesPerSecondHook(
           params.train_batch_size, every_n_steps=10)
 
-      tensors_to_log = {'learning_rate': learning_rate, 'loss': loss}
+      tensors_to_log = {'loss': loss}
 
+      # override LoggingTensorHook to save tensor values
+      old_log = tf.train.LoggingTensorHook._log_tensors
+      
+      def my_log(self, tensor_values):
+        global vals
+        vals.append(tensor_values.values()[0])
+        #        print(vals)
+        old_log(self, tensor_values)
+
+      tf.train.LoggingTensorHook._log_tensors = my_log
+      
       logging_hook = tf.train.LoggingTensorHook(
-          tensors=tensors_to_log, every_n_iter=100)
+          tensors=tensors_to_log, every_n_iter=1)
 
       train_hooks = [logging_hook, examples_sec_hook]
 
@@ -275,9 +290,15 @@ def input_fn(data_dir,
     dataset = cifar10.Cifar10DataSet(data_dir, subset, use_distortion)
     image_batch, label_batch = dataset.make_batch(batch_size)
 
+    assert not args.synthetic and args.synthetic_labels
+    
     if args.synthetic:
       image_batch = tf.random_uniform((batch_size, 32, 32, 3))
       label_batch = tf.ones((batch_size,), dtype=tf.int32)
+      
+    if args.synthetic_labels:
+      label_batch = tf.ones((batch_size,), dtype=tf.int32)
+
 
     if num_shards <= 1:
       # No GPU available or only 1 GPU.
@@ -339,12 +360,14 @@ def get_experiment_fn(data_dir,
         batch_size=hparams.train_batch_size,
         use_distortion_for_training=use_distortion_for_training)
 
+    num_eval_examples = 100
+
     eval_input_fn = functools.partial(
-        input_fn,
-        data_dir,
-        subset='eval',
-        batch_size=hparams.eval_batch_size,
-        num_shards=num_gpus)
+      input_fn,
+      data_dir,
+      subset='eval',
+      batch_size=hparams.eval_batch_size,
+      num_shards=num_gpus)
 
     num_eval_examples = cifar10.Cifar10DataSet.num_examples_per_epoch('eval')
     if num_eval_examples % hparams.eval_batch_size != 0:
@@ -352,7 +375,6 @@ def get_experiment_fn(data_dir,
           'validation set size must be multiple of eval_batch_size')
 
     train_steps = hparams.train_steps
-    eval_steps = num_eval_examples // hparams.eval_batch_size
  
     classifier = tf.estimator.Estimator(
         model_fn=get_model_fn(num_gpus, variable_strategy,
@@ -366,7 +388,7 @@ def get_experiment_fn(data_dir,
         train_input_fn=train_input_fn,
         eval_input_fn=eval_input_fn,
         train_steps=train_steps,
-        eval_steps=eval_steps)
+        eval_steps=1)
 
   return _experiment_fn
 
@@ -385,8 +407,25 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
       intra_op_parallelism_threads=num_intra_threads,
       gpu_options=tf.GPUOptions(force_gpu_compatible=True))
 
+  # override checkpoint saver to not do anything
+  #  from tensorflow.python.training import training
+  #  def dummy(*args, **kwargs): return
+  #  training.CheckpointSaverHook._save = dummy
+
+  np.random.seed(1)
+  tf.set_random_seed(1)
+
+  # change event flush seconds to 1
+  from tensorflow.python.summary.writer.writer import FileWriter
+  old_init = FileWriter.__init__
+  def newinit(*args, **kwargs):
+    print("Overriding FileWriter flush_secs to 1")
+    kwargs['flush_secs']=1
+    old_init(*args, **kwargs)
+  FileWriter.__init__=newinit
+
   config = cifar10_utils.RunConfig(
-      session_config=sess_config, model_dir=job_dir)
+      session_config=sess_config, model_dir=job_dir, tf_random_seed=1)
   tf.contrib.learn.learn_runner.run(
       get_experiment_fn(data_dir, num_gpus, variable_strategy,
                         use_distortion_for_training),
@@ -394,6 +433,8 @@ def main(job_dir, data_dir, num_gpus, variable_strategy,
       hparams=tf.contrib.training.HParams(
           is_chief=config.is_chief,
           **hparams))
+
+  print(vals)
 
 
 if __name__ == '__main__':
@@ -422,17 +463,17 @@ if __name__ == '__main__':
   parser.add_argument(
       '--num-layers',
       type=int,
-      default=44,
+      default=8,
       help='The number of layers of the model.')
   parser.add_argument(
       '--train-steps',
       type=int,
-      default=80000,
+      default=10,
       help='The number of steps to use for training.')
   parser.add_argument(
       '--train-batch-size',
       type=int,
-      default=128,
+      default=10,
       help='Batch size for training.')
   parser.add_argument(
       '--eval-batch-size',
@@ -461,7 +502,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--use-distortion-for-training',
       type=bool,
-      default=True,
+      default=False,
       help='If doing image distortion for training.')
   parser.add_argument(
       '--sync',
@@ -511,7 +552,9 @@ if __name__ == '__main__':
       default=1e-5,
       help='Epsilon for batch norm.')
   parser.add_argument('--synthetic', type=int, default=0,
-                      help='use synthetic (random) data')
+                      help='use synthetic (random) data and constant labels')
+  parser.add_argument('--synthetic-labels', type=int, default=0,
+                      help='use synthetic (all 1s) labels')
   args = parser.parse_args()
 
   if args.num_gpus < 0:
