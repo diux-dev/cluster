@@ -88,8 +88,7 @@ def main():
           (fragment, LIMIT_TO_KEY))
     return
   
-  answer = input("%d instances found, terminate? (Y/n) " % (
-    len(instances_to_kill)))
+  answer = input("%d instances found, terminate? (Y/n) " % (len(instances_to_kill),))
   if not answer:
     answer = "y"
   if answer.lower() == "y":
