@@ -146,7 +146,9 @@ def launcher():
   print()
   
   job.run('source activate mxnet_p36')
-  job.run('pip install tensorflow-gpu') # this installs CPU-only version
+  # as of Jan 26, official version gives incompatible numpy error, so pin to nightly
+  # job.run('pip install tensorflow-gpu')
+  job.run('pip install -U https://ci.tensorflow.org/view/tf-nightly/job/tf-nightly-linux/TF_BUILD_IS_OPT=OPT,TF_BUILD_IS_PIP=PIP,TF_BUILD_PYTHON_VERSION=PYTHON3.6,label=gpu-linux/lastSuccessfulBuild/artifact/pip_test/whl/tf_nightly_gpu-1.6.0.dev20180126-cp36-cp36m-manylinux1_x86_64.whl')
   job.upload(__file__)
   job.run('killall python || echo failed')  # kill previous run
   job.run_async('python %s --role=worker'%(__file__,))

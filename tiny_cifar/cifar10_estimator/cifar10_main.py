@@ -173,7 +173,7 @@ def get_model_fn(num_gpus, variable_strategy, num_workers):
       
       def my_log(self, tensor_values):
         global vals
-        vals.append(tensor_values.values()[0])
+        vals.append(list(tensor_values.values())[0])
         old_log(self, tensor_values)
 
       tf.train.LoggingTensorHook._log_tensors = my_log
@@ -289,7 +289,7 @@ def input_fn(data_dir,
     dataset = cifar10.Cifar10DataSet(data_dir, subset, use_distortion)
     image_batch, label_batch = dataset.make_batch(batch_size)
 
-    assert not args.synthetic and args.synthetic_labels
+    assert not (args.synthetic and args.synthetic_labels)
     
     if args.synthetic:
       image_batch = tf.random_uniform((batch_size, 32, 32, 3))
@@ -552,7 +552,7 @@ if __name__ == '__main__':
       help='Epsilon for batch norm.')
   parser.add_argument('--synthetic', type=int, default=0,
                       help='use synthetic (random) data and constant labels')
-  parser.add_argument('--synthetic-labels', type=int, default=0,
+  parser.add_argument('--synthetic-labels', type=int, default=1,
                       help='use synthetic (all 1s) labels')
   args = parser.parse_args()
 
