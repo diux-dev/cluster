@@ -72,7 +72,7 @@ def main():
     list_ebss()
   elif mode == 'grow':
     task_fragment = sys.argv[2]
-    grow_ebs_for_task(task_fragment, 500)
+    grow_ebs_for_task(task_fragment, 1500)
   else:
     assert False, "Unknown mode "+mode
       
