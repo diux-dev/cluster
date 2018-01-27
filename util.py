@@ -668,8 +668,10 @@ def ssh_to_host(hostname,
 
   return ssh_client
 
+# TODO: inversion procedure is incorrect
+# TODO: probably want to be seconds in local time zone instead
 def seconds_from_datetime(dt):
-  """Convert datetime into seconds since epochs. IE, to use for
+  """Convert datetime into seconds since epochs in UTC timezone. IE, to use for
   instance.launch_time:
      toseconds(instance.launch_time).
 
