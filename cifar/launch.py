@@ -52,11 +52,12 @@ generic_ami_dict = {
     "us-east-1": "ami-9ba7c4e1",
 }
 
-# Script used to make custom AMI.
+# Script used to make custom AMI. (TODO: it installed CUDA 8 version, need 9)
+# TODO: need dtach (sudo apt install -y dtach)
 #
 # source activate mxnet_p36
 # export wheel=https://pypi.python.org/packages/86/f9/7b773ba67997b5c001ca57c4681d618f62d3743b7ee4b32ce310c1100cd7/tf_nightly_gpu-1.5.0.dev20171221-cp36-cp36m-manylinux1_x86_64.whl#md5=d126089a6fbbd81b104d303baeb649ff
-# pip install $wheel --upgrade-strategy=only-if-needed
+# pip install -U $wheel --upgrade-strategy=only-if-needed
 
 # sudo apt install -y emacs24
 # # disable auto-update
