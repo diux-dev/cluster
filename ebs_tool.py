@@ -47,8 +47,11 @@ def grow_ebs_for_task(task_fragment, target_size_gb):
 
   for (seconds, instance) in sorted_instances:
     task_name = u.get_name(instance.tags)
+    hours_ago = (time.time()-seconds)/3600
+    hours_ago+=8 # adjust for time being in UTC
+
     if task_fragment in task_name:
-      print("Found instance %s launched %.1f hours ago" %( task_name, (time.time()-seconds)/3600))
+      print("Found instance %s launched %.1f hours ago" %( task_name, hours_ago))
       break
   print(instance.id)
 
