@@ -54,8 +54,6 @@ parser.add_argument('--real-model', action='store_true',
 args = parser.parse_args()
 
 
-          
-
 
 ########################################
 # Tensorboard logging, move to util.py

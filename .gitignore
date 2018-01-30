@@ -3,3 +3,6 @@ __pycache__
 \#benchmark_grpc_recv.py\#
 *.py#
 .DS_Store
+.\#README.md
+*.md#
+*.pyc
