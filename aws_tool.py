@@ -17,7 +17,7 @@ def list_instances():
   for (seconds, instance) in sorted_instances:
     hours_ago = (time.time()-seconds)/3600
     hours_ago+=8 # adjust for time being in UTC
-    print(u.get_name(instance.tags), instance.id, hours_ago)
+    print(u.get_name(instance.tags), instance.id, instance.public_ip_address, int(hours_ago))
 
 def get_instance(fragment):
   ec2 = u.create_ec2_resource()
