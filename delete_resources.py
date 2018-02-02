@@ -36,6 +36,10 @@ EFS_NAME=u.get_resource_name()
 def main():
   # TODO: also bring down all the instances and wait for them to come down
   region = os.environ['AWS_DEFAULT_REGION']
+  if DEFAULT_NAME == 'nexus':
+    print("Nexus resources are protected, don't delete them")
+    sys.exit()
+    
   print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
   existing_vpcs = u.get_vpc_dict()
   client = u.create_ec2_client()
