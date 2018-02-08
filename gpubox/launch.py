@@ -156,7 +156,7 @@ def launcher():
   
   job.upload(__file__)
   job.run('killall python || echo failed')  # kill previous run
-  job.run_async('python %s --role=worker'%(__file__,))
+  job.run_async('python launch.py --role=worker')
 
 def worker():
   """Worker script that runs on AWS machine. Adds vectors of ones forever,
