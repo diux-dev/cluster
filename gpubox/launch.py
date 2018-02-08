@@ -51,14 +51,17 @@ import boto3
 # availability_mapping = {'us-east-1': availability_mapping_us_east_1,
 #                         'us-west-2': availability_mapping_us_west_2}
 
+# Deep Learning AMI v3
+# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
+
 ami_dict_ubuntu = {
-    "us-west-2": "ami-3b6bce43",
-    "us-east-1": "ami-9ba7c4e1",
+    "us-west-2": "ami-ee48f796",
+    "us-east-1": "ami-0a9fac70",
 }
-ami_dict_amazon = {
-    "us-west-2": "ami-5c60c524",
-    "us-east-1": "ami-3a533040"
-}
+#ami_dict_amazon = {
+#    "us-west-2": "ami-5c60c524",
+#    "us-east-1": "ami-3a533040"
+#}
 
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
