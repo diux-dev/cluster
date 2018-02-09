@@ -19,7 +19,7 @@ import os
 # this is to prevent accidentally wiping all jobs on the account
 # set to '' to remove this restriction
 #LIMIT_TO_KEY = os.environ.get("LIMIT_TO_KEY", "dontkillanything")
-LIMIT_TO_KEY=''
+LIMIT_TO_KEY='yaroslav'
 SKIP_TENSORBOARD=True  # true to avoid killing tensorboard jobs
 SKIP_STOPPED=True  # don't terminate stopped jobs
 
@@ -63,7 +63,7 @@ def main():
       continue
     
     key = instance_response.get('KeyName', '')
-    if LIMIT_TO_KEY and LIMIT_TO_KEY != key:
+    if LIMIT_TO_KEY and not (LIMIT_TO_KEY in key):
       print("instance %s matches but key %s doesn't match desired key %s, "
             "skipping" %(name, key, LIMIT_TO_KEY))
       continue
