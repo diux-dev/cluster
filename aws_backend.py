@@ -443,5 +443,14 @@ tmux a
     # this can fail with following
     #    botocore.exceptions.ClientError: An error occurred (InvalidInstanceID.NotFound) when calling the DescribeInstances operation: The instance ID 'i-0de492df6b20c35fe' does not exist
     # TODO(y): add automatic retry
-    self.instance.load()
+    retry_sec = 1
+    for i in range(10):
+      try:
+        self.instance.load()
+      except Exception as e:
+        print("instance.load failed with %s, retrying in %d seconds"%(str(e),
+                                                                      retry_sec))
+        time.sleep(retry_sec)
+        
+
     return self.instance.private_ip_address
