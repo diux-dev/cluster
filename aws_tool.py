@@ -25,10 +25,11 @@ def list_instances():
     if not (LIMIT_TO_KEY in instance.key_name):
       continue
     
-    print(u.get_name(instance.tags), instance.instance_type,
-          #instance.id,
-          instance.public_ip_address,
-          int(hours_ago))
+    print("%4s %20s %10s %20s" %(int(hours_ago),
+                            u.get_name(instance.tags), instance.instance_type,
+                            #instance.id,
+                            instance.public_ip_address,
+    ))
 
 def get_instance(fragment):
   ec2 = u.create_ec2_resource()
