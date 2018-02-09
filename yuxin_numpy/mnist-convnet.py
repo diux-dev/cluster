@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 # File: mnist-convnet.py
 
-import os
+import os, sys
+
 import argparse
 import tensorflow as tf
+import time
 """
 MNIST ConvNet example.
 about 0.6% validation error after 30 epochs.
@@ -95,7 +97,7 @@ class Model(ModelDesc):
 
 
 def get_data():
-    train = BatchData(dataset.Mnist('train'), 128)
+    train = BatchData(dataset.Mnist('train'), 10000)
     test = BatchData(dataset.Mnist('test'), 256, remainder=True)
     return train, test
 
@@ -111,6 +113,7 @@ def get_config():
         model=Model(),
         dataflow=dataset_train,  # the DataFlow instance for training
         callbacks=[
+            GPUUtilizationTracker(),
             ModelSaver(),   # save the model after every epoch
             MaxSaver('validation_accuracy'),  # save the model with highest accuracy (prefix 'validation_')
             InferenceRunner(    # run inference(for validation) after every epoch
@@ -118,9 +121,11 @@ def get_config():
                 ScalarStats(['cross_entropy_loss', 'accuracy'])),
         ],
         steps_per_epoch=steps_per_epoch,
-        max_epoch=100,
+        max_epoch=1000,
     )
 
+
+step_count = 0
 
 class NumpyTrainer(SyncMultiGPUTrainerReplicated):
 
@@ -144,32 +149,47 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
                 var.load(val)
 
     def run_step(self):
+        global step_count
+        step_count+=1
         if self.var_values is None:
             self._get_values()
-        grad_values = self.hooked_sess.run(self.all_grads)
 
+        start_time = time.perf_counter()
+        grad_values = self.hooked_sess.run(self.all_grads)
+        duration = time.perf_counter() - start_time
+        if step_count%10==0:
+          self.monitors.put_scalar('step_time', duration)
+        lr = 0.01
+        momentum = 0.9
+        acc = 0
+
+        # todo: add momentum
+        # from https://github.com/tensorflow/tensorflow/blob/982549ea3423df4270ff154e5c764beb43d472da/tensorflow/core/kernels/training_ops_gpu.cu.cc
         for v, g in zip(self.var_values, grad_values):
-            v -= 0.01 * g
+            acc = acc*momentum + g
+            v -= lr * acc
+            #          v -= lr * g
 
         self._set_values()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
+    parser.add_argument('--gpu', default='1', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
     parser.add_argument('--name', default='mnist-convnet', help='load model')
+    parser.add_argument('--group', default='yuxin_numpy', help='load model')
     args = parser.parse_args()
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+        os.environ['CUDA_DEVICE_ORDER']='PCI_BUS_ID'
+
 
     # automatically setup the directory train_log/mnist-convnet for logging
     #logger.auto_set_dir()
-    logger.set_logger_dir('/efs/runs/'+args.name)
+    logger.set_logger_dir('/efs/runs/'+args.group+'/'+args.name)
     
     config = get_config()
     if args.load:
         config.session_init = SaverRestore(args.load)
-    # SimpleTrainer is slow, this is just a demo.
-    # You can use QueueInputTrainer instead
-    launch_train_with_config(config, NumpyTrainer(2, use_nccl=False))
+    launch_train_with_config(config, NumpyTrainer(1, use_nccl=False))

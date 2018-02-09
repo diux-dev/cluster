@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 # File: mnist-convnet.py
 
-import os
+import os, sys
+
+
 import argparse
 import tensorflow as tf
 """
@@ -83,19 +85,21 @@ class Model(ModelDesc):
         summary.add_param_summary(('.*/W', ['histogram', 'rms']))
 
     def _get_optimizer(self):
-        lr = tf.train.exponential_decay(
-            learning_rate=1e-3,
-            global_step=get_global_step_var(),
-            decay_steps=468 * 10,
-            decay_rate=0.3, staircase=True, name='learning_rate')
+      # lr = tf.train.exponential_decay(
+      #       learning_rate=1e-3,
+      #       global_step=get_global_step_var(),
+      #       decay_steps=468 * 10,
+      #       decay_rate=0.3, staircase=True, name='learning_rate')
         # This will also put the summary in tensorboard, stat.json and print in terminal
         # but this time without moving average
+        lr = 0.01
         tf.summary.scalar('lr', lr)
-        return tf.train.AdamOptimizer(lr)
+        return tf.train.MomentumOptimizer(lr, momentum=0.9)
+        #        return tf.train.GradientDescentOptimizer(lr)
 
 
 def get_data():
-    train = BatchData(dataset.Mnist('train'), 128)
+    train = BatchData(dataset.Mnist('train'), 10000)
     test = BatchData(dataset.Mnist('test'), 256, remainder=True)
     return train, test
 
@@ -112,64 +116,34 @@ def get_config():
         dataflow=dataset_train,  # the DataFlow instance for training
         callbacks=[
             ModelSaver(),   # save the model after every epoch
+          GPUUtilizationTracker(),
             MaxSaver('validation_accuracy'),  # save the model with highest accuracy (prefix 'validation_')
             InferenceRunner(    # run inference(for validation) after every epoch
                 dataset_test,   # the DataFlow instance used for validation
                 ScalarStats(['cross_entropy_loss', 'accuracy'])),
         ],
         steps_per_epoch=steps_per_epoch,
-        max_epoch=100,
+        max_epoch=1000,
     )
-
-
-class NumpyTrainer(SyncMultiGPUTrainerReplicated):
-
-    var_values = None
-
-    def _setup_graph(self, input, get_cost_fn, get_opt_fn):
-        callbacks = super(NumpyTrainer, self)._setup_graph(input, get_cost_fn, get_opt_fn)
-        self.all_vars = []  # #GPU x #PARAM
-        for grads in self._builder.grads:
-            self.all_vars.append([k[1] for k in grads])
-        self.all_grads = [k[0] for k in self._builder.grads[0]]
-
-        return callbacks
-
-    def _get_values(self):
-        self.var_values = self.sess.run(self.all_vars[0])
-
-    def _set_values(self):
-        for all_vars in self.all_vars:
-            for val, var in zip(self.var_values, all_vars):
-                var.load(val)
-
-    def run_step(self):
-        if self.var_values is None:
-            self._get_values()
-        grad_values = self.hooked_sess.run(self.all_grads)
-
-        for v, g in zip(self.var_values, grad_values):
-            v -= 0.01 * g
-
-        self._set_values()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
+    parser.add_argument('--gpu', default='2', help='comma separated list of GPU(s) to use.')
     parser.add_argument('--load', help='load model')
-    parser.add_argument('--name', default='mnist-convnet', help='load model')
+    parser.add_argument('--name', default='mnist-convnet-prenumpy', help='name')
+    parser.add_argument('--group', default='yuxin_numpy', help='group')
     args = parser.parse_args()
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
     # automatically setup the directory train_log/mnist-convnet for logging
     #logger.auto_set_dir()
-    logger.set_logger_dir('/efs/runs/mnist-convnet-prenumpy')
+    logger.set_logger_dir('/efs/runs/'+args.group+'/'+args.name)
     
     config = get_config()
     if args.load:
         config.session_init = SaverRestore(args.load)
     # SimpleTrainer is slow, this is just a demo.
     # You can use QueueInputTrainer instead
-    launch_train_with_config(config, SimpleTrainer())
+    launch_train_with_config(config, QueueInputTrainer())
