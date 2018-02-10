@@ -141,6 +141,7 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
             self.all_vars.append([k[1] for k in grads])
         self.all_grads = [k[0] for k in self._builder.grads[0]]
 
+        self.acc_values = None
         return callbacks
 
     def _get_values(self):
@@ -164,13 +165,22 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
           self.monitors.put_scalar('step_time', duration)
         lr = 0.01
         momentum = 0.9
-        acc_values = [np.zeros_like(g) for g in grad_values]
+
+        if not self.acc_values:
+          self.acc_values = [np.zeros_like(g) for g in grad_values]
 
         # from https://github.com/tensorflow/tensorflow/blob/982549ea3423df4270ff154e5c764beb43d472da/tensorflow/core/kernels/training_ops_gpu.cu.cc
-        for v, g, acc in zip(self.var_values, grad_values, acc_values):
-            acc = acc*momentum + g
-            v -= lr * acc
-            #          v -= lr * g
+        for i in range(len(self.var_values)):
+          v = self.var_values[i]
+          g = grad_values[i]
+          self.acc_values[i] = self.acc_values[i]*momentum+g
+          v -= lr*self.acc_values[i]
+          
+#        for v, g, acc in zip(self.var_values, grad_values, acc_values):
+#            acc = acc*momentum + g
+#            v -= lr * acc
+#            import pdb; pdb.set_trace
+#            #          v -= lr * g
 
         self._set_values()
 
