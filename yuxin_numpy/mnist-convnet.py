@@ -7,6 +7,9 @@ import os, sys
 import argparse
 import tensorflow as tf
 import time
+
+import numpy as np
+
 """
 MNIST ConvNet example.
 about 0.6% validation error after 30 epochs.
@@ -161,11 +164,10 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
           self.monitors.put_scalar('step_time', duration)
         lr = 0.01
         momentum = 0.9
-        acc = 0
+        acc_values = [np.zeros_like(g) for g in grad_values]
 
-        # todo: add momentum
         # from https://github.com/tensorflow/tensorflow/blob/982549ea3423df4270ff154e5c764beb43d472da/tensorflow/core/kernels/training_ops_gpu.cu.cc
-        for v, g in zip(self.var_values, grad_values):
+        for v, g, acc in zip(self.var_values, grad_values, acc_values):
             acc = acc*momentum + g
             v -= lr * acc
             #          v -= lr * g
