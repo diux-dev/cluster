@@ -151,6 +151,8 @@ class Task(backend.Task):
     self.id = task_id
     self.install_script = install_script
     self._run_counter = 0
+    self.cached_ip = None
+    self.cached_public_ip = None
     
     self.initialized = False
 
@@ -211,14 +213,7 @@ class Task(backend.Task):
 
     self.log("Running initialize")
     self.initialize_called = True
-    while True:
-      # TODO: this try/except is wrong, should check for None instead
-      try:
-        public_ip = self.public_ip
-        break
-      except:
-        self.log("no public IP, retrying in %d seconds"%(TIMEOUT_SEC))
-      time.sleep(TIMEOUT_SEC)
+    public_ip = self.public_ip # todo: add retry logic to public_ip property
 
     while True:
       self.ssh_client = u.ssh_to_host(self.public_ip, self.keypair_fn,
@@ -371,6 +366,7 @@ tmux a
     stdout_str = stdout.read().decode()
     stderr_str = stderr.read().decode()
     self.log("run_ssh returned: " + stdout_str)
+        
     return stdout_str, stderr_str
     
   def run(self, cmd, sync=True, ignore_errors=False,
@@ -428,11 +424,14 @@ tmux a
           self.log("Warning: command %s returned status %s"%(cmd, contents))
       break    
 
-   
+
+  # todo: follow same logic as in def ip(self)
   @property
   def public_ip(self):
-    self.instance.load()
-    return self.instance.public_ip_address
+    if not self.cached_public_ip:
+      self.instance.load()
+      self.cached_public_ip = self.instance.public_ip_address
+    return self.cached_public_ip
 
   @property
   def port(self):
@@ -442,15 +441,15 @@ tmux a
   def ip(self):  # private ip
     # this can fail with following
     #    botocore.exceptions.ClientError: An error occurred (InvalidInstanceID.NotFound) when calling the DescribeInstances operation: The instance ID 'i-0de492df6b20c35fe' does not exist
-    # TODO(y): add automatic retry
-    retry_sec = 1
-    for i in range(10):
-      try:
-        self.instance.load()
-      except Exception as e:
-        print("instance.load failed with %s, retrying in %d seconds"%(str(e),
-                                                                      retry_sec))
-        time.sleep(retry_sec)
-        
+    if not self.cached_ip:
+      retry_sec = 1
+      for i in range(10):
+        try:
+          self.instance.load()
+        except Exception as e:
+          print("instance.load failed with %s, retrying in %d seconds"%(str(e),
+                                                                        retry_sec))
+          time.sleep(retry_sec)
+      self.cached_ip = self.instance.private_ip_address
 
-    return self.instance.private_ip_address
+    return self.cached_ip
