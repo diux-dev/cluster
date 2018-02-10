@@ -95,7 +95,6 @@ class Model(ModelDesc):
         lr = 0.01
         tf.summary.scalar('lr', lr)
         return tf.train.MomentumOptimizer(lr, momentum=0.9)
-        #        return tf.train.GradientDescentOptimizer(lr)
 
 
 def get_data():
