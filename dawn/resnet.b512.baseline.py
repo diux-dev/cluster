@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
 # File: resnet.b512.baseline.py
 # from yuxin
 
@@ -21,13 +20,12 @@ from tensorpack.tfutils.summary import *
 from tensorpack.utils.gpu import get_nr_gpu
 
 from imagenet_utils import (
-    minimal_augmentor, ImageNetModel, image_preprocess,
+    ImageNetModel,
     get_imagenet_dataflow,
-    compute_loss_and_error, eval_on_ILSVRC12,
+    eval_on_ILSVRC12,
     fbresnet_augmentor)
 from resnet_model import (
-    resnet_group, resnet_basicblock, resnet_bottleneck,
-    resnet_backbone_nofc)
+    resnet_group, resnet_basicblock, resnet_bottleneck)
 
 
 TOTAL_BATCH_SIZE = 512
@@ -102,9 +100,13 @@ def get_config(model):
 
 
 if __name__ == '__main__':
+    from os.path import expanduser
+    home = expanduser("~")
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
-    parser.add_argument('--data', help='ILSVRC dataset dir')
+    parser.add_argument('--data', default=home+'/data/imagenet',
+                        help='ILSVRC dataset dir')
     parser.add_argument('--load', help='load model')
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--logdir', default='train_log/tmp')
