@@ -62,7 +62,7 @@ class Run:
 
   def log(self, message, *args):
     """Log to client console."""
-    #    ts = u.current_timestamp()
+    ts = u.current_timestamp()
     if args:
       message = message % args
 
@@ -170,7 +170,7 @@ class Task:
     if args:
       message = message % args
 
-      print("%s %s.%d: %s"%(ts, self.job.name, self.id, message))
+      print("%s %d.%s: %s"%(ts, self.id, self.job.name, message))
 
   def file_write(self, fn, contents):
     """Write string contents to file fn in task."""
