@@ -60,7 +60,9 @@ class Run(backend.Run):
       security_group = u.get_security_group_dict()[u.get_resource_name()]
       keypair = u.get_keypair_dict()[u.get_keypair_name()]
       vpc = u.get_vpc_dict()[u.get_resource_name()]
-      subnet = u.get_subnet_dict(vpc)[availability_zone]
+      subnet_dict = u.get_subnet_dict(vpc)
+      assert availability_zone in subnet_dict, "Availability zone %s is not in subnet dict, available subnets are %s"%(availability_zone, ', '.join(subnet_dict.keys()))
+      subnet = subnet_dict[availability_zone]
       ec2 = u.create_ec2_resource()
       u.maybe_create_placement_group(placement_group)
 
