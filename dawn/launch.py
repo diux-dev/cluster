@@ -62,7 +62,7 @@ def main():
   job.upload('imagenet_utils.py')
   job.upload('resnet_model.py')
   job.upload('resnet.b512.baseline.py')
-  job.run_async('python resnet.b512.baseline.py --logir=%s'%(logdir,))
+  job.run_async('python resnet.b512.baseline.py --logdir=%s'%(logdir,))
 
 
 if __name__=='__main__':
