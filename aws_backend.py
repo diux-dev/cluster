@@ -240,6 +240,8 @@ class Task(backend.Task):
       self.install_script+='\necho ok > /tmp/is_initialized\n'
       self.file_write('install.sh', u._add_echo(self.install_script))
       self.run('bash -e install.sh') # fail on errors
+      # TODO(y): propagate error messages printed on console to the user
+      # right now had to log into tmux to see it
 
     assert self._is_initialized_file_present()
 
