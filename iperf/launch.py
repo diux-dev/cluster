@@ -68,9 +68,9 @@ parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='iperf00',
                      help="name of the current run")
-parser.add_argument('--instance-type', type=str, default='p2.xlarge',
+parser.add_argument('--instance-type', type=str, default='c5.9xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='us-west-2a',
+parser.add_argument('--zone', type=str, default='us-east-1f',
                     help='which availability zone to use')
 parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
@@ -128,10 +128,9 @@ def main():
                             num_tasks=2)
   worker_job.wait_until_ready()
   ps_job.wait_until_ready()
-  tasks = job.tasks
 
-  tasks[0].run_async('sudo iperf3 -s -p 6006')
-  tasks[1].run('sudo iperf3 -c %s -P 10 -i 1 -t 60 -V -p 6006'%(tasks[0].ip,))
+  worker_job.tasks[0].run_async('sudo iperf3 -s -p 6006')
+  worker_job.tasks[1].run('sudo iperf3 -c %s -P 10 -i 1 -t 60 -V -p 6006'%(worker_job.tasks[0].ip,))
   print("Job ready for connection, run the following:")
   print("../connect "+args.name)
   print("Alternatively run")
