@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import os
 from itertools import count
+import time
 
 import tensorflow as tf
 
@@ -21,14 +22,17 @@ from tensorpack.utils.gpu import get_nr_gpu
 
 from imagenet_utils import (
     ImageNetModel,
-    get_imagenet_dataflow,
+  get_imagenet_dataflow,
     eval_on_ILSVRC12,
-    fbresnet_augmentor)
+    fbresnet_augmentor,
+  fbresnet_augmentor_fast,
+)
 from resnet_model import (
     resnet_group, resnet_basicblock, resnet_bottleneck)
 
 
-TOTAL_BATCH_SIZE = 512
+#TOTAL_BATCH_SIZE = 512
+PER_GPU_BATCH_SIZE = 64
 BASE_LR = 0.1 * (512 // 256)
 
 
@@ -56,7 +60,8 @@ class Model(ImageNetModel):
 def get_data(name, batch):
     isTrain = name == 'train'
     global args
-    augmentors = fbresnet_augmentor(isTrain)
+    augmentors = fbresnet_augmentor_fast(isTrain)
+
     if isTrain:
         print("Training batch:", batch)
         return get_imagenet_dataflow(args.data, name, batch, augmentors)
@@ -64,38 +69,48 @@ def get_data(name, batch):
         imagenet1k = get_imagenet_dataflow(args.data, name, batch, augmentors)
         return imagenet1k
 
+class StepTimeCallback(Callback):
+    def _before_run(self, _):
+        self._start = time.time()
+
+    def _after_run(self, _, __):
+        self.trainer.monitors.put_scalar('step_time', time.time() - self._start)
 
 def get_config(model):
     nr_tower = max(get_nr_gpu(), 1)
-    batch = TOTAL_BATCH_SIZE // nr_tower
+    #    batch = TOTAL_BATCH_SIZE // nr_tower
+    batch = PER_GPU_BATCH_SIZE
 
     logger.info("Running on {} towers. Batch size per tower: {}".format(nr_tower, batch))
     dataset_train = get_data('train', batch)
     dataset_val = get_data('val', batch)
-    import pdb; pdb.set_trace()
 
     infs = [ClassificationError('wrong-top1', 'val-error-top1'),
             ClassificationError('wrong-top5', 'val-error-top5')]
     callbacks = [
-        ModelSaver(),
+        StepTimeCallback(),
         GPUUtilizationTracker(),
-        ScheduledHyperParamSetter('learning_rate',
-            [(0, 0.1), (3, BASE_LR)], interp='linear'),
-        ScheduledHyperParamSetter('learning_rate',
-            [(30, BASE_LR * 1e-1), (60, BASE_LR * 1e-2), (80, BASE_LR * 1e-3)]),
-        PeriodicTrigger(
-            DataParallelInferenceRunner(
-                dataset_val, infs, list(range(nr_tower))),
-            every_k_epochs=1),
     ]
 
+
+
+
+    if args.fake:
+        dataset_train = FakeData(
+            [[batch, 224, 224, 3], [batch]], 1000,
+            random=False, dtype=['uint8', 'int32'])
+
+
     input = QueueInput(dataset_train)
+    #    import pdb; pdb.set_trace()
     input = StagingInput(input, nr_stage=1)
+
+    num_gpus = get_nr_gpu()
     return TrainConfig(
         model=model,
         data=input,
         callbacks=callbacks,
-        steps_per_epoch=1281167 // TOTAL_BATCH_SIZE,
+        steps_per_epoch=1281 // (PER_GPU_BATCH_SIZE*get_nr_gpu()),
         max_epoch=100,
     )
 
@@ -109,8 +124,9 @@ if __name__ == '__main__':
     parser.add_argument('--data', default=home+'/data/imagenet',
                         help='ILSVRC dataset dir')
     parser.add_argument('--load', help='load model')
+    parser.add_argument('--fake', action='store_true', help='use fake data')
     parser.add_argument('--eval', action='store_true')
-    parser.add_argument('--logdir', default='train_log/tmp')
+    parser.add_argument('--logdir', default='/efs/runs/yuxin_numpy_imagenet/scratch10')
     args = parser.parse_args()
 
     if args.gpu:
@@ -126,10 +142,12 @@ if __name__ == '__main__':
             ['input', 'label0'],
             ['wrong-top1', 'wrong-top5'])
     else:
+        os.system('mv %s /efs/trash/%d'%(args.logdir,time.time()))
         logger.set_logger_dir(args.logdir, 'd')
 
         config = get_config(model)
         if args.load:
             config.session_init = get_model_loader(args.load)
         nr_tower = max(get_nr_gpu(), 1)
-        launch_train_with_config(config, QueueInputTrainer())
+        launch_train_with_config(config,
+            SyncMultiGPUTrainerReplicated(nr_tower))
