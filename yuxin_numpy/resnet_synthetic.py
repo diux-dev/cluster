@@ -32,6 +32,7 @@ from resnet_model import (
   resnet_group, resnet_basicblock, resnet_bottleneck)
 
 
+DATASET_SIZE=1281  # 0.1% of original dataset size
 PER_GPU_BATCH_SIZE = 64
 BASE_LR = 0.1 * (512 // 256)
 
@@ -101,11 +102,15 @@ def get_config(model):
   input = StagingInput(input, nr_stage=1)
 
   num_gpus = get_nr_gpu()
+  
   return TrainConfig(
     model=model,
     data=input,
     callbacks=callbacks,
-    steps_per_epoch=1281 // (PER_GPU_BATCH_SIZE*get_nr_gpu()),
+    extra_callbacks=train.DEFAULT_CALLBACKS()+[
+      MergeAllSummaries(period=1),
+    ],
+    steps_per_epoch=DATASET_SIZE // (PER_GPU_BATCH_SIZE*get_nr_gpu()),
     max_epoch=3,
   )
 
