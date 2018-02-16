@@ -15,12 +15,12 @@ import time
 
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--tag', type=str, default='train-error-top1',
+parser.add_argument('--tag', type=str, default='step-time',#default='numpy-step-time',#default='xentropy-loss',
                     help='launcher or worker')
 parser.add_argument('--group', default='resnet_synthetic')
 parser.add_argument('--name', default='fresh00')
-parser.add_argument('--dir', type=str, default='/efs/runs/resnet_synthetic/fresh01',
-                    help='launcher or worker')
+#parser.add_argument('--dir', type=str, default='/efs/runs/resnet_synthetic/fresh01')
+parser.add_argument('--dir', type=str, default='/home/ubuntu/logs/resnet_synthetic_test')
 args = parser.parse_args()
 
 
@@ -29,7 +29,10 @@ import glob
 
 def main():
 
-  logdir = '/efs/runs/'+args.group + '/' + args.name
+  if args.dir:
+    logdir = args.dir
+  else:
+    logdir = '/efs/runs/'+args.group + '/' + args.name
 
   for fname in glob.glob(logdir+'/events*'):
     print('opening ', fname)

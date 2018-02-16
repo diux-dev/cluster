@@ -101,6 +101,8 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
 
     self.acc_values = None
     self.step_count = 0
+
+    
     return callbacks
 
   def _get_values(self):
@@ -121,9 +123,6 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
     grad_values = self.hooked_sess.run(self.all_grads)
     lr = 0.1
     momentum = 0.9
-
-    if not self.acc_values:
-      self.acc_values = [np.zeros_like(g) for g in grad_values]
 
     for i in range(len(self.var_values)):
       v = self.var_values[i]
