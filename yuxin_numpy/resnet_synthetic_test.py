@@ -208,6 +208,6 @@ if __name__ == '__main__':
 
   assert(abs(losses[-1]-0.046783510595560074)<0.001)
   assert(np.median(step_times)<0.21)
-  assert(epoch_times[-1]<4.1)
+  assert(epoch_times[-1]<4.2)
   assert(epoch_times[-1]>4)
   print("Test passed")
