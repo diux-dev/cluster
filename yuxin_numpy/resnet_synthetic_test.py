@@ -36,6 +36,11 @@ PER_GPU_BATCH_SIZE = 64
 BASE_LR = 0.1 * (512 // 256)
 
 class Model(ImageNetModel):
+  def _get_optimizer(self):
+    lr = tf.get_variable('learning_rate', initializer=0.1, trainable=False)
+    tf.summary.scalar('learning_rate-summary', lr)
+    return tf.train.GradientDescentOptimizer(lr)
+
   def get_logits(self, image):
     group_func = resnet_group
     block_func = resnet_bottleneck
@@ -189,7 +194,7 @@ if __name__ == '__main__':
   print('Median step time: %10.1f ms'%( 1000*np.median(step_times)))
   print('Final epoch time: %10.3f sec' %(epoch_times[-1]))
   im_per_sec = DATASET_SIZE/epoch_times[-1]
-  print('Images/second: %10.2f sec' %(im_per_sec))
+  print('Images/second: %10.2f sec (%.1f on 8)' %(im_per_sec, 8*im_per_sec))
 
   # Example two runs:
   #
