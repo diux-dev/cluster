@@ -15,9 +15,11 @@ import time
 
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--tag', type=str, default='gpuutil',
+parser.add_argument('--tag', type=str, default='train-error-top1',
                     help='launcher or worker')
-parser.add_argument('--dir', type=str, default='/efs/runs/yuxin_numpy/0',
+parser.add_argument('--group', default='resnet_synthetic')
+parser.add_argument('--name', default='fresh00')
+parser.add_argument('--dir', type=str, default='/efs/runs/resnet_synthetic/fresh01',
                     help='launcher or worker')
 args = parser.parse_args()
 
@@ -27,17 +29,22 @@ import glob
 
 def main():
 
-  for fname in glob.glob(args.dir+'/events*'):
+  logdir = '/efs/runs/'+args.group + '/' + args.name
+
+  for fname in glob.glob(logdir+'/events*'):
     print('opening ', fname)
     events = summary_iterator.summary_iterator(fname)
 
-    summaries = [e.summary for e in events if e.summary.value]
-    values = []
-    for summary in summaries:
-      tag = summary.value[0].tag
-      if args.tag.lower() not in tag.lower():
-        continue
-      print(summary.value[0].simple_value)
+    events = [e for e in events if e.step]
+
+    for event in events:
+      step = event.step
+      wall_time = event.wall_time
+      vals = {val.tag: val.simple_value for val in event.summary.value}
+      # step_time: value
+      for tag in vals:
+        if args.tag in tag:
+          print(step, tag, vals[tag])
 
 if __name__ == '__main__':
   main()
