@@ -185,9 +185,11 @@ if __name__ == '__main__':
   losses = np.array(losses)
   step_times = np.array(step_times)
   epoch_times = np.array(epoch_times)
-  print('Final loss: ', losses[-1])
-  print('Median step time: ', np.median(step_times))
-  print('Final epoch time: ', epoch_times[-1])
+  print('Final loss: %10.5f' %(losses[-1]))
+  print('Median step time: %10.1f ms'%( 1000*np.median(step_times)))
+  print('Final epoch time: %10.3f sec' %(epoch_times[-1]))
+  im_per_sec = DATASET_SIZE/epoch_times[-1]
+  print('Images/second: %10.2f sec' %(im_per_sec))
 
   # Example two runs:
   #
