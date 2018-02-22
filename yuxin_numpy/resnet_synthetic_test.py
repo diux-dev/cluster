@@ -92,8 +92,13 @@ def get_config(model):
   batch = PER_GPU_BATCH_SIZE
 
   logger.info("Running on {} towers. Batch size per tower: {}".format(nr_tower, batch))
-  dataset_train = get_data('train', batch)
-  dataset_val = get_data('val', batch)
+  if args.fake:
+    dataset_train = FakeData(
+      [[batch, 224, 224, 3], [batch]], 1000,
+      random=False, dtype=['uint8', 'int32'])
+  else:
+    dataset_train = get_data('train', batch)
+    dataset_val = get_data('val', batch)
 
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
@@ -102,12 +107,6 @@ def get_config(model):
     EpochTimeCallback(),
     GPUUtilizationTracker(),
   ]
-
-
-  if args.fake:
-    dataset_train = FakeData(
-      [[batch, 224, 224, 3], [batch]], 1000,
-      random=False, dtype=['uint8', 'int32'])
 
 
   input = QueueInput(dataset_train)
