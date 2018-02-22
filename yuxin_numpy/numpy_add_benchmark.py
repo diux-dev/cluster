@@ -20,9 +20,9 @@ def main():
   times = []
   print(args.inplace)
   
+  grads = np.ones(dim, dtype=np.float32)
   for i in range(100):
     t1 = time.time()
-    grads = np.ones(dim, dtype=np.float32)
     if args.inplace:
       weights+=grads
     else:
