@@ -36,7 +36,7 @@ class ParameterServer(object):
         self.params = np.zeros(dim)
 
     def update_and_get_new_params(self, gradients):
-        self.params += gradients
+        self.params -= gradients
         return self.params
 
 @ray.remote
@@ -58,7 +58,6 @@ def main():
     ps = ParameterServer.remote(args.dim)
     worker = Worker.remote(args.dim)
 
-  RUN_RAY = True
   net = CNN(args.dim)
 
   for i in range(100):
