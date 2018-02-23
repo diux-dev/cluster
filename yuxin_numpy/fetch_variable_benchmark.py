@@ -21,6 +21,8 @@ from collections import OrderedDict
 parser = argparse.ArgumentParser()
 parser.add_argument("--placement", default='cpu', type=str,
                     help="The number of parameter servers to use.")
+parser.add_argument("--align", default=0, type=int,
+                    help="Whether to manually align array")
 parser.add_argument("--dim", default=25*1000*1000, type=int,
                     help="The number of parameters.")
 args = parser.parse_args()
@@ -44,6 +46,18 @@ class timeit:
     global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
     print("%20s %10.2f"%(self.tag, interval_ms))
 
+# https://github.com/numpy/numpy/issues/5312
+import numpy as np
+
+def empty_aligned(n, align=128):
+    """
+    Get n bytes of memory wih alignment align.
+    """
+
+    a = np.empty(n + (align - 1), dtype=np.float32)
+    data_align = a.ctypes.data % align
+    offset = 0 if data_align == 0 else (align - data_align)
+    return a[offset : offset + n]
 
 def summarize_time(tag, time_list_ms):
   # delete first large interval if exists
@@ -92,8 +106,12 @@ def sessrun(*args, **kwargs):
 
 def main():
   gc.disable()
-  params0 = np.ones((args.dim,), dtype=np.float32)
-
+  if args.align:
+    params0 = empty_aligned(args.dim)
+  else:
+    params0 = np.ones((args.dim,), dtype=np.float32)
+  
+  
   with tf.device('/gpu:0'):
     gpu_params = tf.Variable(initial_value=params0)
     gpu_tensor = tf.ones((args.dim,), dtype=np.float32)
