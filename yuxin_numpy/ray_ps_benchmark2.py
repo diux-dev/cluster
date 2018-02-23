@@ -38,7 +38,7 @@ class CNN(object):
 @ray.remote
 class ParameterServer(object):
     def __init__(self, dim):
-        self.params = np.zeros(dim)
+        self.params = np.zeros(dim, dtype=np.float32)
 
     def update_and_get_new_weights(self, *gradients):
         for grad in gradients:
@@ -71,7 +71,8 @@ class Worker(object):
 if __name__ == "__main__":
     if args.redis_address is None:
         # Run everything locally.
-        ray.init(num_gpus=args.num_parameter_servers + args.num_workers)
+        ray.init(num_gpus=args.num_parameter_servers + args.num_workers,
+                 num_workers=0, object_store_memory=(10 ** 9))
     else:
         # Connect to a cluster.
         ray.init(redis_address=args.redis_address)
