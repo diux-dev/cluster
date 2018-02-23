@@ -25,7 +25,7 @@ parser.add_argument("--num-workers", default=1, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--num-parameter-servers", default=1, type=int,
                     help="The number of parameter servers to use.")
-parser.add_argument("--dim", default=25*1000*10000, type=int,
+parser.add_argument("--dim", default=25*1000*1000, type=int,
                     help="The number of parameters.")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
@@ -88,7 +88,7 @@ def create_net(name, params0):
 
 timeline_counter = 0
 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE, output_partition_graphs=True)
-def traced_run(fetches):
+def traced_run(*args, **kwargs):
   """Runs fetches, dumps timeline files in current directory."""
 
   global timeline_counter
@@ -102,9 +102,10 @@ def traced_run(fetches):
   
   from tensorflow.python.client import timeline
 
-  results = sess.run(fetches,
-                     options=run_options,
-                     run_metadata=run_metadata);
+  kwargs['options'] = run_options
+  kwargs['run_metadata'] = run_metadata
+  results = sess.run(*args, **kwargs)
+  
   tl = timeline.Timeline(step_stats=run_metadata.step_stats)
   ctf = tl.generate_chrome_trace_format(show_memory=True,
                                           show_dataflow=False)
@@ -131,7 +132,6 @@ def main():
       sess.run(grad_assign_op)
       
     with timeit('fetch'):
-      #      grad0 = sess.run(grad_cached)
       grad0 = sess.run(grad_cached)
 
     # takes 75ms, 33ms is on allocation, 16ms on multiplication
@@ -139,7 +139,8 @@ def main():
       params0-=grad0*lr
 
     with timeit('feed'):
-      params.load(params0)
+      #      params.load(params0)
+      traced_run(params.initializer, feed_dict={params.initial_value:params0})
 
 
   for key, times in global_timeit_dict.items():
