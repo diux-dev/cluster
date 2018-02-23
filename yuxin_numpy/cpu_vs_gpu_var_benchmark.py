@@ -126,7 +126,7 @@ def main():
     print('loss', loss0)
 
     with timeit('step'):
-      sess.run(grad_assign_op)
+      sessrun(grad_assign_op)
       
     with timeit('fetch'):
       grad0 = sess.run(grad_cached)
@@ -137,7 +137,7 @@ def main():
 
     with timeit('feed'):
       #      params.load(params0)
-      sessrun(params.initializer, feed_dict={params.initial_value:params0})
+      sess.run(params.initializer, feed_dict={params.initial_value:params0})
 
 
   for key, times in global_timeit_dict.items():
