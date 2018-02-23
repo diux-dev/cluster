@@ -10,6 +10,8 @@ import os
 from itertools import count
 import time
 
+import ray
+
 import tensorflow as tf
 
 from tensorpack import *
@@ -40,6 +42,10 @@ parser.add_argument('--fake', default=1, help='use fake data')
 parser.add_argument('--eval', action='store_true')
 parser.add_argument('--group', default='resnet_synthetic')
 parser.add_argument('--name', default='fresh00')
+parser.add_argument("--skip-ray", default=0, type=int,
+                    help="skip ray and add directly in numpy")
+parser.add_argument('--lr', default=0.1)
+
 args = parser.parse_args()
 
 DATASET_SIZE=1281  # 0.1% of original dataset size
@@ -122,10 +128,29 @@ def unflatten(flat, shapes):
     result.append(np.reshape(flat_val, shape))
   return result
 
+@ray.remote
+class ParameterServer(object):
+    def __init__(self, dim, lr):
+        self.params = np.zeros(dim)
+        self.lr = lr
+
+    def update_and_get_new_params(self, gradients):
+        self.params -= self.lr*gradients
+        return self.params
+
+    def init_params(self, params):
+      self.params = np.copy(params)
+      
+    def ip(self):
+        return ray.services.get_node_ip_address()
+
+
 class NumpyTrainer(SyncMultiGPUTrainerReplicated):
 
-  var_values = None
-
+  def __init__(self, *args, **argv):
+    SyncMultiGPUTrainerReplicated.__init__(self, *args, **argv)
+    self.var_values = None
+    
   def _setup_graph(self, input, get_cost_fn, get_opt_fn):
     callbacks = super(NumpyTrainer, self)._setup_graph(input, get_cost_fn, get_opt_fn)
     self.all_vars = []  # #GPU x #PARAM
@@ -153,21 +178,27 @@ class NumpyTrainer(SyncMultiGPUTrainerReplicated):
         var.load(val)
 
   def run_step(self):
+    global ps
+    
     start_time = time.perf_counter()
     #    import pdb; pdb.set_trace()
     
     self.step_count+=1
     if self.var_values is None:
       self._get_values()  # initalizes var_flat
+      ps.init_params.remote(self.var_flat)  # initialize parameter server
 
     grad_values = self.hooked_sess.run(self.all_grads)
     grad_values_flat = flatten(grad_values)
-    lr = 0.1
 
     v = self.var_flat
     g = grad_values_flat
-    v-=lr*g
-          
+    if args.skip_ray:
+      v-=args.lr*g
+    else:
+      new_val = ps.update_and_get_new_params.remote(g)
+      
+    self.var_flat = ray.get(new_val)
     self._set_values()
     
     duration = time.perf_counter() - start_time
@@ -181,6 +212,8 @@ def get_config(model):
 
   logger.info("Running on {} towers. Batch size per tower: {}".format(nr_tower, batch))
 
+  if not args.skip_ray:
+    ray.init()
 
   if args.fake:
     dataset_train = FakeData(
@@ -218,6 +251,8 @@ def get_config(model):
 
 
 def main():
+  global ps
+  
   from os.path import expanduser
   home = expanduser("~")
 
@@ -237,7 +272,9 @@ def main():
 
   tf.set_random_seed(1)
   np.random.seed(1)
-  #  launch_train_with_config(config, SyncMultiGPUTrainerReplicated(nr_tower))
+
+  ps = ParameterServer.remote(0, args.lr)
+
   launch_train_with_config(config, NumpyTrainer(nr_tower,
                                                 use_nccl=False))
 
