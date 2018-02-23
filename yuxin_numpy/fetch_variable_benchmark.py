@@ -4,12 +4,10 @@ import tensorflow as tf
 import argparse
 import numpy as np
 import time
-import ray
 
 import gc
 
 import os
-import portpicker
 import subprocess
 import sys
 import tensorflow as tf
@@ -106,7 +104,7 @@ def main():
   sess = tf.InteractiveSession()
   sess.run(tf.global_variables_initializer())
 
-  for i in range(100):
+  for i in range(20):
     with timeit('fetch-cpu-variable'):
       val0 = sess.run(cpu_params)
     with timeit('fetch-cpu-tensor'):
