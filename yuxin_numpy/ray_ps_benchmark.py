@@ -33,7 +33,7 @@ class CNN(object):
 @ray.remote
 class ParameterServer(object):
     def __init__(self, dim):
-        self.params = np.zeros(dim)
+        self.params = np.zeros(dim, dtype=np.float32)
 
     def update_and_get_new_params(self, gradients):
         self.params -= gradients
@@ -53,7 +53,7 @@ def main():
   params = np.zeros(args.dim, dtype=np.float32)
 
   if not args.skip_ray:
-    ray.init()
+    ray.init(object_store_memory=(10 ** 9), num_workers=0)
 
     ps = ParameterServer.remote(args.dim)
     worker = Worker.remote(args.dim)
