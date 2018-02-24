@@ -22,8 +22,10 @@ import pickle
 from collections import OrderedDict
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dim", default=2*25*1000*1000, type=int,
+parser.add_argument("--dim", default=25*1000*1000, type=int,
                     help="The number of parameters.")
+parser.add_argument("--align", default='none', type=str,
+                    help="none/cpu/gpu")
 args = parser.parse_args()
 
 
@@ -110,12 +112,36 @@ def traced_run(*args, **kwargs):
   timeline_counter+=1
   return results
 
+def align_numpy_cpu(unaligned):
+  sess = tf.get_default_session()
+  with tf.device('/cpu:0'):
+    tensor = tf.ones(unaligned.shape, dtype=unaligned.dtype)
+  aligned = sess.run(tensor)
+  np.copyto(aligned, unaligned)
+  return aligned
+
+def align_numpy_gpu(unaligned):
+  sess = tf.get_default_session()
+  with tf.device('/gpu:0'):
+    tensor = tf.ones(unaligned.shape, dtype=unaligned.dtype)
+  aligned = sess.run(tensor)
+  np.copyto(aligned, unaligned)
+  return aligned
+
+
 def main():
+  sess = tf.InteractiveSession()
   params0 = np.ones((args.dim,), dtype=np.float32)/(np.sqrt(args.dim))
 
+  if args.align == 'none':
+    pass
+  elif args.align == 'cpu':
+    params0 = align_numpy_cpu(params0)
+  elif args.align == 'gpu':
+    params0 = align_numpy_gpu(params0)
+    
   loss, params, grad_cached, grad_assign_op = create_net('net1', params0)
   
-  sess = tf.InteractiveSession()
   sess.run(tf.global_variables_initializer())
 
   lr = 0.01
