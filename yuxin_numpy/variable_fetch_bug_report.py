@@ -106,7 +106,7 @@ def fetch_cpu_variable():
     with timeit('fetch_cpu_variable'):
       sess.run(params)
 
-def fetch_cpu_variable_hack1():
+def fetch_cpu_variable_add():
   data = np.ones((args.dim,), dtype=np.float32)
   with tf.device('/cpu:0'):
     params = tf.Variable(initial_value=data)
@@ -114,18 +114,18 @@ def fetch_cpu_variable_hack1():
     
   sess.run(tf.global_variables_initializer())
   for i in range(20):
-    with timeit('fetch_cpu_variable_hack1'):
+    with timeit('fetch_cpu_variable_add'):
       sess.run(params)
 
 
-def fetch_cpu_variable_hack2():
+def fetch_cpu_variable_concat():
   data = np.ones((args.dim,), dtype=np.float32)
   with tf.device('/cpu:0'):
     params = tf.Variable(initial_value=data)
     params = tf.concat([params, tf.fill([1],1.0)], axis=0)
   sess.run(tf.global_variables_initializer())
   for i in range(20):
-    with timeit('fetch_cpu_variable_hack2'):
+    with timeit('fetch_cpu_variable_concat'):
       sess.run(params)
 
 
@@ -180,7 +180,7 @@ if __name__ == '__main__':
   gc.disable()
   sess = tf.InteractiveSession()
   fetch_cpu_variable()
-  fetch_cpu_variable_hack1()
-  fetch_cpu_variable_hack2()
+  fetch_cpu_variable_add()
+  fetch_cpu_variable_concat()
   for key, times in global_timeit_dict.items():
     summarize_time(key, times)
