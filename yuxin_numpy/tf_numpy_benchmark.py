@@ -378,6 +378,34 @@ def ray_copy():
     with timeit('ray_copy'):
       np.copyto(params0, params1)
 
+def pytorch_from_numpy():
+  """Convert numpy array to pytorch, <1ms because no copy takes place."""
+  import torch
+  
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('pytorch_from_numpy'):
+      torch.from_numpy(params0)
+  
+def pytorchadd_from_numpy():
+  """Convert numpy array to pytorch, add a number to resulting tensor."""
+  import torch
+  
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('pytorch_from_numpy'):
+      result = torch.from_numpy(params0)
+      result+=1
+      print(result[0])
+  
+def pytorchgpu_from_numpy():
+  import torch
+  
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('pytorch_from_numpy'):
+      result = torch.from_numpy(params0)
+      result = result.cuda()
   
 
 if __name__ == '__main__':
@@ -388,6 +416,7 @@ if __name__ == '__main__':
 
   os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
   os.environ['TF_CUDNN_USE_AUTOTUNE']='0'
+  os.environ['CUDA_LAUNCH_BLOCKING']='1' 
   import tensorflow as tf
   from tensorflow.core.protobuf import rewriter_config_pb2
   optimizer_options = tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)
