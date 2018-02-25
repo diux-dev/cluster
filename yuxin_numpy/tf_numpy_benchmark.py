@@ -1,4 +1,9 @@
 # Benchmark various ways of getting numpy arrays in and out of TensorFlow
+# --allocator types are:
+# numpy: default numpy array
+# tf: 64-byte aligned numpy array
+# tfgpu: 64-byte aligned numpy array in pinned memory
+# ray: numpy array returned from ray
 
 
 """
@@ -188,7 +193,7 @@ def align_numpy_tf(unaligned):
 def align_numpy_tfgpu(unaligned):
   sess = tf.get_default_session()
   with tf.device('/gpu:0'):
-    tensor = tf.ones(unaligned.shape, dtype=unaligned.dtype)
+    tensor = tf.zeros(unaligned.shape, dtype=unaligned.dtype)
   aligned = sess.run(tensor)
   np.copyto(aligned, unaligned)
   return aligned
@@ -211,7 +216,7 @@ def align_numpy_ray(unaligned):
 def create_array():
   """Creates numpy array, using size and allocator specified in args."""
   
-  params0 = np.ones((args_dim,), dtype=np.float32)/(np.sqrt(args_dim))
+  params0 = np.ones((args_dim,), dtype=np.float32)
 
   if args.allocator == 'numpy':
     pass
@@ -305,8 +310,6 @@ def fetch_gpu_tensor():
       result = sess.run(params)
 
 def feed_cpu_variable():
-  params0 = np.ones((args_dim,), dtype=np.float32)/(np.sqrt(args_dim))
-
   params0 = create_array()
 
   with tf.device('/cpu:0'):
@@ -336,6 +339,24 @@ def feed_cpu_tensor():
     with timeit('feed_cpu_tensor'):
       sess.run(result.op, feed_dict = {params: params0})
 
+def feed_cpu_tensor_with_copy():
+  params0 = create_array()
+  with tf.device('/cpu:0'):
+    params = tf.placeholder(tf.float32)
+    result = tf.concat([params, tf.fill([1],1.0)], axis=0)
+
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  params1 = 2*np.ones((args_dim,), dtype=np.float32)
+  
+  params0 = align_numpy_tf(params0)
+  params1 = align_numpy_ray(params1)
+
+
+  for i in range(args.num_iters):
+    with timeit('feed_cpu_tensor'):
+      np.copyto(params0, params1)
+      sess.run(result.op, feed_dict = {params: params0})
+
 def feed_gpu_tensor():
   params0 = create_array()
   with tf.device('/gpu:0'):
@@ -344,7 +365,21 @@ def feed_gpu_tensor():
   for i in range(args.num_iters):
     with timeit('feed_gpu_tensor'):
       sess.run(result.op, feed_dict = {params: params0})
+
+def ray_copy():
+
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  params1 = 2*np.ones((args_dim,), dtype=np.float32)
   
+  params0 = align_numpy_tf(params0)
+  params1 = create_array()
+
+  for i in range(args.num_iters):
+    with timeit('ray_copy'):
+      np.copyto(params0, params1)
+
+  
+
 if __name__ == '__main__':
 
   # remove garbage colleciton, automatic optimizations and tuning
