@@ -89,7 +89,7 @@ parser.add_argument("--size-mb", default=100, type=int,
 parser.add_argument("--allocator", default='numpy', type=str,
                     help="Which allocator to use for numpy array memory: "
                     "numpy/tf/tfgpu/ray")
-parser.add_argument("--num-iters", default=2100, type=int,
+parser.add_argument("--num-iters", default=21, type=int,
                     help="number of iterations")
 parser.add_argument("--profile", default=0, type=int,
                     help="dump stepstats/timelines into 'data' directory")
