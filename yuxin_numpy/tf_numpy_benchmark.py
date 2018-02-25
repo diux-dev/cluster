@@ -396,7 +396,6 @@ def pytorchadd_from_numpy():
     with timeit('pytorch_from_numpy'):
       result = torch.from_numpy(params0)
       result+=1
-      print(result[0])
   
 def pytorchgpu_from_numpy():
   import torch
