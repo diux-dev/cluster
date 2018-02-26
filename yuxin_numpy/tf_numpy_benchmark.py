@@ -235,7 +235,6 @@ def create_array():
     params0 = align_numpy_pytorch(params0)
   else:
     assert False, "Unknown allocator type "+str(args.allocator)
-  print("Alignment is ", params0.ctypes.data%64)
   return params0
 
 
