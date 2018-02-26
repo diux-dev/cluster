@@ -220,7 +220,8 @@ def align_numpy_pytorch(unaligned):
 def create_array():
   """Creates numpy array, using size and allocator specified in args."""
   
-  params0 = np.ones((args_dim,), dtype=np.float32)
+  #  params0 = np.ones((args_dim,), dtype=np.float32)
+  params0 = np.random.randn(args_dim).astype(dtype=np.float32)
 
   if args.allocator == 'numpy':
     pass
@@ -270,7 +271,7 @@ def pytorch_add():
   params0 = torch.from_numpy(create_array())
   params1 = torch.from_numpy(create_array())
   for i in range(args.num_iters):
-    with timeit('numpy_add'):
+    with timeit('pytorch_add'):
       params0+=params1
 
 
