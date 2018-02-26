@@ -212,6 +212,10 @@ def align_numpy_ray(unaligned):
   result = ray.get(f.remote())
   return result
 
+def align_numpy_pytorch(unaligned):
+  import torch
+  return torch.from_numpy(unaligned).clone().numpy()
+
 
 def create_array():
   """Creates numpy array, using size and allocator specified in args."""
@@ -226,8 +230,11 @@ def create_array():
     params0 = align_numpy_tfgpu(params0)
   elif args.allocator == 'ray':
     params0 = align_numpy_ray(params0)
+  elif args.allocator == 'pytorch':
+    params0 = align_numpy_pytorch(params0)
   else:
     assert False, "Unknown allocator type "+str(args.allocator)
+  print("Alignment is ", params0.ctypes.data%64)
   return params0
 
 
