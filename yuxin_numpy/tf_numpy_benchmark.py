@@ -254,6 +254,25 @@ def numpy_copy():
     with timeit('numpy_copy'):
       np.copyto(target, data)
 
+def numpy_add():
+  """Copy data into existing numpy array"""
+
+  params0 = create_array()
+  params1 = create_array()
+  for i in range(args.num_iters):
+    with timeit('numpy_add'):
+      params0+=params1
+
+def pytorch_add():
+  """Copy data into existing numpy array"""
+
+  import torch
+  params0 = torch.from_numpy(create_array())
+  params1 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('numpy_add'):
+      params0+=params1
+
 
 def fetch_cpu_variable():
   with tf.device('/cpu:0'):
@@ -392,7 +411,7 @@ def pytorch_from_numpy():
   params0 = create_array()
   for i in range(args.num_iters):
     with timeit('pytorch_from_numpy'):
-      torch.from_numpy(params0)
+      align_numpy_pytorch(params0)
   
 def pytorchadd_from_numpy():
   """Convert numpy array to pytorch, add a number to resulting tensor."""
