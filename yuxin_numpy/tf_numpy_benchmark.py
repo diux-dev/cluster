@@ -294,13 +294,15 @@ def fetch_cpu_resource_variable():
 
 def fetch_cpu_variable_add():
   with tf.device('/cpu:0'):
-    params = tf.Variable(initial_value=data)
-    params = params+0.1
+    params_var = tf.Variable(initial_value=data)
+    params = params_var+0.1
     
   sess.run(tf.global_variables_initializer())
   for i in range(args.num_iters):
+    #    params_var.load(np.random.randn(args_dim).astype(dtype=np.float32))
     with timeit('fetch_cpu_variable_add'):
-      sess.run(params)
+      result = sess.run(params)
+    #    print(result[0])
 
 
 def fetch_cpu_tensor():
