@@ -220,8 +220,8 @@ def align_numpy_pytorch(unaligned):
 def create_array():
   """Creates numpy array, using size and allocator specified in args."""
   
-  #  params0 = np.ones((args_dim,), dtype=np.float32)
-  params0 = np.random.randn(args_dim).astype(dtype=np.float32)
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  #  params0 = np.random.randn(args_dim).astype(dtype=np.float32)
 
   if args.allocator == 'numpy':
     pass
@@ -277,6 +277,15 @@ def pytorch_add():
 def fetch_cpu_variable():
   with tf.device('/cpu:0'):
     params = tf.Variable(initial_value=data)
+
+  sess.run(tf.global_variables_initializer())
+  for i in range(args.num_iters):
+    with timeit('fetch_cpu_variable'):
+      sess.run(params)
+
+def fetch_cpu_resource_variable():
+  with tf.device('/cpu:0'):
+    params = tf.get_variable("var", initializer=data, use_resource=True)
 
   sess.run(tf.global_variables_initializer())
   for i in range(args.num_iters):
@@ -448,6 +457,7 @@ if __name__ == '__main__':
   config = tf.ConfigProto(operation_timeout_in_ms=150000, graph_options=tf.GraphOptions(optimizer_options=optimizer_options))
   config.graph_options.rewrite_options.constant_folding = rewriter_config_pb2.RewriterConfig.OFF
   config.graph_options.place_pruned_graph = True
+  config.gpu_options.allow_growth=True  # leave some space for PyTorch
   sess = tf.InteractiveSession(config=config)
 
   data = create_array()
