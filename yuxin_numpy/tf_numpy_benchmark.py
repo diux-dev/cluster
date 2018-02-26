@@ -289,7 +289,7 @@ def fetch_cpu_resource_variable():
 
   sess.run(tf.global_variables_initializer())
   for i in range(args.num_iters):
-    with timeit('fetch_cpu_variable'):
+    with timeit('fetch_cpu_resource_variable'):
       sess.run(params)
 
 def fetch_cpu_variable_add():
