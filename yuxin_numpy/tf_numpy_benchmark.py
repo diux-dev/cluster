@@ -272,6 +272,16 @@ def pytorch_add():
     with timeit('pytorch_add'):
       params0+=params1
 
+def pytorch_add_newobject():
+  """add vectors, put result into new memory"""
+
+  import torch
+  params0 = torch.from_numpy(create_array())
+  params1 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('pytorch_add_newobject'):
+      params0+params1
+
 def pytorch_add_fast():
   """Add custom allocated object to pytorch allocated object"""
 
