@@ -224,14 +224,22 @@ def create_array():
 
   if args.allocator == 'numpy':
     pass
+  elif args.allocator == 'numpy_readonly':
+    params0.flags['WRITEABLE'] = False
   elif args.allocator == 'tf':
     params0 = align_numpy_tf(params0)
+  elif args.allocator == 'tf_readonly':
+    params0 = align_numpy_tf(params0)
+    params.flags['WRITEABLE'] = False
   elif args.allocator == 'tfgpu':
     params0 = align_numpy_tfgpu(params0)
   elif args.allocator == 'ray':
     params0 = align_numpy_ray(params0)
   elif args.allocator == 'pytorch':
     params0 = align_numpy_pytorch(params0)
+  elif args.allocator == 'pytorch_readonly':
+    params0 = align_numpy_pytorch(params0)
+    params0.flags['WRITEABLE'] = False
   else:
     assert False, "Unknown allocator type "+str(args.allocator)
   return params0
@@ -253,6 +261,19 @@ def numpy_copy():
     with timeit('numpy_copy'):
       np.copyto(target, data)
 
+
+def numpy_array():
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('numpy_array'):
+      np.array(params0)
+  
+def numpy_access():
+  for i in range(args.num_iters):
+    params0 = create_array()
+    with timeit('numpy_access'):
+      params0[:100]
+  
 def numpy_add():
   """Copy data into existing numpy array"""
 
