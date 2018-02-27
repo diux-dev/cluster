@@ -230,7 +230,7 @@ def create_array():
     params0 = align_numpy_tf(params0)
   elif args.allocator == 'tf_readonly':
     params0 = align_numpy_tf(params0)
-    params.flags['WRITEABLE'] = False
+    params0.flags['WRITEABLE'] = False
   elif args.allocator == 'tfgpu':
     params0 = align_numpy_tfgpu(params0)
   elif args.allocator == 'ray':
