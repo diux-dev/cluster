@@ -272,6 +272,16 @@ def pytorch_add():
     with timeit('pytorch_add'):
       params0+=params1
 
+def pytorch_add_fast():
+  """Add custom allocated object to pytorch allocated object"""
+
+  import torch
+  params0 = torch.from_numpy(create_array()).clone()
+  params1 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('pytorch_add'):
+      params0+=params1
+
 
 def fetch_cpu_variable():
   with tf.device('/cpu:0'):
@@ -402,6 +412,31 @@ def feed_gpu_tensor():
     with timeit('feed_gpu_tensor'):
       sess.run(result.op, feed_dict = {params: params0})
 
+def feed_gpu_tensor_fast():
+  import torch
+
+  # allocate page-locked memory and turn it into PyTorch tensor
+  params0 = np.zeros((args_dim,), dtype=np.float32)
+  params0 = align_numpy_tfgpu(params0)
+  params0 = torch.from_numpy(params0)
+  
+  # copy Ray array into page-locked memory using PyTorch OMP add
+  # for top performance, restrict GOMP_CPU_AFFINITY to single physical socket
+  # https://github.com/pytorch/pytorch/issues/5412
+
+  # new array with custom allocator
+  params1 = create_array()
+  
+  with tf.device('/gpu:0'):
+    params = tf.placeholder(tf.float32)
+    result = params + 1
+  
+  for i in range(args.num_iters):
+    with timeit('feed_gpu_tensor_fast1'):
+      params0+=torch.from_numpy(params1)  # use PyTorch to copy data into page-locked memory
+    with timeit('feed_gpu_tensor_fast2'):
+      sess.run(result.op, feed_dict = {params: params0})
+
 def ray_copy():
 
   params0 = np.ones((args_dim,), dtype=np.float32)
@@ -415,13 +450,24 @@ def ray_copy():
       np.copyto(params0, params1)
 
 def pytorch_from_numpy():
-  """Convert numpy array to pytorch, <1ms because no copy takes place."""
+  """Convert numpy array to pytorch, using 'clone' to move it to proper
+  memory."""
+  
   import torch
   
   params0 = create_array()
   for i in range(args.num_iters):
     with timeit('pytorch_from_numpy'):
       align_numpy_pytorch(params0)
+  
+def pytorch_from_numpy_noclone():
+  """Convert numpy array to pytorch, <1ms because no copy takes place."""
+  import torch
+  
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('pytorch_from_numpy'):
+      torch.from_numpy(params0)
   
 def pytorchadd_from_numpy():
   """Convert numpy array to pytorch, add a number to resulting tensor."""
