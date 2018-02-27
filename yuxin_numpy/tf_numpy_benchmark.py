@@ -438,7 +438,7 @@ def pytorchgpu_from_numpy():
   
   params0 = create_array()
   for i in range(args.num_iters):
-    with timeit('pytorch_from_numpy'):
+    with timeit('pytorchgpu_from_numpy'):
       result = torch.from_numpy(params0)
       result = result.cuda()
   
