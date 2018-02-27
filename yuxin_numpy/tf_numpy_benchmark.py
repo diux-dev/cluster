@@ -80,7 +80,6 @@ feed_gpu_tensor               :   1.3 GB/sec, min: 76.19, median: 83.05, mean: 8
 import argparse
 import numpy as np
 import os
-import portpicker
 import sys
 import tensorflow as tf
 import threading
