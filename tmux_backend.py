@@ -25,9 +25,10 @@ class Run(backend.Run):
   def __init__(self, name, install_script=None):
     self.name = name
     self.install_script = install_script
+    self.jobs = []
 
   # TODO: rename job_name to role_name
-  def make_job(self, job_name, num_tasks, install_script=None):
+  def make_job(self, job_name, num_tasks=1, install_script=None):
     assert num_tasks>=0
 
     # TODO, remove mandatory delete and make separate method for killing?
@@ -45,6 +46,7 @@ class Run(backend.Run):
     if not install_script:
       install_script = self.install_script
     job = Job(self, job_name, tmux_windows, install_script=install_script)
+    self.jobs.append(job)
     return job
 
   @property
@@ -69,7 +71,6 @@ class Task(backend.Task):
   def __init__(self, tmux_window, job, task_id, install_script):
     self.tmux_window = tmux_window  # TODO: rename tmux_window to window?
     self.job = job
-    self._ip = '127.0.0.1'  # hostname/ip address
     self.id = task_id
     self._port = portpicker.pick_unused_port()
     print("Assigning %s:%s to port %s"%(self.job.name, self.id, self.port))
@@ -188,3 +189,11 @@ class Task(backend.Task):
   def wait_until_ready(self):
     return
   
+
+  @property
+  def ip(self):
+    return '127.0.0.1'
+
+  @property
+  def public_ip(self):
+    return '127.0.0.1'
