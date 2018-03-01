@@ -59,6 +59,20 @@ def empty_aligned(n, align=128):
     offset = 0 if data_align == 0 else (align - data_align)
     return a[offset : offset + n]
 
+def tf_aligned(n):
+    """
+    Get n bytes of memory wih alignment align.
+    """
+
+    sess = tf.get_default_session()
+    return sess.run(tf.ones((args.dim,), dtype=np.float32))
+
+def align_numpy(unaligned):
+  sess = tf.get_default_session()
+  aligned = sess.run(tf.ones(unaligned.shape, dtype=unaligned.dtype))
+  np.copyto(aligned, unaligned)
+  return aligned
+
 def summarize_time(tag, time_list_ms):
   # delete first large interval if exists
   if time_list_ms and time_list_ms[0]>3600*10:
@@ -76,11 +90,12 @@ def summarize_time(tag, time_list_ms):
 
 def main():
   gc.disable()
+  sess = tf.InteractiveSession()
+
+  params0 = np.ones((args.dim,), dtype=np.float32)
   if args.align:
-    params0 = empty_aligned(args.dim)
-  else:
-    params0 = np.ones((args.dim,), dtype=np.float32)
-  
+    params0 = align_numpy(params0)
+
   
   with tf.device('/gpu:0'):
     gpu_params = tf.Variable(initial_value=params0)
@@ -89,10 +104,9 @@ def main():
     cpu_params = tf.Variable(initial_value=params0)
     cpu_tensor = tf.ones((args.dim,), dtype=np.float32)
     
-  sess = tf.InteractiveSession()
   sess.run(tf.global_variables_initializer())
 
-  for i in range(20):
+  for i in range(10):
     with timeit('feed-cpu-variable'):
       sess.run(cpu_params.initializer,
                feed_dict={cpu_params.initial_value:params0})
