@@ -18,6 +18,7 @@ def f():
 
 
 arr = ray.get(f.remote())
+assert str(arr.__class__) == "<class 'numpy.ndarray'>"
 assert arr[0] == 1.0
 
 # uncomment to get fail with "ValueError: output array is read-only"
