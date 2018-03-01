@@ -111,12 +111,14 @@ def fetch_cpu_variable_add():
   with tf.device('/cpu:0'):
     params = tf.Variable(initial_value=data)
     params = params+0.1
+    params_first = params[0]
+    params_sum = tf.reduce_sum(params)
     
   sess.run(tf.global_variables_initializer())
   for i in range(20):
     with timeit('fetch_cpu_variable_add'):
-      sess.run(params)
-
+      #      sess.run(params)
+      result = sess.run(params)
 
 def fetch_cpu_variable_concat():
   data = np.ones((args.dim,), dtype=np.float32)
