@@ -7,8 +7,6 @@ import shlex
 import sys
 import time
 
-import portpicker
-
 import backend
 import util as u
 
@@ -34,6 +32,7 @@ class Run(backend.Run):
   def __init__(self, name, **kwargs):
     self.name = name
     self.kwargs = kwargs
+    self.jobs = []
 
   # TODO: get rid of linux type (only login username)
   def make_job(self, role_name, num_tasks=1, **kwargs):
@@ -106,6 +105,7 @@ class Run(backend.Run):
     job = Job(self, job_name, instances=instances,
               install_script=install_script,
               linux_type=linux_type)
+    self.jobs.append(job)
     return job
 
   @property
@@ -378,7 +378,7 @@ tmux a
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
 
-    assert self._run_command_available
+    assert self._run_command_available, "Have you done wait_until_ready?"
     cmd = cmd.strip()
     
     self._run_counter+=1
