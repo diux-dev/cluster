@@ -204,6 +204,7 @@ def align_numpy_ray(unaligned):
     try:
       ray.init(object_store_memory=(10 ** 9), num_workers=0)
     except:  # older version doesn't have object_store_memory
+      print("Falling back on older Ray init")
       ray.init(num_workers=0)
       
 
@@ -317,7 +318,7 @@ def pytorch_add_fast():
   params0 = torch.from_numpy(create_array()).clone()
   params1 = torch.from_numpy(create_array())
   for i in range(args.num_iters):
-    with timeit('pytorch_add'):
+    with timeit('pytorch_add_fast'):
       params0+=params1
 
 
@@ -533,7 +534,7 @@ if __name__ == '__main__':
   import gc
   gc.disable()
 
-  os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
+  os.environ['TF_CPP_MIN_LOG_LEVEL']='0'
   os.environ['TF_CUDNN_USE_AUTOTUNE']='0'
   os.environ['CUDA_LAUNCH_BLOCKING']='1' 
   import tensorflow as tf
