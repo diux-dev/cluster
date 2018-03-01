@@ -1,9 +1,10 @@
 #!/usr/bin/env python
+# Adds multiple values to parameter server, 1 parameter server shard
+
 import argparse
 import base64
 import os
 import pickle
-import portpicker
 import subprocess
 import sys
 import threading
@@ -21,9 +22,9 @@ import util as u
 parser = argparse.ArgumentParser()
 parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
-parser.add_argument("--iters", default=10, type=int,
+parser.add_argument("--iters", default=10000, type=int,
                     help="number of iterations for worker")
-parser.add_argument("--profile", default=1, type=int,
+parser.add_argument("--profile", default=0, type=int,
                     help="dump stepstats/timelines into 'data' directory")
 parser.add_argument("--logdir", default='', type=str, help="logdir")
 parser.add_argument("--label", default='', type=str, help="location of logging directory")
@@ -35,11 +36,10 @@ RETRY_DELAY_SEC = 5
 # TODO: when ps server restarts, it doesn't reinitialize the variables
 # TODO: document TF_CONFIG
 
-
 timeline_counter = 0
 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE, output_partition_graphs=True)
 def traced_run(*args, **kwargs):
-  """Runs fetches, dumps timeline files in current directory."""
+  """Runs fetches, dumps timeline files into {cwd}/data."""
 
   global timeline_counter, run_options
   run_metadata = tf.RunMetadata()
@@ -71,7 +71,7 @@ def sessrun(*args1, **kwargs):
     return traced_run(*args1, **kwargs)
   else:
     return regular_run(*args1, **kwargs)
-    
+
 
 def regular_run(*args, **kwargs):
   sess = tf.get_default_session()
@@ -95,6 +95,7 @@ def get_worker_device(task, op_device_str=''):
   device.merge_from(op_device)
   return device.to_string()
 
+
 def session_config():
   optimizer_options = tf.OptimizerOptions(opt_level=tf.OptimizerOptions.L0)
   config = tf.ConfigProto(
@@ -102,6 +103,7 @@ def session_config():
   
   config.operation_timeout_in_ms = 10*1000  # abort after 10 seconds
   return config
+
 
 def make_params():
   ps_device = get_ps_device(0)
@@ -135,7 +137,6 @@ class timeit:
   
 
 global_last_logger = None
-
 def get_logger():
   global_last_logger
   return global_last_logger
@@ -220,7 +221,7 @@ def run_worker():
 
     local_update = local_params.assign(params)
     local_params0 = local_params[0]
-    grads = tf.fill([params.shape[0]], val)
+    grads = tf.fill([int(params.shape[0])], val)
 
   with tf.device(ps_device):
     global_update = params.assign_add(grads)
@@ -268,7 +269,7 @@ def run_worker():
         # this can fail if workers too too long to come up and
         # sessrun failed with DeadlineExceeded
         time.sleep(RETRY_DELAY_SEC)
-    
+
 
   for step in range(args.iters):
     start_time = time.time()
@@ -397,11 +398,12 @@ def main():
   logdir = args.logdir
   print("Logging to "+logdir)
   os.system('mkdir -p '+logdir)
-  logger = TensorboardLogger(logdir)
     
   if  config.task_type == 'worker':
+    logger = TensorboardLogger(logdir)
     run_worker()
   elif config.task_type == 'ps':
+    # don't start logger, tensorboard gets confused by multiple event files
     run_ps()
   else:
     assert False, "Unknown task type "+str(config.task_type)
