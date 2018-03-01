@@ -25,7 +25,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--dim", default=25*1000*1000, type=int,
                     help="The number of parameters.")
 parser.add_argument("--align", default='none', type=str,
-                    help="none/cpu/gpu")
+                    help="none/cpu/gpu/ray")
+parser.add_argument("--target", default='cpu', type=str,
+                    help="where target tensor lives (cpu or gpu)")
 args = parser.parse_args()
 
 
@@ -50,8 +52,8 @@ class timeit:
 
 def summarize_time(tag, time_list_ms):
   # delete first large interval if exists
-  if time_list_ms and time_list_ms[0]>3600*10:
-    del time_list_ms[0]
+  #  if time_list_ms and time_list_ms[0]>3600*10:
+  del time_list_ms[0]
     
   if len(time_list_ms)>0:
     min = np.min(time_list_ms)
@@ -68,10 +70,20 @@ def create_net(name, params0):
   """Creates network that runs minimization.
   Returns parameter tensor and gradient tensor (on GPU)."""
 
-  params = tf.Variable(initial_value=params0, name=name+'-params')
-  loss = tf.reduce_sum(tf.square(params))
-  grad_cached = tf.Variable(initial_value=params0, name=name+'-grads')
-  grad = tf.gradients(loss, params)[0]
+  global grad_cached_const
+
+  if args.target == 'cpu':
+    dev = '/cpu:0'
+  elif args.target == 'gpu':
+    dev = '/gpu:0'
+    
+  with tf.device(dev):
+    params = tf.Variable(initial_value=params0, name=name+'-params')
+    loss = tf.reduce_sum(tf.square(params))
+    grad_cached = tf.Variable(initial_value=params0, name=name+'-grads')
+    grad_cached_const = tf.fill((args.dim,), 1.0)
+    #    tf.constant(params0, name=name+'-grads')
+    grad = tf.gradients(loss, params)[0]
   
   n = 11200  # this takes about 200ms on V100
   a = tf.random_uniform((n, n))
@@ -130,6 +142,10 @@ def align_numpy_gpu(unaligned):
 
 
 def main():
+  global grad_cached_const
+  import gc
+  gc.disable()
+  
   sess = tf.InteractiveSession()
   params0 = np.ones((args.dim,), dtype=np.float32)/(np.sqrt(args.dim))
 
@@ -150,10 +166,12 @@ def main():
     print(loss0)
 
     with timeit('step'):
-      sess.run(grad_assign_op)
+      pass
+      #      sess.run(grad_assign_op)
       
     with timeit('fetch'):
-      grad0 = sess.run(grad_cached)
+      #      grad0 = sess.run(grad_cached)
+      grad0 = sess.run(grad_cached_const)
 
     # takes 75ms, 33ms is on allocation, 16ms on multiplication
     with timeit('add'):
