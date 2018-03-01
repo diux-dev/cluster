@@ -18,7 +18,7 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='ami-f9d6dc83',
                      help="name of AMI to use ")
-parser.add_argument('--name', type=str, default='numpy00',
+parser.add_argument('--name', type=str, default='resnet50',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
