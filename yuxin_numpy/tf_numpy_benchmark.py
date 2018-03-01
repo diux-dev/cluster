@@ -201,7 +201,11 @@ def align_numpy_tfgpu(unaligned):
 def align_numpy_ray(unaligned):
   if 'ray' not in sys.modules:  # avoid calling ray.init twice which crashes
     import ray
-    ray.init(object_store_memory=(10 ** 9), num_workers=0)
+    try:
+      ray.init(object_store_memory=(10 ** 9), num_workers=0)
+    except:  # older version doesn't have object_store_memory
+      ray.init(num_workers=0)
+      
 
   import ray
   @ray.remote
@@ -235,6 +239,9 @@ def create_array():
     params0 = align_numpy_tfgpu(params0)
   elif args.allocator == 'ray':
     params0 = align_numpy_ray(params0)
+  elif args.allocator == 'ray_hacked':
+    params0 = align_numpy_ray(params0)
+    params0.flags['WRITEABLE'] = True
   elif args.allocator == 'pytorch':
     params0 = align_numpy_pytorch(params0)
   elif args.allocator == 'pytorch_readonly':
