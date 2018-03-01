@@ -29,6 +29,9 @@ parser.add_argument("--dim", default=25*1000*1000, type=int,
                     help="The number of parameters.")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
+parser.add_argument("--allocator", default='numpy', type=str,
+                    help="Which allocator to use for numpy array memory: "
+                    "numpy/tf/tfgpu/ray")
 args = parser.parse_args()
 
 
@@ -71,24 +74,24 @@ def create_net(name, params0):
   """Creates network that runs minimization.
   Returns parameter tensor and gradient tensor (on GPU)."""
 
-  params = tf.Variable(initial_value=params0, name=name+'-params')
+  with tf.device('/gpu:0'):
+    params = tf.Variable(initial_value=params0, name=name+'-params')
   loss = tf.reduce_sum(tf.square(params))
   grad_cached = tf.Variable(initial_value=params0, name=name+'-grads')
   grad = tf.gradients(loss, params)[0]
   
   n = 11200  # this takes about 200ms on V100
-  a = tf.random_uniform((n, n))
-  b = tf.random_uniform((n, n))
+  a = tf.random_uniform((n, n))/n
+  b = tf.random_uniform((n, n))/n
   slow_op = a@b
-  with tf.control_dependencies([slow_op]):
-    slow_grad = tf.identity(grad)
+  slow_grad = grad+1e-10*tf.reduce_sum(slow_op)
   grad_assign_op = grad_cached.assign(slow_grad)
 
   return loss, params, grad_cached, grad_assign_op
 
 timeline_counter = 0
 run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE, output_partition_graphs=True)
-def traced_run(*args, **kwargs):
+def sessrun(*args, **kwargs):
   """Runs fetches, dumps timeline files in current directory."""
 
   global timeline_counter
@@ -115,12 +118,71 @@ def traced_run(*args, **kwargs):
   timeline_counter+=1
   return results
 
+def align_numpy_tf(unaligned):
+  sess = tf.get_default_session()
+  with tf.device('/cpu:0'):
+    tensor = tf.ones(unaligned.shape, dtype=unaligned.dtype)
+  aligned = sess.run(tensor)
+  np.copyto(aligned, unaligned)
+  return aligned
+
+
+def align_numpy_tfgpu(unaligned):
+  sess = tf.get_default_session()
+  with tf.device('/gpu:0'):
+    tensor = tf.zeros(unaligned.shape, dtype=unaligned.dtype)
+  aligned = sess.run(tensor)
+  np.copyto(aligned, unaligned)
+  return aligned
+
+
+def align_numpy_ray(unaligned):
+  if 'ray' not in sys.modules:  # avoid calling ray.init twice which crashes
+    import ray
+    ray.init(object_store_memory=(10 ** 9), num_workers=0)
+
+  import ray
+  @ray.remote
+  def f():
+    return unaligned
+
+  result = ray.get(f.remote())
+  return result
+
+def align_numpy_pytorch(unaligned):
+  import torch
+  return torch.from_numpy(unaligned).clone().numpy()
+
+
+def create_array():
+  """Creates numpy array, using size and allocator specified in args."""
+  
+  params0 = np.ones((args.dim,), dtype=np.float32)
+  #  params0 = np.random.randn(args_dim).astype(dtype=np.float32)
+
+  if args.allocator == 'numpy':
+    pass
+  elif args.allocator == 'tf':
+    params0 = align_numpy_tf(params0)
+  elif args.allocator == 'tfgpu':
+    params0 = align_numpy_tfgpu(params0)
+  elif args.allocator == 'ray':
+    params0 = align_numpy_ray(params0)
+  elif args.allocator == 'pytorch':
+    params0 = align_numpy_pytorch(params0)
+  else:
+    assert False, "Unknown allocator type "+str(args.allocator)
+  return params0
+
+
 def main():
+  sess = tf.InteractiveSession()
+  
   params0 = np.ones((args.dim,), dtype=np.float32)/(np.sqrt(args.dim))
+  params0 = create_array()/np.sqrt(args.dim)
 
   loss, params, grad_cached, grad_assign_op = create_net('net1', params0)
   
-  sess = tf.InteractiveSession()
   sess.run(tf.global_variables_initializer())
 
   lr = 0.01
@@ -140,7 +202,7 @@ def main():
 
     with timeit('feed'):
       #      params.load(params0)
-      traced_run(params.initializer, feed_dict={params.initial_value:params0})
+      sess.run(params.initializer, feed_dict={params.initial_value:params0})
 
 
   for key, times in global_timeit_dict.items():
@@ -151,3 +213,5 @@ def main():
   
 if __name__ == '__main__':
   main()
+  params0 = create_array()/np.sqrt(args.dim)
+  
