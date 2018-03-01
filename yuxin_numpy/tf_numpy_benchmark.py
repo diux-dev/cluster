@@ -301,6 +301,21 @@ def pytorch_add():
     with timeit('pytorch_add'):
       params0+=params1
 
+
+def pytorch_add0():
+  import torch
+  params0 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('pytorch_add0'):
+      params1 = params0+0
+
+def pytorch_clone():
+  import torch
+  params0 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('pytorch_clone'):
+      params1 = params0.clone()
+  
 def pytorch_add_newobject():
   """add vectors, put result into new memory"""
 
