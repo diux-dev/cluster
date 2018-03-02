@@ -309,6 +309,14 @@ def pytorch_add0():
     with timeit('pytorch_add0'):
       params1 = params0+0
 
+
+def pytorch_add1():
+  import torch
+  params0 = torch.from_numpy(create_array())
+  for i in range(args.num_iters):
+    with timeit('pytorch_add1'):
+      params1 = params0+0
+
 def pytorch_clone():
   import torch
   params0 = torch.from_numpy(create_array())
