@@ -2,6 +2,8 @@
 
 import glob
 import os
+import subprocess
+import sys
 import shlex
 import sys
 import time
@@ -189,7 +191,14 @@ class Task(backend.Task):
   def wait_until_ready(self):
     return
   
-
+  def stream_file(self, fn):
+    if not fn.startswith('/'):
+      fn = self.taskdir+'/'+fn
+      
+    process = subprocess.Popen(['tail', '-f', fn], stdout=subprocess.PIPE)
+    for line in iter(process.stdout.readline, ''):
+      sys.stdout.write(line.decode('ascii', errors='ignore'))
+    
   @property
   def ip(self):
     return '127.0.0.1'
@@ -197,3 +206,7 @@ class Task(backend.Task):
   @property
   def public_ip(self):
     return '127.0.0.1'
+
+  @property
+  def public_port(self):
+    return self.port

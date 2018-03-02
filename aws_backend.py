@@ -14,7 +14,8 @@ TASKDIR_PREFIX='/tmp/tasklogs'
 LOGDIR_PREFIX='/efs/runs'
 TIMEOUT_SEC=5
 MAX_RETRIES = 10
-DEFAULT_PORT=3000
+DEFAULT_PORT=3000  # port used for task internal communication
+TENSORBOARD_PORT=6006  # port used for external HTTP communication
 
 def make_run(name, **kwargs):
   return Run(name, **kwargs)
@@ -29,6 +30,9 @@ def _strip_comment(cmd):
 
 
 class Run(backend.Run):
+  """In charge of creating resources and allocating instances. AWS instances
+  are then wrapped in Job and Task objects."""
+  
   def __init__(self, name, **kwargs):
     self.name = name
     self.kwargs = kwargs
@@ -48,6 +52,9 @@ class Run(backend.Run):
     placement_group = kwargs.get('placement_group', '')
     install_script = kwargs.get('install_script','')
     linux_type = kwargs.get('linux_type', 'ubuntu')
+    user_data = kwargs.get('user_data', '')
+
+    print("Using user_data", user_data)
 
     # TODO: also make sure instance type is the same
     if instances:
@@ -79,9 +86,12 @@ class Run(backend.Run):
                                     'AssociatePublicIpAddress': True,
                                     'Groups': [security_group.id]}]
       
+
       placement_arg = {'AvailabilityZone': availability_zone}
+      
       if placement_group: placement_arg['GroupName'] = placement_group
       args['Placement'] = placement_arg
+      args['UserData'] = user_data
 
       instances = ec2.create_instances(**args)
       assert len(instances) == num_tasks
@@ -104,7 +114,8 @@ class Run(backend.Run):
 
     job = Job(self, job_name, instances=instances,
               install_script=install_script,
-              linux_type=linux_type)
+              linux_type=linux_type,
+              user_data=user_data)
     self.jobs.append(job)
     return job
 
@@ -116,7 +127,7 @@ class Run(backend.Run):
 class Job(backend.Job):
   # TODO: get rid of linux_type
   def __init__(self, run, name, instances, install_script=None,
-               linux_type=None):
+               linux_type=None, user_data=''):
     self._run = run
     self.name = name
 
@@ -128,25 +139,18 @@ class Job(backend.Job):
     for instance in instances:
       task_id = instance.ami_launch_index
       task = Task(instance, self, task_id, install_script=install_script,
-                             linux_type=linux_type)
+                             linux_type=linux_type, user_data=user_data)
       self.tasks[task_id] = task
 
   def _initialize(self):
     for task in self.tasks:
       task._initialize()
 
-  # todo: rename to initialize
-  def wait_until_ready(self):
-    """Waits until all tasks in the job are available and initialized."""
-    for task in self.tasks:
-      task.wait_until_ready()
-      # todo: initialization should start async in constructor instead of here
-
 
 class Task(backend.Task):
   # TODO: replace linux_type with username
   def __init__(self, instance, job, task_id, install_script=None,
-               linux_type=None):
+               linux_type=None, user_data=''):
     self.initialize_called = False
     self.instance = instance
     self.job = job
@@ -164,7 +168,7 @@ class Task(backend.Task):
                                                    job.name, self.id,
                                                    0) # u.now_micros())
     self.remote_scratch = '/tmp/tmux'
-    self.log("Creating local scratch dir %s", self.scratch)
+    #    self.log("Creating local scratch dir %s", self.scratch)
     self._ossystem('rm -Rf '+self.scratch)  # TODO: don't delete this?
     self._ossystem('mkdir -p '+self.scratch)
     #    os.chdir(self.scratch)
@@ -193,7 +197,6 @@ class Task(backend.Task):
       return 'ok' in self.file_read('/tmp/is_initialized')
     except:
       return False
-
 
   def _setup_tmux(self):
     self._run_ssh('tmux kill-session -t tmux')
@@ -372,7 +375,9 @@ tmux a
     self.log("run_ssh returned: " + stdout_str)
         
     return stdout_str, stderr_str
-    
+
+
+  # todo: transition to higher-level SshClient instead of paramiko.SSHClient
   def run(self, cmd, sync=True, ignore_errors=False,
           max_wait_sec=600, check_interval=1):
     """Runs command in tmux session. No need for multiple tmux sessions per
@@ -426,9 +431,29 @@ tmux a
           assert False, "Command %s returned status %s"%(cmd, contents)
         else:
           self.log("Warning: command %s returned status %s"%(cmd, contents))
-      break    
+      break
 
 
+  def run_and_stream_output(self, cmd, sync):
+    stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
+    print("run_and_stream_output", stdin, stdout, stderr)
+    if stdout:
+      t1 = u._StreamOutputToStdout(stdout)
+    if stderr:
+      t2 = u._StreamOutputToStdout(stderr)
+      
+    if stdout and sync:
+      t1.join()
+    if stderr and sync:
+      t2.join()    
+
+
+  def stream_file(self, fn, sync=True):
+    if not fn.startswith('/'): fn = self.taskdir+'/'+fn
+    print("stream_file", fn)
+    self.run_and_stream_output('tail -f '+fn, sync)
+
+    
   # todo: follow same logic as in def ip(self)
   @property
   def public_ip(self):
@@ -440,6 +465,10 @@ tmux a
   @property
   def port(self):
     return DEFAULT_PORT
+
+  @property
+  def public_port(self):
+    return TENSORBOARD_PORT
 
   @property
   def ip(self):  # private ip

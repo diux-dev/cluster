@@ -59,6 +59,19 @@ class Run:
     """Location of shared files, ie /efs/runs/attemp1"""
     raise NotImplementedError()
 
+  def run(self, *args, **kwargs):
+    """Runs command on every job in the run."""
+    
+    for job in self.jobs:
+      job.run(*args, **kwargs)
+
+      
+  def upload(self, *args, **kwargs):
+    
+    """Runs command on every job in the run."""
+    
+    for job in self.jobs:
+      job.upload(*args, **kwargs)
 
   def log(self, message, *args):
     """Log to client console."""
@@ -87,6 +100,13 @@ class Job:
     
     for task in self.tasks:
       task.upload(*args, **kwargs)
+      
+  # todo: rename to initialize
+  def wait_until_ready(self):
+    """Waits until all tasks in the job are available and initialized."""
+    for task in self.tasks:
+      task.wait_until_ready()
+      # todo: initialization should start async in constructor instead of here
   
   # these methods redirect to the first task
   @property
@@ -100,6 +120,10 @@ class Job:
   @property
   def port(self):
     return self.tasks[0].port
+
+  @property
+  def public_port(self):
+    return self.tasks[0].public_port
 
   @property
   def connect_instructions(self):
@@ -146,7 +170,7 @@ class Task:
 
   @property
   def ip(self):
-    return self._ip
+    raise NotImplementedError()
 
   @property
   def public_ip(self):
@@ -162,6 +186,13 @@ class Task:
     communicating with other tasks. When using TensorFlow, this would be the 
     port on which TensorFlow server is listening."""
     return self._port
+
+  @property
+  def public_port(self):
+    """This is a port that's used to access task from public internet.
+    On AWS it tends to be fixed because it's set by underlying infrastructure
+    (security group), defer implementation to backend."""
+    raise NotImplementedError()
 
 
   def log(self, message, *args):
@@ -183,6 +214,11 @@ class Task:
   def file_exists(self, fn):
     """Return true if file exists in task current directory."""
     raise NotImplementedError()
+
+  def stream_file(self, fn):
+    """Streams task-local file to console (path relative to taskdir)."""
+    raise NotImplementedError()
+  
 
   def _ossystem(self, cmd):
     self.log(cmd)
