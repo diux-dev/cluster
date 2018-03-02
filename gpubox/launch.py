@@ -68,7 +68,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='box00',
                      help="name of the current run")
-parser.add_argument('--instance-type', type=str, default='p2.xlarge',
+parser.add_argument('--instance', type=str, default='p2.xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -135,7 +135,7 @@ def launcher():
   run = aws_backend.make_run(args.name, install_script=install_script,
                              ami=ami, availability_zone=args.zone,
                              linux_type=args.linux_type)
-  job = run.make_job('gpubox', instance_type=args.instance_type)
+  job = run.make_job('gpubox', instance_type=args.instance)
   
   job.wait_until_ready()
 
