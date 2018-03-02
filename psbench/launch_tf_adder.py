@@ -3,10 +3,10 @@
 from collections import OrderedDict
 from collections import defaultdict
 import argparse
+import base64
 import json
 import os
 import pickle
-import base64
 import sys
 import time
 
@@ -15,19 +15,6 @@ import boto3
 module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
 import util as u
-
-
-# map availability zones that contain given instance type
-# TODO: this mapping is randomized between username on AWS side
-# availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b',
-#                                          'us-east-1e', 'us-east-1c'],
-#                                   'p2': ['us-east-1f'],
-#                                   'p3': [us-east-1d, us-east-1c, us-east-1f]}
-# availability_mapping_us_west_2 = {'g3': ['us-west-2a'],
-#                                   'p2': ['us-west-2a', 'us-west-2b'],
-#                                   'p3': ['us-west-2b', 'us-west-2c']}
-# availability_mapping = {'us-east-1': availability_mapping_us_east_1,
-#                         'us-west-2': availability_mapping_us_west_2}
 
 # Deep learning AMI v5
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
@@ -235,10 +222,16 @@ def launch(backend, install_script):
 
   # todo: for local runs need to do task.port because multiple tb's
   # 6006 is hardwired because it's open through the security group
-  tb_port = 6006
+  tb_port = tb_job.public_port #6006
   tb_job.run("tensorboard --logdir={logdir} --port={port}".format(
     logdir=run.logdir, port=tb_port), sync=False)
+  print("*"*80)
   print("See tensorboard at http://%s:%s"%(tb_job.public_ip, tb_port))
+  print("*"*80)
+  print(" "*80)
+
+  print("Streaming output of worker[0]")
+  worker_job.tasks[0].stream_file('log.txt')
 
     
 def main():

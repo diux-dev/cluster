@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-# Adds multiple values to parameter server, 1 parameter server shard
+# Asynchronous parameter server benchmark in TensorFlow
+#
+# Uses sparse cluster config so that addition continues even when some workers
+# go down
+
 
 import argparse
 import base64
@@ -26,12 +30,14 @@ parser.add_argument("--iters", default=10000, type=int,
                     help="number of iterations for worker")
 parser.add_argument("--profile", default=0, type=int,
                     help="dump stepstats/timelines into 'data' directory")
-parser.add_argument("--logdir", default='', type=str, help="logdir")
-parser.add_argument("--label", default='', type=str, help="location of logging directory")
+parser.add_argument("--logdir", default='', type=str,
+                    help="TensorBoard events go here")
+parser.add_argument("--label", default='', type=str,
+                    help="location of logging directory")
 args = parser.parse_args()
 params_size = args.size_mb * 250*1000
 dtype = np.float32
-RETRY_DELAY_SEC = 5
+RETRY_DELAY_SEC = 5   # distributed session retries
 
 # TODO: when ps server restarts, it doesn't reinitialize the variables
 # TODO: document TF_CONFIG
@@ -131,22 +137,52 @@ class timeit:
     global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
     
     newtag = 'time/'+self.tag
-    logger = get_logger()
+    logger = get_tb_logger()
     logger(newtag, interval_ms)
 
   
 
 global_last_logger = None
-def get_logger():
+def get_tb_logger():
   global_last_logger
   return global_last_logger
 
+class FileLogger:
+  """Helper class to log to file (possibly mirroring to stderr)
+     logger = FileLogger('somefile.txt')
+     logger = FileLogger('somefile.txt', mirror=True)
+     logger('somemessage')
+     logger('somemessage: %s %.2f', 'value', 2.5)
+  """
+  
+  def __init__(self, fn, mirror=False):
+    self.fn = fn
+    self.f = open(fn, 'w')
+    self.mirror = mirror
+    
+  def __call__(self, s, *args):
+    """Either ('asdf %f', 5) or (val1, val2, val3, ...)"""
+    if (isinstance(s, str) or isinstance(s, bytes)) and '%' in s :
+      formatted_s = s % args
+    else:
+      toks = [s]+list(args)
+      formatted_s = ', '.join(str(s) for s in toks)
+      
+    self.f.write(formatted_s+'\n')
+    self.f.flush()
+    if self.mirror:
+      print(formatted_s)
+
+  def __del__(self):
+    self.f.close()
+
+    
 class TensorboardLogger:
   """Helper class to log to single tensorboard writer from multiple places.
    logger = u.TensorboardLogger('/efs/runs/somedirectory')
    logger = u.get_last_logger()  # gets last logger created
    logger('svd_time', 5)  # records "svd_time" stat at 5
-   logger.next_step()     # advances step counter
+   logger.next_step()     # advances step counter, flushes stats
    logger.set_step(5)     # sets step counter to 5
   """
   
@@ -170,6 +206,10 @@ class TensorboardLogger:
     for (tag, value) in u.chunks(args, 2):
       self.summary.value.add(tag=tag, simple_value=float(value))
 
+  def set_step(self, step):
+    self.next_step()
+    self.step = step
+    
   def next_step(self):
     new_timestamp = time.perf_counter()
     interval_ms = 1000*(new_timestamp - self.last_timestamp)
@@ -183,7 +223,6 @@ class TensorboardLogger:
     self.summary = tf.Summary()
 
   def __del__(self):
-    print("Calling summary writer flush")
     self.summary_writer.flush()
 
 
@@ -192,20 +231,21 @@ def run_worker():
 
   config = load_config()
   cluster_spec = config.cluster_spec
-  logger = get_logger()
-
+  assert config.task_type == 'worker'
   ps_tasks = len(cluster_spec['ps'])
   assert ps_tasks >= 0
 
-  # logdir = args.logdir
-  # print("Logging to "+logdir)
-  # os.system('mkdir -p '+logdir)
-  # logger = TensorboardLogger(logdir)
+  # can only log to TensorBoard from single worker (TensorBoard logger)
+  # see https://github.com/tensorflow/tensorboard/issues/1011
+  # https://github.com/tensorflow/tensorboard/blob/1.6.0/README.md#tensorboard-is-showing-only-some-of-my-data-or-isnt-properly-updating
+  #
+  # log file/stderr from each worker (FileLogger)
   
-  assert config.task_type == 'worker'
-  
+  file_logger = FileLogger('log.txt', mirror=True)
+  tb_logger = get_tb_logger() if config.task_id == 0 else None
+
   if config.task_id == 1:
-    time.sleep(60)  # slow-down second worker for async testing
+    time.sleep(30)  # slow-down second worker for async testing
   
   worker_device = get_worker_device(config.task_id) # /job:worker/task:1
   ps_device = get_ps_device(0) # /job:ps/task:0
@@ -213,6 +253,8 @@ def run_worker():
   params = make_params()
   with tf.device(worker_device):
     val = tf.ones((), dtype=params.dtype)
+    grads = tf.fill([int(params.shape[0])], val)
+    
     # create local params-w for worker w
     local_params = tf.get_variable("params-"+str(config.task_id),
                                    [params_size], dtype,
@@ -221,7 +263,6 @@ def run_worker():
 
     local_update = local_params.assign(params)
     local_params0 = local_params[0]
-    grads = tf.fill([int(params.shape[0])], val)
 
   with tf.device(ps_device):
     global_update = params.assign_add(grads)
@@ -236,9 +277,8 @@ def run_worker():
                            job_name=config.task_type,
                            task_index=config.task_id)
 
-    # follow logic in prepare_session
-    # https://github.com/tensorflow/tensorflow/blob/22586bdf900640217deac6dc826054bc6e785518/tensorflow/python/training/session_manager.py#L71
-
+  # follow logic in prepare_session
+  # https://github.com/tensorflow/tensorflow/blob/22586bdf900640217deac6dc826054bc6e785518/tensorflow/python/training/session_manager.py#L71
   def create_session():
     is_initialized = False
     while not is_initialized:
@@ -255,7 +295,7 @@ def run_worker():
     
   # TODO: check for failures in creating session?
   sess = tf.InteractiveSession(server.target, config=session_config())
-    
+  
   # only run initialization on worker task 0
   if config.task_id == 0:
     sess_run_succeeded = False
@@ -270,7 +310,10 @@ def run_worker():
         # sessrun failed with DeadlineExceeded
         time.sleep(RETRY_DELAY_SEC)
 
-
+  last_local_val = 0
+  last_local_val_ts = 0
+  global_rate = 0      # measures how fast global param value changes
+  
   for step in range(args.iters):
     start_time = time.time()
     sess_run_succeeded = False
@@ -278,11 +321,13 @@ def run_worker():
       try:
         with timeit('worker_fetch'):
           sessrun(local_update)    # ps -> worker tf
-        with timeit('worker_access'):  # worker tf -> worker python memory 
+        with timeit('worker_access'):  # worker tf -> worker python memory
+          # todo: change to whole parameter fetch
           local_val = sessrun(local_params0)
         with timeit('worker_push'):
           sessrun(global_update)
         sess_run_succeeded = True
+        
       # Exception when ps restarts, need to recreate session
       except Exception as e:  
         print(("sess run failed with %s, "
@@ -290,12 +335,22 @@ def run_worker():
         time.sleep(RETRY_DELAY_SEC)
         sess = create_session()
 
-    elapsed_time = time.time() - start_time
-    rate = args.size_mb/elapsed_time
-    print('%.2f MB/s'%(rate,))
-    logger('rate', rate)
-    logger('worker-'+str(config.task_id), local_val)
-    logger.next_step()
+    elapsed_time = time.time() - start_time  # todo: replace with perf_counter?
+    local_rate = args.size_mb/elapsed_time
+    
+    elapsed_time_global = time.time() - last_local_val_ts
+    last_local_val_ts = time.time()
+    
+    if last_local_val:
+      global_rate = args.size_mb*(local_val - last_local_val)/elapsed_time_global
+    last_local_val = local_val
+    
+    file_logger('step time: %8.2f ms, local rate: %8.2f MB/s, global rate: %8.2f MB/s', 1000*elapsed_time, local_rate, global_rate)
+
+    if tb_logger:
+      tb_logger('rate', local_rate)
+      tb_logger('worker-'+str(config.task_id), local_val)
+      tb_logger.next_step()
 
 
 # Replacement of estimators.run_config.ClusterConfig that works with sparse
@@ -404,6 +459,7 @@ def main():
     run_worker()
   elif config.task_type == 'ps':
     # don't start logger, tensorboard gets confused by multiple event files
+    # https://github.com/tensorflow/tensorboard/issues/1011
     run_ps()
   else:
     assert False, "Unknown task type "+str(config.task_type)
