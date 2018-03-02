@@ -48,89 +48,9 @@ parser.add_argument('--placement', type=int, default=1,
 
 args = parser.parse_args()
 
-# TODO: get rid of this?
-INSTALL_SCRIPT_UBUNTU="""
-python --version
-sudo mkdir -p /efs
-sudo chmod 777 /efs
-"""
-
-INSTALL_SCRIPT_AMAZON="""
-python --version
-sudo mkdir -p /efs
-sudo chmod 777 /efs
-"""
-
-# def launch_local(backend, install_script):
-#   run = backend.make_run(args.name, install_script=install_script)
-#   worker_job = run.make_job('worker', args.workers) # 
-#   ps_job = run.make_job('ps', args.ps)
-#   tb_job = run.make_job('tb')
-
-#   run.upload('tf_adder.py')
-#   run.upload('../util.py')
-
-  
-#   def tf_env_setup(task, dense_cluster_spec, task_spec):
-#     """Helper method to initialize clusterspec for a task."""
-
-#     task_type = task_spec['type']
-#     task_id = task_spec['index']
-
-#     # full cluster spec (needed for estimator)
-#     dense_cluster_config = {'cluster': dense_cluster_spec, 'task': task_spec}
-#     TF_CONFIG = json.dumps(dense_cluster_spec)
-#     task.run("export TF_CONFIG='%s'"%(TF_CONFIG,))
-
-#     # construct sparse cluster spec
-#     # every worker needs its own location
-#     sparse_cluster_spec = defaultdict(dict)
-#     host = dense_cluster_spec[task_type][task_id]
-#     sparse_cluster_spec[task_type][task_id] = host
-
-#     # gradient workers know about all ps workers
-#     if task_type == 'worker':
-#       sparse_cluster_spec['ps'] = dense_cluster_spec['ps']
-
-#     # ps workers know about all gradient workers
-#     if task_type == 'ps':
-#       sparse_cluster_spec['worker'] = dense_cluster_spec['worker']
-
-#     sparse_cluster_config = {'cluster': sparse_cluster_spec,
-#                              'task': task_spec}
-
-#     # sparse cluster spec
-#     pickle_string = pickle.dumps(sparse_cluster_config)
-#     pickle_string_encoded = base64.b16encode(pickle_string)
-#     pickle_string_encoded = pickle_string_encoded.decode('ascii')
-#     task.run("export TF_PICKLE_BASE16=%s"%(pickle_string_encoded,))
 
 
-#   worker_hosts = ["%s:%d"%(task.ip, task.port) for task in worker_job.tasks]
-#   ps_hosts = ["%s:%d"%(task.ip, task.port) for task in ps_job.tasks]
-#   cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
-  
-#   # Launch tensorflow tasks.
-#   tf_cmd = "source activate cifar ; python tf_adder.py --logdir={logdir}".format(logdir=run.logdir)
-  
-#   # ps tasks go first because tensorboard doesn't support multiple processes
-#   # creating events in same directory locally (only shows latest created
-#   # event file)
-#   for task in ps_job.tasks:
-#     task_spec = {'type': 'ps', 'index': task.id}
-#     tf_env_setup(task, cluster_spec, task_spec)
-#     task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id), sync=False)
-
-#   for task in worker_job.tasks:
-#     task_spec = {'type': 'worker', 'index': task.id}
-#     tf_env_setup(task, cluster_spec, task_spec)
-#     task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id), sync=False)
-
-#   tb_job.run("tensorboard --logdir={logdir} --port={port}".format(
-#     logdir=run.logdir, port=tb_job.port), sync=False)
-#   print("See tensorboard at http://%s:%s"%(tb_job.public_ip, tb_job.port))
-
-def launch(backend, install_script):
+def launch(backend, install_script='', init_cmd=''):
   if args.placement:
     placement_group = args.name
   else:
@@ -138,7 +58,7 @@ def launch(backend, install_script):
     
   if backend.__name__ == 'aws_backend':
     ami = ami_dict_ubuntu[u.get_region()]
-    run = backend.make_run(args.name, install_script=install_script,
+    run = backend.make_run(args.name, user_data=install_script,
                            ami=ami, availability_zone=args.zone)
     worker_job = run.make_job('worker', num_tasks=args.workers,
                               instance_type=args.instance,
@@ -199,11 +119,6 @@ def launch(backend, install_script):
   cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
   
   # Launch tensorflow tasks.
-  if backend.__name__ == 'aws_backend':
-    init_cmd = "source activate tensorflow_p36"
-  else:
-    init_cmd = "source activate cifar"
-
   run.run(init_cmd)
   tf_cmd = "python tf_adder.py --logdir={logdir}".format(logdir=run.logdir)
   
@@ -240,10 +155,18 @@ def main():
   import tmux_backend
   import aws_backend
 
+  install_script="""#!/bin/bash
+source /home/ubuntu/anaconda3/bin/activate tensorflow_p36
+pip install ray
+echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
+"""
+
   if args.cluster == 'local':
-    launch(tmux_backend, '')
+    launch(tmux_backend, init_cmd='source activate cifar')
   elif args.cluster == 'aws':
-    launch(aws_backend, '')
+    launch(aws_backend, init_cmd='source activate tensorflow_p36',
+           install_script=install_script)
+    
   else:
     print("Unknown cluster", args.cluster)
     # todo: create resources

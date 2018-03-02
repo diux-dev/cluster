@@ -137,8 +137,9 @@ class timeit:
     global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
     
     newtag = 'time/'+self.tag
-    logger = get_tb_logger()
-    logger(newtag, interval_ms)
+    tb_logger = get_tb_logger()
+    if tb_logger:
+      tb_logger(newtag, interval_ms)
 
   
 
@@ -242,10 +243,11 @@ def run_worker():
   # log file/stderr from each worker (FileLogger)
   
   file_logger = FileLogger('log.txt', mirror=True)
+
   tb_logger = get_tb_logger() if config.task_id == 0 else None
 
   if config.task_id == 1:
-    time.sleep(30)  # slow-down second worker for async testing
+    time.sleep(10)  # slow-down second worker for async testing
   
   worker_device = get_worker_device(config.task_id) # /job:worker/task:1
   ps_device = get_ps_device(0) # /job:ps/task:0
@@ -454,8 +456,9 @@ def main():
   print("Logging to "+logdir)
   os.system('mkdir -p '+logdir)
     
-  if  config.task_type == 'worker':
-    logger = TensorboardLogger(logdir)
+  if  config.task_type == 'worker'
+    if config.task_id == 0:
+      TensorboardLogger(logdir)
     run_worker()
   elif config.task_type == 'ps':
     # don't start logger, tensorboard gets confused by multiple event files
