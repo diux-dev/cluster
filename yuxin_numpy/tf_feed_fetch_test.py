@@ -26,7 +26,7 @@ parser.add_argument("--size-mb", default=100, type=int,
 parser.add_argument("--allocator", default='tf', type=str,
                     help="Which allocator to use for numpy array memory: "
                     "numpy/tf/tfgpu/ray/ray_hacked")
-parser.add_argument("--num-iters", default=21, type=int,
+parser.add_argument("--num-iters", default=51, type=int,
                     help="number of iterations")
 parser.add_argument("--profile", default=0, type=int,
                     help="dump stepstats/timelines into 'data' directory")
@@ -277,7 +277,7 @@ if __name__ == '__main__':
   config.graph_options.place_pruned_graph = True
 
   print_socket_info()
-  print(tf.__version__)
+  print("TensorFlow version", tf.__version__)
   
   sess = tf.InteractiveSession(config=config)
   data = create_array()
