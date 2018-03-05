@@ -557,7 +557,25 @@ def allocator_alignment():
     result = create_array()
     print("%10s: %d"%(allocator, result.ctypes.data%64))
 
-  
+def allreduce():
+  from mpi4py import MPI
+
+  comm = MPI.COMM_WORLD
+  rank = comm.Get_rank()
+  print("hello world from process ", rank)
+
+
+  senddata = create_array()
+  recvdata = create_array()
+  print('on task',rank,'before allreduce:    data = ',recvdata[0])
+
+  for i in range(args.num_iters):
+    with timeit('mpi_reduce_sum'):
+      comm.Allreduce(senddata,recvdata)
+      
+  print('on task',rank,'after Allreduce:    data = ',recvdata[0])
+      
+
 if __name__ == '__main__':
 
   # remove garbage colleciton, automatic optimizations and tuning
