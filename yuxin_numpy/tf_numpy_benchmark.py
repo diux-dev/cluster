@@ -551,6 +551,13 @@ def pytorchgpu_from_numpy():
       result = result.cuda()
   
 
+def allocator_alignment():
+  for allocator in ['numpy', 'ray', 'pytorch', 'tf']:
+    args.allocator = allocator
+    result = create_array()
+    print("%10s: %d"%(allocator, result.ctypes.data%64))
+
+  
 if __name__ == '__main__':
 
   # remove garbage colleciton, automatic optimizations and tuning
