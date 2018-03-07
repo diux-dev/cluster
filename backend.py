@@ -201,7 +201,7 @@ class Task:
     if args:
       message = message % args
 
-      print("%s %d.%s: %s"%(ts, self.id, self.job.name, message))
+    print("%s %d.%s: %s"%(ts, self.id, self.job.name, message))
 
   def file_write(self, fn, contents):
     """Write string contents to file fn in task."""
