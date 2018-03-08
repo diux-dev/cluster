@@ -137,6 +137,7 @@ class Task(backend.Task):
     start_time = time.time()
     #    time.sleep(0.01) # tmux gets confused when too many messages get sent at
     # once
+    self.log("%s> %s"%(self.tmux_window, cmd))
     tmux_cmd = 'tmux send-keys -t {} {} Enter'.format(self.tmux_window, shlex.quote(modified_cmd))
     self._ossystem(tmux_cmd)
     if not sync:
