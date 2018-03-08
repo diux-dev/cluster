@@ -54,10 +54,14 @@ import boto3
 # Deep Learning AMI v3
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
 
+# Deep learning AMI v5
+# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
 ami_dict_ubuntu = {
-    "us-west-2": "ami-ee48f796",
-    "us-east-1": "ami-0a9fac70",
+  "us-east-1": "ami-7336d50e",
+  "us-east-2": "ami-eb596e8e",
+  "us-west-2": "ami-c27af5ba",
 }
+
 #ami_dict_amazon = {
 #    "us-west-2": "ami-5c60c524",
 #    "us-east-1": "ami-3a533040"
