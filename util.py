@@ -3,11 +3,10 @@ import os
 import argparse
 import boto3
 import shlex
-import paramiko
 import re
 import sys
+import threading
 import time
-import paramiko
 import os
 
 from collections import OrderedDict
@@ -385,7 +384,7 @@ class timeit:
   def __exit__(self, *args):
     self.end = time.perf_counter()
     interval_sec = (self.end - self.start)
-    print("%s took %.2f seconds"%(self.tag, interval_sec))
+    print("%s took %.2f ms"%(self.tag, 1000*interval_sec))
 
 
 def get_instance_ip_map():
@@ -497,6 +496,7 @@ class SshClient:
 
     returns SSH client connected to host.
     """
+    import paramiko
 
     print("ssh_to_host %s@%s"%(username, hostname))
     k = paramiko.RSAKey.from_private_key_file(ssh_key)
@@ -532,6 +532,22 @@ class SshClient:
     print("run_sync returned: " + stdout_str)
     return stdout_str, stderr_str
 
+
+  def run_and_stream(self, cmd):
+    """Runs command and streams output to local stderr."""
+    
+    stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
+    if stdout:
+      t1 = _StreamOutputToStdout(stdout, stdout_file)
+    if stderr:
+      t2 = _StreamOutputToStdout(stderr, stderr_file)
+      
+    if stdout:
+      t1.join()
+    if stderr:
+      t2.join()    
+    
+
 def _add_echo(script):
   """Goes over each line script, adds "echo cmd" in front of each cmd.
 
@@ -550,6 +566,19 @@ def _add_echo(script):
     new_script+="echo \\* " + shlex.quote(cmd) + "\n"
     new_script+=cmd+"\n"
   return new_script
+
+def _StreamOutputToStdout(fd):  # todo: pep convention
+  """Stream output to stdout"""
+
+  def func(fd):
+    for line in iter(lambda: fd.readline(2048), ''):
+      print(line.strip())
+      sys.stdout.flush()
+
+  t = threading.Thread(target=func, args=(fd,))
+  t.start()
+  
+  return t
 
 def lookup_aws_instances(job_name):
   """Returns all AWS instances for given AWS job name, like
@@ -577,7 +606,7 @@ def lookup_aws_instances(job_name):
 
   return result
 
-def maybe_create_placement_group(name=''):
+def maybe_create_placement_group(name='', max_retries=10):
   """Creates placement group or reuses existing one. crash if unable to create
   placement group. If name is empty, ignores request."""
   
@@ -596,16 +625,17 @@ def maybe_create_placement_group(name=''):
   while True:
     try:
       res = client.describe_placement_groups(GroupNames=[name])
-      if res['PlacementGroups'][0]['State'] == 'available':
+      res_entry = res['PlacementGroups'][0]
+      if res_entry['State'] == 'available':
         print("Found placement group: "+name)
-        assert res['Strategy'] == 'cluster'
+        assert res_entry['Strategy'] == 'cluster'
         break
     except Exception as e:
-      print(e)
+      print("Got exception: %s"%(e,))
     counter = counter + 1
-    if counter >= MAX_RETRIES:
+    if counter >= max_retries:
       assert False, 'Failed to create placement group ' + name
-    time.sleep(TIMEOUT_SEC)
+    time.sleep(WAIT_INTERVAL_SEC)
 
 
 def merge_kwargs(kwargs1, kwargs2):
@@ -648,6 +678,7 @@ def ssh_to_host(hostname,
   returns Paramiko SSH client connected to host.
 
   """
+  import paramiko
 
   print("ssh_to_host %s@%s" % (username, hostname))
   k = paramiko.RSAKey.from_private_key_file(ssh_key)
@@ -710,3 +741,8 @@ def put_dir(sftp, source, target):
       _safe_mkdir(sftp, '%s/%s' % (target, item))
       put_dir(sftp, os.path.join(source, item), '%s/%s' % (target, item))
 
+
+def chunks(l, n):
+  """Yield successive n-sized chunks from l."""
+  for i in range(0, len(l), n):
+    yield l[i:i + n]
