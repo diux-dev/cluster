@@ -99,6 +99,9 @@ class ParameterServer(object):
   def get_weights(self):
     return self.params
 
+  def ip(self):
+    return ray.services.get_node_ip_address()
+
 
 @ray.remote(num_gpus=1)
 class Worker(object):
@@ -113,6 +116,9 @@ class Worker(object):
     if args.ps == 1:
       return self.gradients
     return np.split(self.gradients, args.ps)
+
+  def ip(self):
+    return ray.services.get_node_ip_address()
 
 
 def main():
