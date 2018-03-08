@@ -352,7 +352,7 @@ tmux a
   
 
   def file_read(self, remote_fn):
-    self.log("file_read")
+    #    self.log("file_read")
     tmp_fn = self.scratch+'/'+str(u.now_micros())
     self.download(remote_fn, tmp_fn)
     return open(tmp_fn).read()
@@ -372,7 +372,8 @@ tmux a
     stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
     stdout_str = stdout.read().decode()
     stderr_str = stderr.read().decode()
-    self.log("run_ssh returned: " + stdout_str)
+    # todo, line below always prints nothing
+    #    self.log("run_ssh returned: " + stdout_str)
         
     return stdout_str, stderr_str
 
