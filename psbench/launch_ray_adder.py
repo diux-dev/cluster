@@ -22,6 +22,7 @@ module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
 import tmux_backend
 import aws_backend
+import create_resources as create_resources_lib
 import util as u
 
 # Deep learning AMI v5
@@ -40,7 +41,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='raybench',
                      help="name of the current run")
-parser.add_argument('--instance', type=str, default='c5.4xlarge', # c5.18xlarge
+parser.add_argument('--instance', type=str, default='c5.large', # c5.18xlarge
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-east-1a',
                     help='which availability zone to use')
@@ -71,6 +72,9 @@ def launch(backend, install_script='', init_cmd=''):
     run = backend.make_run(args.name, install_script=install_script)
     job = run.make_job('worker', num_tasks) 
   else:
+    region = u.get_region()
+    assert args.zone.startswith(region), "Your specified zone is %s but your region (from AWS_DEFAULT_REGION) is %s, please specify zone correctly, such as --zone=%sa" %(args.zone, region, region)
+    create_resources_lib.create_resources()
     ami = ami_dict_ubuntu[u.get_region()]
     run = backend.make_run(args.name, user_data=install_script,
                            ami=ami, availability_zone=args.zone)
@@ -110,6 +114,7 @@ def launch(backend, install_script='', init_cmd=''):
                                                             DEFAULT_PORT)
   if not run_local:
     client_cmd+=' --enforce-different-ips=1'
+  head_task.run('rm log.txt || echo nevermind')
   head_task.run(client_cmd, sync=False)
 
   log("Streaming log.txt of task[0]")
@@ -129,7 +134,10 @@ def main():
   install_script="""#!/bin/bash
 source /home/ubuntu/anaconda3/bin/activate pytorch_p36
 pip install -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
-echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
+# pre-warm caches
+ray start --head
+ray stop
+python -c "import ray, torch"
 """
 
   # todo: document local conda environment better
