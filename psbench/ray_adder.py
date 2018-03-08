@@ -21,15 +21,16 @@ parser.add_argument("--workers", default=1, type=int,
                     help="The number of workers to use.")
 parser.add_argument("--ps", default=1, type=int,
                     help="number of parameter servers to use.")
-parser.add_argument("--dim", default=(25 * 10 ** 6), type=int,
-                    help="The dimension of the parameter vector (the vector "
-                         "consists of np.float32, so the default is 100MB).")
+parser.add_argument("--size-mb", default=100, type=int,
+                    help="size of data in MBs")
 parser.add_argument("--redis-address", default=None, type=str,
                     help="The Redis address of the cluster.")
 parser.add_argument("--enforce-different-ips", default=0, type=int,
                     help="Check that all workers are on different ips,"
                     "crash otherwise")
 args = parser.parse_args()
+args_dim = args.size_mb * 250*1000
+
 import torch
 
 class FileLogger:
@@ -124,7 +125,7 @@ class Worker(object):
 def main():
   global logger
   
-  if args.dim % args.ps != 0:
+  if args_dim % args.ps != 0:
     raise Exception("The dimension argument must be divisible by the "
                     "number of parameter servers.")
 
@@ -139,11 +140,11 @@ def main():
   logger = FileLogger('log.txt', mirror=True)
 
   # Create the parameter servers.
-  pss = [ParameterServer.remote(args.dim // args.ps)
+  pss = [ParameterServer.remote(args_dim // args.ps)
                        for _ in range(args.ps)]
 
   # Create workers.
-  workers = [Worker.remote(args.dim) for worker_index in range(args.workers)]
+  workers = [Worker.remote(args_dim) for worker_index in range(args.workers)]
   current_weights = [ps.get_weights.remote() for ps in pss]
   iteration = 0
   reporting_interval = 10

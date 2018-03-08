@@ -53,6 +53,8 @@ parser.add_argument('--workers', type=int, default=1,
                     help='number of parameter server tasks')
 parser.add_argument('--placement', type=int, default=1,
                     help='whether or not to use placement group')
+parser.add_argument("--size-mb", default=100, type=int,
+                    help="size of data in MBs")
 
 
 args = parser.parse_args()
@@ -110,8 +112,7 @@ def launch(backend, install_script='', init_cmd=''):
       task.run(ray_cmd)
 
   # Client script
-  client_cmd = 'python ray_adder.py --redis-address %s:%d'%(head_task.ip,
-                                                            DEFAULT_PORT)
+  client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
   if not run_local:
     client_cmd+=' --enforce-different-ips=1'
   head_task.run('rm log.txt || echo nevermind')
