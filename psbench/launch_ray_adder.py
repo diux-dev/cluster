@@ -37,9 +37,9 @@ ami_dict_ubuntu = {
 #REMOTE_CONDA_ENV='pytorch_p36' # use this conda env when running remotely
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('local-conda-env', default='cifar',
+parser.add_argument('--local-conda-env', default='cifar',
                     help='name of conda env to use when running locally')
-parser.add_argument('remote-conda-env', default='pytorch_p36',
+parser.add_argument('--remote-conda-env', default='pytorch_p36',
                     help='name of conda env to use when running remotely')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
@@ -135,7 +135,7 @@ def log(message, *args):
 
     
 def main():
-  # todo add "ray stop" to pre-warm ray/python
+  # todo: add "source deactivate" to fix https://github.com/conda/conda/issues/7007
   install_script="""#!/bin/bash
 source /home/ubuntu/anaconda3/bin/activate pytorch_p36
 pip install -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
