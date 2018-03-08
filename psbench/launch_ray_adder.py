@@ -33,10 +33,14 @@ ami_dict_ubuntu = {
   "us-west-2": "ami-c27af5ba",
 }
 
-LOCAL_CONDA_ENV='cifar'        # use this conda env when running locally
-REMOTE_CONDA_ENV='pytorch_p36' # use this conda env when running remotely
+#LOCAL_CONDA_ENV='cifar'        # use this conda env when running locally
+#REMOTE_CONDA_ENV='pytorch_p36' # use this conda env when running remotely
 
 parser = argparse.ArgumentParser(description='launch')
+parser.add_argument('local-conda-env', default='cifar',
+                    help='name of conda env to use when running locally')
+parser.add_argument('remote-conda-env', default='pytorch_p36',
+                    help='name of conda env to use when running remotely')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='raybench',
@@ -143,9 +147,9 @@ python -c "import ray, torch"
 
   # todo: document local conda environment better
   if args.cluster == 'local':
-    launch(tmux_backend, init_cmd='source activate ' + LOCAL_CONDA_ENV)
+    launch(tmux_backend, init_cmd='source activate ' + args.local_conda_env)
   elif args.cluster == 'aws':
-    launch(aws_backend, init_cmd='source activate ' + REMOTE_CONDA_ENV,
+    launch(aws_backend, init_cmd='source activate ' + args.remote_conda_env,
            install_script=install_script)
     
   else:
