@@ -6,6 +6,7 @@ import subprocess
 import sys
 import shlex
 import sys
+import socket
 import time
 
 import portpicker
@@ -74,6 +75,7 @@ class Task(backend.Task):
     self.tmux_window = tmux_window  # TODO: rename tmux_window to window?
     self.job = job
     self.id = task_id
+    self.cached_ip = None
     self._port = portpicker.pick_unused_port()
     print("Assigning %s:%s to port %s"%(self.job.name, self.id, self.port))
     self.connect_instructions = 'tmux a -t '+self.tmux_window
@@ -217,11 +219,14 @@ class Task(backend.Task):
       
   @property
   def ip(self):
-    return '127.0.0.1'
+    if not self.cached_ip:
+      self.cached_ip = socket.gethostbyname(socket.gethostname())
+    return self.cached_ip
+
 
   @property
   def public_ip(self):
-    return '127.0.0.1'
+    return self.ip
 
   @property
   def public_port(self):
