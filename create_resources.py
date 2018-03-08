@@ -32,7 +32,7 @@ PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
 ]
 
 # region is taken from environment variable AWS_DEFAULT_REGION
-assert 'AWS_DEFAULT_REGION' in os.environ
+# assert 'AWS_DEFAULT_REGION' in os.environ
 #assert os.environ['AWS_DEFAULT_REGION'] in {'us-east-2','us-east-1','us-west-1','us-west-2','ap-south-1','ap-northeast-2','ap-southeast-1','ap-southeast-2','ap-northeast-1','ca-central-1','eu-west-1','eu-west-2','sa-east-1'}
 
 
