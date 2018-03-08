@@ -6,3 +6,9 @@ __pycache__
 .\#README.md
 *.md#
 *.pyc
+/yuxin_numpy/cpuprofile
+/yuxin_numpy/data
+/psbench/aws-cpu
+/psbench/aws-gpu
+/psbench/data-aws
+/psbench/macbook-cpu
