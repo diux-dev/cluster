@@ -12,6 +12,7 @@ Usage:
 
 import boto3
 import time
+import getpass
 import sys
 import os
 
@@ -19,7 +20,7 @@ import os
 # this is to prevent accidentally wiping all jobs on the account
 # set to '' to remove this restriction
 #LIMIT_TO_KEY = os.environ.get("LIMIT_TO_KEY", "dontkillanything")
-LIMIT_TO_KEY='yaroslav'
+LIMIT_TO_KEY=getpass.getuser()
 SKIP_TENSORBOARD=True  # true to avoid killing tensorboard jobs
 SKIP_STOPPED=True  # don't terminate stopped jobs
 
