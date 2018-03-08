@@ -43,7 +43,7 @@ def main():
   for line in run_shell('tmux ls'):
     session_name = line.split(':', 1)[0]
     
-    if session_name == 'tensorboard' or session_name == 'jupyter':
+    if session_name == 'tensorboard' or session_name == 'jupyter' or session_name == 'dropbox':
       print("Skipping "+session_name)
       continue
     print("Killing "+session_name)
