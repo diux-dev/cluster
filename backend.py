@@ -221,5 +221,5 @@ class Task:
   
 
   def _ossystem(self, cmd):
-    self.log(cmd)
+    #    self.log(cmd)
     os.system(cmd)

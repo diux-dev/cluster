@@ -54,6 +54,9 @@ class Run(backend.Run):
     linux_type = kwargs.get('linux_type', 'ubuntu')
     user_data = kwargs.get('user_data', '')
 
+    if user_data:
+      user_data+='\necho userdata_ok >> /tmp/is_initialized\n'
+
     #    print("Using user_data", user_data)
 
     # TODO: also make sure instance type is the same
@@ -233,11 +236,11 @@ class Task(backend.Task):
     self._setup_tmux()
     self.run('mkdir -p '+self.remote_scratch)
     self._mount_efs()
-    
+
     # run initialization commands here
     if self._is_initialized_file_present():
       self.log("reusing previous initialized state")
-    else:
+    elif self.install_script:
       self.log("running install script")
 
       self.install_script+='\necho ok > /tmp/is_initialized\n'
@@ -245,8 +248,11 @@ class Task(backend.Task):
       self.run('bash -e install.sh') # fail on errors
       # TODO(y): propagate error messages printed on console to the user
       # right now had to log into tmux to see it
+      assert self._is_initialized_file_present()
+    else:
+      # installation happens through user-data instead of install script
+      pass
 
-    assert self._is_initialized_file_present()
 
     self.connect_instructions = """
 ssh -i %s -o StrictHostKeyChecking=no %s@%s
@@ -321,7 +327,7 @@ tmux a
 
   def download(self, remote_fn, local_fn=None):
     # TODO: self.ssh_client is sometimes None
-    self.log("downloading %s"%(remote_fn))
+    #    self.log("downloading %s"%(remote_fn))
     sftp = self.ssh_client.open_sftp()
     if local_fn is None:
       local_fn = os.path.basename(local_fn)
@@ -368,7 +374,7 @@ tmux a
     This is a barebones method to be used during initialization that have
     minimal dependencies (no tmux)
     """
-    self.log("run_ssh: %s"%(cmd,))
+    #    self.log("run_ssh: %s"%(cmd,))
     stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
     stdout_str = stdout.read().decode()
     stderr_str = stderr.read().decode()
@@ -416,7 +422,7 @@ tmux a
       if time.time() - start_time > max_wait_sec:
         assert False, "Timeout %s exceeded for %s" %(max_wait_sec, cmd)
       if not self.file_exists(cmd_fn_out):
-        self.log("waiting %s for %s"%(check_interval, cmd))
+        self.log("waiting for %s"%(cmd,))
         time.sleep(check_interval)
         continue
     
