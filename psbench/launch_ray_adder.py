@@ -136,9 +136,10 @@ def log(message, *args):
     
 def main():
   # todo: add "source deactivate" to fix https://github.com/conda/conda/issues/7007
+  # timeout for slow pre-warming: https://github.com/ray-project/ray/issues/1682
   install_script="""#!/bin/bash
 source /home/ubuntu/anaconda3/bin/activate pytorch_p36
-pip install -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
+pip install --default-timeout=100 -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
 # pre-warm caches
 ray start --head
 ray stop
