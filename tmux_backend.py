@@ -37,7 +37,7 @@ class Run(backend.Run):
     tmux_name = self.name+'-'+job_name # tmux can't use . in name
     os.system('tmux kill-session -t ' + tmux_name)
     tmux_windows = []
-    print("Creating %s with %s"%(tmux_name, num_tasks))
+    self.log("Creating %s with %s"%(tmux_name, num_tasks))
     if num_tasks>0:
       os.system('tmux new-session -s %s -n %d -d' % (tmux_name, 0))
       tmux_windows.append(tmux_name+":"+str(0))
@@ -194,11 +194,27 @@ class Task(backend.Task):
   def stream_file(self, fn):
     if not fn.startswith('/'):
       fn = self.taskdir+'/'+fn
-      
-    process = subprocess.Popen(['tail', '-f', fn], stdout=subprocess.PIPE)
-    for line in iter(process.stdout.readline, ''):
-      sys.stdout.write(line.decode('ascii', errors='ignore'))
+
+    if not os.path.exists(fn):
+      os.system('mkdir -p '+os.path.dirname(fn))
+      os.system('touch '+fn)
+
+    from time import strftime, gmtime, localtime
+
+    def ts():
+      return strftime("%a, %d %b %Y %H:%M:%S", localtime())
+
+    start_time = time.time()
+
+    p = subprocess.Popen(['tail', '-f', fn], stdout=subprocess.PIPE)
     
+    for line in iter(p.stdout.readline, ''):
+      elapsed = time.time()-start_time
+      #      print(ts()+": %.2f read line"%(elapsed,))
+      sys.stdout.write(line.decode('ascii', errors='ignore'))
+      start_time = time.time()
+      
+      
   @property
   def ip(self):
     return '127.0.0.1'

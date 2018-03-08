@@ -28,7 +28,7 @@ parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
 parser.add_argument("--iters", default=10000, type=int,
                     help="number of iterations for worker")
-parser.add_argument("--profile", default=0, type=int,
+parser.add_argument("--profile", default=1, type=int,
                     help="dump stepstats/timelines into 'data' directory")
 parser.add_argument("--logdir", default='', type=str,
                     help="TensorBoard events go here")
@@ -263,11 +263,11 @@ def run_worker():
                                    initializer=tf.ones_initializer(dtype=dtype),
                                    use_resource=True)
 
-    local_update = local_params.assign(params)
+    local_update = local_params.assign(params).op
     local_params0 = local_params[0]
 
   with tf.device(ps_device):
-    global_update = params.assign_add(grads)
+    global_update = params.assign_add(grads).op
     params0 = params[0]
 
   initialized_op = tf.is_variable_initialized(params)
@@ -350,7 +350,8 @@ def run_worker():
     file_logger('step time: %8.2f ms, local rate: %8.2f MB/s, global rate: %8.2f MB/s', 1000*elapsed_time, local_rate, global_rate)
 
     if tb_logger:
-      tb_logger('rate', local_rate)
+      tb_logger('local_rate', local_rate)
+      tb_logger('global_rate', global_rate)
       tb_logger('worker-'+str(config.task_id), local_val)
       tb_logger.next_step()
 
@@ -456,7 +457,7 @@ def main():
   print("Logging to "+logdir)
   os.system('mkdir -p '+logdir)
     
-  if  config.task_type == 'worker'
+  if  config.task_type == 'worker':
     if config.task_id == 0:
       TensorboardLogger(logdir)
     run_worker()

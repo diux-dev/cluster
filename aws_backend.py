@@ -54,7 +54,7 @@ class Run(backend.Run):
     linux_type = kwargs.get('linux_type', 'ubuntu')
     user_data = kwargs.get('user_data', '')
 
-    print("Using user_data", user_data)
+    #    print("Using user_data", user_data)
 
     # TODO: also make sure instance type is the same
     if instances:
@@ -435,8 +435,12 @@ tmux a
 
 
   def run_and_stream_output(self, cmd, sync):
+    """Runs command on task and streams output locally on stderr."""
+
+
     stdin, stdout, stderr = self.ssh_client.exec_command(cmd, get_pty=True)
-    print("run_and_stream_output", stdin, stdout, stderr)
+    # todo: add error handling, currently see this in stdout.readline()
+    # 'bash: asdfasdf: command not found\r\n'
     if stdout:
       t1 = u._StreamOutputToStdout(stdout)
     if stderr:
@@ -449,8 +453,14 @@ tmux a
 
 
   def stream_file(self, fn, sync=True):
+    """Does tail -f on task-local file and streams output locally.
+    Can use on files that haven't been created yet, it will create the file."""
     if not fn.startswith('/'): fn = self.taskdir+'/'+fn
     print("stream_file", fn)
+
+    # todo: only create this file if it doesn't exist already
+    self._run_ssh('mkdir -p '+os.path.dirname(fn))
+    self._run_ssh('touch '+fn)
     self.run_and_stream_output('tail -f '+fn, sync)
 
     

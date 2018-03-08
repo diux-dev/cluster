@@ -25,10 +25,10 @@ def list_instances():
     if not (LIMIT_TO_KEY in instance.key_name):
       continue
     
-    print("%4s %20s %10s %20s %s" %(int(hours_ago),
+    print("%4s %20s %10s %20s %s %s" %(int(hours_ago),
                             u.get_name(instance.tags), instance.instance_type,
-                            #instance.id,
                             instance.public_ip_address,
+                                       instance.private_ip_address,
                                     instance.id
     ))
 

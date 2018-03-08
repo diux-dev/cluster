@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 
+"""Usage
+
+# launch locally (in tmux sessions)
+python launch_tf_adder.py --workers=2 --cluster=local
+
+# launch on AWS using given instance type
+python launch_tf_adder.py --workers=2 --cluster=aws --name=psbench1 --instance=c5.18xlarge
+
+
+"""
 from collections import OrderedDict
 from collections import defaultdict
 import argparse
@@ -27,7 +37,7 @@ ami_dict_ubuntu = {
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
-parser.add_argument('--name', type=str, default='psbench',
+parser.add_argument('--name', type=str, default='tfbench',
                      help="name of the current run")
 parser.add_argument('--instance', type=str, default='c5.4xlarge', # c5.18xlarge
                      help="type of instance")
@@ -43,6 +53,8 @@ parser.add_argument('--ps', type=int, default=1,
                     help='number of parameter server tasks')
 parser.add_argument('--workers', type=int, default=1,
                     help='number of parameter server tasks')
+parser.add_argument('--profile', type=int, default=0,
+                    help='dump timelines')
 parser.add_argument('--placement', type=int, default=1,
                     help='whether or not to use placement group')
 
@@ -120,7 +132,7 @@ def launch(backend, install_script='', init_cmd=''):
   
   # Launch tensorflow tasks.
   run.run(init_cmd)
-  tf_cmd = "python tf_adder.py --logdir={logdir}".format(logdir=run.logdir)
+  tf_cmd = "python tf_adder.py --logdir={logdir} --profile={profile}".format(logdir=run.logdir, profile=args.profile)
   
   # ps tasks go first because tensorboard doesn't support multiple processes
   # creating events in same directory locally (only shows latest created
@@ -145,7 +157,7 @@ def launch(backend, install_script='', init_cmd=''):
   print("*"*80)
   print(" "*80)
 
-  print("Streaming output of worker[0]")
+  print("Streaming log.txt of worker[0]")
   worker_job.tasks[0].stream_file('log.txt')
 
     
