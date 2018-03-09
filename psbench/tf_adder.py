@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # Asynchronous parameter server benchmark in TensorFlow
-#
-# Uses sparse cluster config so that addition continues even when some workers
-# go down
 
 
 import argparse
@@ -34,8 +31,12 @@ parser.add_argument("--logdir", default='', type=str,
                     help="TensorBoard events go here")
 parser.add_argument("--label", default='', type=str,
                     help="location of logging directory")
+parser.add_argument("--ps", default=1, type=int,
+                    help="number of parameter server shards")
 args = parser.parse_args()
 params_size = args.size_mb * 250*1000
+sharded_params_size = params_size//args.ps
+
 dtype = np.float32
 RETRY_DELAY_SEC = 5   # distributed session retries
 
@@ -240,37 +241,51 @@ def run_worker():
   # see https://github.com/tensorflow/tensorboard/issues/1011
   # https://github.com/tensorflow/tensorboard/blob/1.6.0/README.md#tensorboard-is-showing-only-some-of-my-data-or-isnt-properly-updating
   #
-  # log file/stderr from each worker (FileLogger)
-  
-  file_logger = FileLogger('log.txt', mirror=True)
-
   tb_logger = get_tb_logger() if config.task_id == 0 else None
+  
+  # log file/stderr from each worker (FileLogger)
+  file_logger = FileLogger('log.txt', mirror=True)
 
   if config.task_id == 1:
     time.sleep(10)  # slow-down second worker for async testing
-  
-  worker_device = get_worker_device(config.task_id) # /job:worker/task:1
-  ps_device = get_ps_device(0) # /job:ps/task:0
 
-  params = make_params()
-  with tf.device(worker_device):
-    val = tf.ones((), dtype=params.dtype)
-    grads = tf.fill([int(params.shape[0])], val)
-    
-    # create local params-w for worker w
-    local_params = tf.get_variable("params-"+str(config.task_id),
-                                   [params_size], dtype,
-                                   initializer=tf.ones_initializer(dtype=dtype),
-                                   use_resource=True)
+  # create worker graph
+  worker_id = config.task_id
+  global_params = []
+  global_init_ops = []
+  for i in range(args.ps):
+    with tf.device("/job:ps/task:"+str(i)):
+      param = tf.get_variable(name="params"+str(i),
+                              shape=[sharded_params_size],
+                              dtype=dtype,
+                              initializer=tf.ones_initializer)
+      global_params.append(param)
+      global_init_ops.append(param.initializer)
 
-    local_update = local_params.assign(params).op
-    local_params0 = local_params[0]
+  fetch_ops = []
+  push_ops = []
+  local_init_ops = []
+  with tf.device("/job:worker/task:"+str(worker_id)):
+    for i in range(args.ps):
+      local_params = tf.get_variable(name="local"+str(i),
+                                     shape=[sharded_params_size],
+                                     dtype=dtype,
+                                     initializer=tf.ones_initializer)
+      fetch_ops.append(local_params.assign(global_params[i]).op)
+      one =  tf.ones((), dtype=dtype)
+      grads = tf.fill([sharded_params_size], one)
+      push_ops.append(global_params[i].assign_add(grads).op)
+      local_init_ops.append(local_params.initializer)
+      local_val_op = local_params[0]  # entry of last ps shard
 
-  with tf.device(ps_device):
-    global_update = params.assign_add(grads).op
-    params0 = params[0]
+  def are_variables_initialized(vars):
+    """op which is True iff all vars are initialized."""
+    result = True
+    for var in vars:
+      result = tf.logical_and(tf.is_variable_initialized(var), result)
+    return result
 
-  initialized_op = tf.is_variable_initialized(params)
+  initialized_op = are_variables_initialized(global_params)
   
   # TODO: add retries for errors during server creation?
   # it can fail if assigned port is unavailable
@@ -286,9 +301,13 @@ def run_worker():
     while not is_initialized:
       try:
         sess = tf.InteractiveSession(server.target, config=session_config())
+        sessrun(local_init_ops)
+        if config.task_id == 0:
+          sessrun(global_init_ops)
+          
         is_initialized = sessrun(initialized_op)
       except Exception as e:
-        print("Initialization failed with %s, retrying" %(e,))
+        print("Initialization/init check failed with %s, retrying" %(e,))
         
       print(("Model not initialized, "
              "retrying in %.1f seconds" %(RETRY_DELAY_SEC,)))
@@ -296,22 +315,8 @@ def run_worker():
     return sess
     
   # TODO: check for failures in creating session?
-  sess = tf.InteractiveSession(server.target, config=session_config())
+  sess = create_session()
   
-  # only run initialization on worker task 0
-  if config.task_id == 0:
-    sess_run_succeeded = False
-    while not sess_run_succeeded:
-      try:
-        sessrun(params.initializer)
-        sess_run_succeeded = True
-      except Exception as e:
-        print("Initialization failed with %s, retrying "
-              "in %.1f sec" %(e, RETRY_DELAY_SEC))
-        # this can fail if workers too too long to come up and
-        # sessrun failed with DeadlineExceeded
-        time.sleep(RETRY_DELAY_SEC)
-
   last_local_val = 0
   last_local_val_ts = 0
   global_rate = 0      # measures how fast global param value changes
@@ -322,12 +327,10 @@ def run_worker():
     while not sess_run_succeeded:
       try:
         with timeit('worker_fetch'):
-          sessrun(local_update)    # ps -> worker tf
-        with timeit('worker_access'):  # worker tf -> worker python memory
-          # todo: change to whole parameter fetch
-          local_val = sessrun(local_params0)
+          sessrun(fetch_ops)    # ps -> worker tf
         with timeit('worker_push'):
-          sessrun(global_update)
+          sessrun(push_ops)
+        local_val = sessrun(local_val_op)
         sess_run_succeeded = True
         
       # Exception when ps restarts, need to recreate session
