@@ -38,3 +38,9 @@ python launch_tf_adder.py --cluster=aws --zone=us-west-2a --instance=c5.18xlarge
 Running AWS command above will provide a link to TensorBoard and you would see something like this
 
 <img src="4worker.png">
+
+# Experiments
+
+TensorFlow async transfer summaries: https://docs.google.com/document/d/1K0-39NW3ywSx9SDMMF0dUFqSKr6RxtUUIV5XKIp5r18/edit
+
+Ray sync summary transfer summaries: https://docs.google.com/document/d/1StrxUjDxOmhiiPD2_sZZElEE0mbq16tBEOqLaGSY6jc/edit
