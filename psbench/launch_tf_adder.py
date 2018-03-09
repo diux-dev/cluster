@@ -35,6 +35,10 @@ ami_dict_ubuntu = {
 }
 
 parser = argparse.ArgumentParser(description='launch')
+parser.add_argument('--local-conda-env', default='cifar',
+                    help='name of conda env to use when running locally')
+parser.add_argument('--remote-conda-env', default='pytorch_p36',
+                    help='name of conda env to use when running remotely')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='tfbench',
@@ -116,9 +120,12 @@ def launch(backend, install_script='', init_cmd=''):
     # ps workers know about all gradient workers
     if task_type == 'ps':
       sparse_cluster_spec['worker'] = dense_cluster_spec['worker']
+      # the following spec is required for ps, why?
+      sparse_cluster_spec['ps'] = dense_cluster_spec['ps']
 
     sparse_cluster_config = {'cluster': sparse_cluster_spec,
                              'task': task_spec}
+    task.log('sparse_cluster_config %s', sparse_cluster_config)
 
     # sparse cluster spec
     pickle_string = pickle.dumps(sparse_cluster_config)
@@ -132,7 +139,7 @@ def launch(backend, install_script='', init_cmd=''):
   
   # Launch tensorflow tasks.
   run.run(init_cmd)
-  tf_cmd = "python tf_adder.py --logdir={logdir} --profile={profile}".format(logdir=run.logdir, profile=args.profile)
+  tf_cmd = "python tf_adder.py --logdir={logdir} --profile={profile} --ps={ps}".format(logdir=run.logdir, profile=args.profile, ps=args.ps)
   
   # ps tasks go first because tensorboard doesn't support multiple processes
   # creating events in same directory locally (only shows latest created
@@ -174,9 +181,9 @@ echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
 """
 
   if args.cluster == 'local':
-    launch(tmux_backend, init_cmd='source activate cifar')
+    launch(tmux_backend, init_cmd='source activate ' + args.local_conda_env)
   elif args.cluster == 'aws':
-    launch(aws_backend, init_cmd='source activate tensorflow_p36',
+    launch(aws_backend, init_cmd='source activate ' + args.remote_conda_env,
            install_script=install_script)
     
   else:
