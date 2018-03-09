@@ -1,6 +1,6 @@
 Parameter server benchmarks for TensorFlow and Ray
 
-# Running on AWS
+# Running Ray benchmark on AWS
 ```
 git clone https://github.com/diux-dev/cluster.git
 cd cluster/psbench
@@ -13,7 +13,7 @@ python launch_ray_adder.py --cluster=aws --zone=us-west-2a --instance=c5.large -
 python launch_ray_adder.py --cluster=aws --zone=us-west-2a --instance=c5.large --ps=1 --workers=4 --name=run3
 ```
 
-# Running locally
+# Running Ray benchmark locally
 ```
 conda create --name cifar --clone my_favourite_env
 source activate cifar
@@ -28,9 +28,13 @@ python launch_ray_adder.py --workers=1 --ps=2
 ```
 
 
-# Other commands
+# Running TensorFlow benchmarks
 
 ```
 python launch_tf_adder.py # runs locally with 1 parameter server, 1 worker
 python launch_tf_adder.py --cluster=aws --zone=us-west-2a --instance=c5.18xlarge --ps=1 --workers=4 # runs on AWS with 1 parameter server, 4 workers
 ```
+
+Running AWS command above will provide a link to TensorBoard and you would see something like this
+
+<img src="4worker.png">
