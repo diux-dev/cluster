@@ -3,7 +3,7 @@
 """Usage
 
 # launch locally (in tmux sessions)
-python launch_tf_adder.py --workers=2 --cluster=local
+python launch_tf_adder.py --workers=2
 
 # launch on AWS using given instance type
 python launch_tf_adder.py --workers=2 --cluster=aws --name=psbench1 --instance=c5.18xlarge
@@ -37,7 +37,7 @@ ami_dict_ubuntu = {
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--local-conda-env', default='cifar',
                     help='name of conda env to use when running locally')
-parser.add_argument('--remote-conda-env', default='pytorch_p36',
+parser.add_argument('--remote-conda-env', default='tensorflow_p36',
                     help='name of conda env to use when running remotely')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
