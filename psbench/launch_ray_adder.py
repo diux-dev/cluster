@@ -118,12 +118,7 @@ def launch(backend, install_script='', init_cmd=''):
     for task in job.tasks[1:]:
       task.run(ray_cmd)
 
-  # Client script
-  if not run_local:
-    client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
-  else:
-    client_cmd = 'python ray_adder.py --size-mb %d'%(args.size_mb,)
-
+  client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
   client_cmd += ' --iters %d --workers %d --ps %d'%(args.iters, args.workers,
                                                    args.ps)
   if not run_local:
