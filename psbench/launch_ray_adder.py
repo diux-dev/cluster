@@ -63,6 +63,8 @@ parser.add_argument("--iters", default=100, type=int,
                     help="how many iterations to go for")
 parser.add_argument("--memcpy-threads", default=0, type=int,
                     help="how many threads to use for memcpy (0 for unchanged)")
+parser.add_argument("--omp-threads", default=0, type=int,
+                    help="how many threads to use for omp")
 
 
 args = parser.parse_args()
@@ -103,6 +105,8 @@ def launch(backend, install_script='', init_cmd=''):
   # todo: use task.port instead of DEFAULT_PORT
   run.run(init_cmd)
   run.run('ray stop || echo "ignoring error"')
+  if args.omp_threads:
+    run.run('export OMP_NUM_THREADS='+str(args.omp_threads))
 
   # Ray start for head node. When running locally, specify more gpus since
   # all workers go on same machine
