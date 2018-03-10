@@ -30,6 +30,9 @@ parser.add_argument("--enforce-different-ips", default=0, type=int,
                     "crash otherwise")
 parser.add_argument("--iters", default=100, type=int,
                     help="how many iterations to go for")
+parser.add_argument("--memcpy-threads", default=0, type=int,
+                    help="how many threads to use for memcpy (0 for unchanged)")
+
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
 local_redis = False if args.redis_address else True
@@ -91,6 +94,8 @@ class ParameterServer(object):
   def __init__(self, num_params):
     params0 = np.zeros(num_params, dtype=np.float32)
     self.params = torch.from_numpy(params0).clone()
+    if args.memcpy_threads:
+      ray.worker.global_worker.memcopy_threads = args.memcpy_threads
 
   def assign_add(self, *gradients):
     """Adds all gradients to current value of parameters, returns result."""
@@ -112,6 +117,8 @@ class ParameterServer(object):
 class Worker(object):
   def __init__(self, dim):
     self.gradients = np.ones(dim, dtype=np.float32)
+    if args.memcpy_threads:
+      ray.worker.global_worker.memcopy_threads = args.memcpy_threads
 
   @ray.method(num_return_vals=args.ps)
   def compute_gradients(self, *weights):
@@ -140,6 +147,9 @@ def main():
       ray.init()
   else:
     ray.init(redis_address=args.redis_address)
+
+  if args.memcpy_threads:
+    ray.worker.global_worker.memcopy_threads = args.memcpy_threads
 
   logger = FileLogger('log.txt', mirror=True)
 

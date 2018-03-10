@@ -61,6 +61,8 @@ parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
 parser.add_argument("--iters", default=100, type=int,
                     help="how many iterations to go for")
+parser.add_argument("--memcpy-threads", default=0, type=int,
+                    help="how many threads to use for memcpy (0 for unchanged)")
 
 
 args = parser.parse_args()
@@ -121,6 +123,9 @@ def launch(backend, install_script='', init_cmd=''):
   client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
   client_cmd += ' --iters %d --workers %d --ps %d'%(args.iters, args.workers,
                                                    args.ps)
+  if args.memcpy_threads:
+    client_cmd += ' --memcpy-threads %d'%(args.memcpy_threads,)
+    
   if not run_local:
     client_cmd+=' --enforce-different-ips=1'
   head_task.run('rm log.txt || echo nevermind')
