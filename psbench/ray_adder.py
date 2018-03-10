@@ -17,9 +17,9 @@ import ray
 
 parser = argparse.ArgumentParser(description="Run a synchronous parameter "
                                              "server performance benchmark.")
-parser.add_argument("--workers", default=1, type=int,
+parser.add_argument("--workers", default=0, type=int,
                     help="The number of workers to use.")
-parser.add_argument("--ps", default=1, type=int,
+parser.add_argument("--ps", default=0, type=int,
                     help="number of parameter servers to use.")
 parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
@@ -28,8 +28,12 @@ parser.add_argument("--redis-address", default=None, type=str,
 parser.add_argument("--enforce-different-ips", default=0, type=int,
                     help="Check that all workers are on different ips,"
                     "crash otherwise")
+parser.add_argument("--iters", default=100, type=int,
+                    help="how many iterations to go for")
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
+local_redis = False if args.redis_address else True
+num_gpus_per_worker = 0 if local_redis else 1
 
 import torch
 
@@ -82,7 +86,7 @@ class timeit:
     global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(num_gpus=num_gpus_per_worker)
 class ParameterServer(object):
   def __init__(self, num_params):
     params0 = np.zeros(num_params, dtype=np.float32)
@@ -104,7 +108,7 @@ class ParameterServer(object):
     return ray.services.get_node_ip_address()
 
 
-@ray.remote(num_gpus=1)
+@ray.remote(num_gpus=num_gpus_per_worker)
 class Worker(object):
   def __init__(self, dim):
     self.gradients = np.ones(dim, dtype=np.float32)
@@ -168,8 +172,7 @@ def main():
       if len(all_ips) != len(set(all_ips)):
         assert False, "Some IPs are reused"
 
-  num_iterations = 100
-  for iteration in range(num_iterations):
+  for iteration in range(args.iters):
     # Compute gradients.
     gradient_ids = np.empty((args.workers, args.ps), dtype=object)
     for i in range(args.workers):
@@ -218,7 +221,7 @@ def main():
           info["store_outputs_end"] - info["store_outputs_start"])
 
   logger("Average time per iteration (total): %.2f"%(
-    1000*(end_time - start_time) / num_iterations))
+    1000*(end_time - start_time) / args.iters))
   logger()
   logger("Average time computing gradients:%.2f"%(
         np.mean(compute_gradient_times)*1e3))
@@ -234,7 +237,7 @@ def main():
 
   logger("Total accounted for:            %.2f" %(total_accounted_time*1e3,))
   logger("Total unaccounted for:          %.2f"%(
-        ((end_time - start_time) / num_iterations - total_accounted_time)*1e3))
+        ((end_time - start_time) / args.iters - total_accounted_time)*1e3))
 
 if __name__ == "__main__":
   main()
