@@ -77,8 +77,7 @@ def launch(backend, install_script='', init_cmd=''):
   run_local = False if backend.__name__ == 'aws_backend' else True
 
   if run_local:
-    run = backend.make_run(args.name, install_script=install_script,
-                           skip_efs_mount=True)
+    run = backend.make_run(args.name, install_script=install_script)
     job = run.make_job('worker', num_tasks) 
   else:
     region = u.get_region()
@@ -86,7 +85,8 @@ def launch(backend, install_script='', init_cmd=''):
     create_resources_lib.create_resources()
     ami = ami_dict_ubuntu[u.get_region()]
     run = backend.make_run(args.name, user_data=install_script,
-                           ami=ami, availability_zone=args.zone)
+                           ami=ami, availability_zone=args.zone,
+                           skip_efs_mount=True)
     job = run.make_job('worker', num_tasks=num_tasks,
                        instance_type=args.instance,
                        placement_group=placement_group) 
