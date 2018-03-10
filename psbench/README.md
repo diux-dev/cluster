@@ -19,6 +19,7 @@ conda create --name cifar --clone my_favourite_env
 source activate cifar
 pip install portpicker
 pip install tensorflow
+pip install ray
 
 git clone https://github.com/diux-dev/cluster.git
 cd cluster/psbench
@@ -44,3 +45,34 @@ Running AWS command above will provide a link to TensorBoard and you would see s
 TensorFlow async transfer summaries: https://docs.google.com/document/d/1K0-39NW3ywSx9SDMMF0dUFqSKr6RxtUUIV5XKIp5r18/edit
 
 Ray sync summary transfer summaries: https://docs.google.com/document/d/1StrxUjDxOmhiiPD2_sZZElEE0mbq16tBEOqLaGSY6jc/edit
+
+
+# Troubleshooting
+
+1. Something doesn't work:
+
+Connect to the instance and look at the errors. Everything is launched in tmux session, so you can ssh to instance, and do "tmux a" to attach to default tmux session and see error messages. Also you can use "up" arrow to scroll through commands that have been issues and possibly rerun them.
+
+A "connect" script makes it easier to connect to instances, ie to ssh into instance with name 0.worker.pbench15, do this
+```
+connect 0.worker.psbench15
+tmux a
+```
+
+The "pem" file needed for ssh connection is under ~, with your username and region in its name. IE, to connect to Ubuntu instance use this
+
+```
+ssh -i ~/nexus-yaroslav-us-east-1.pem ubuntu@123.123.123.32
+tmux a
+```
+
+To connect to Amazon Linux instance, the username is 'ec2-user'
+
+2. Install failed
+
+Installation is handled through "UserData". Install script passes a string during instance creation, and this string is run through bash at startup. If something failed, double-check the userdata, and look at the output:
+
+```
+curl http://169.254.169.254/latest/user-data/
+cat /var/log/cloud-init-output.log
+```
