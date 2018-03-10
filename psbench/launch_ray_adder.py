@@ -23,7 +23,7 @@ sys.path.append(module_path+'/..')
 import tmux_backend
 import aws_backend
 import create_resources as create_resources_lib
-import util as u
+import util as u   # needs tensorflow :(
 
 # Deep learning AMI v5
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
@@ -59,6 +59,8 @@ parser.add_argument('--placement', type=int, default=1,
                     help='whether or not to use placement group')
 parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
+parser.add_argument("--iters", default=100, type=int,
+                    help="how many iterations to go for")
 
 
 args = parser.parse_args()
@@ -75,7 +77,8 @@ def launch(backend, install_script='', init_cmd=''):
   run_local = False if backend.__name__ == 'aws_backend' else True
 
   if run_local:
-    run = backend.make_run(args.name, install_script=install_script)
+    run = backend.make_run(args.name, install_script=install_script,
+                           skip_efs_mount=True)
     job = run.make_job('worker', num_tasks) 
   else:
     region = u.get_region()
@@ -116,7 +119,13 @@ def launch(backend, install_script='', init_cmd=''):
       task.run(ray_cmd)
 
   # Client script
-  client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
+  if not run_local:
+    client_cmd = 'python ray_adder.py --redis-address %s:%d --size-mb %d'%(head_task.ip, DEFAULT_PORT, args.size_mb)
+  else:
+    client_cmd = 'python ray_adder.py --size-mb %d'%(args.size_mb,)
+
+  client_cmd += ' --iters %d --workers %d --ps %d'%(args.iters, args.workers,
+                                                   args.ps)
   if not run_local:
     client_cmd+=' --enforce-different-ips=1'
   head_task.run('rm log.txt || echo nevermind')
@@ -135,12 +144,16 @@ def log(message, *args):
 
     
 def main():
-  # todo: add "source deactivate" to fix https://github.com/conda/conda/issues/7007
+  # "source deactivate" to fix https://github.com/conda/conda/issues/7007
   # timeout for slow pre-warming: https://github.com/ray-project/ray/issues/1682
-  install_script="""#!/bin/bash
+  install_script="""#!/bin/bash -e
 source /home/ubuntu/anaconda3/bin/deactivate
 source /home/ubuntu/anaconda3/bin/activate pytorch_p36
-pip install --default-timeout=100 -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
+pip install --default-timeout=200 -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
+pip install tensorflow  # cpu-only version, needed for ../util.py
+
+# https://github.com/ray-project/ray/issues/1641
+# conda uninstall -y gcc
 # pre-warm caches
 ray start --head
 ray stop
