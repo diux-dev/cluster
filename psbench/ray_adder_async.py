@@ -29,10 +29,13 @@ parser.add_argument("--redis-address", default=None, type=str,
 parser.add_argument("--enforce-different-ips", default=0, type=int,
                     help="Check that all workers are on different ips,"
                     "crash otherwise")
-parser.add_argument("--iters", default=100, type=int,
+parser.add_argument("--iters", default=10000, type=int,
                     help="how many iterations to go for")
 parser.add_argument("--memcpy-threads", default=0, type=int,
                     help="how many threads to use for memcpy (0 for unchanged)")
+parser.add_argument("--skip-wait", default=0, type=int,
+                    help="set to 1 to go fully async")
+
 
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
@@ -143,7 +146,8 @@ class Worker(object):
         for ps_shard, grad_shard in zip(self.pss, self.grads):
           push_ids.append(ps_shard.push.remote(grad_shard))
         result_shards = [ps_shard.pull.remote() for ps_shard in self.pss]
-        ray.wait(result_shards+push_ids, num_returns=2*len(result_shards))
+        if not args.skip_wait:
+          ray.wait(result_shards+push_ids, num_returns=2*len(result_shards))
         self.val = ray.get(result_shards[0])[0]
 
   def iteration_time(self):
@@ -187,7 +191,7 @@ def main():
     worker.train.remote()
   print("Done")
 
-  for i in range(100):
+  for i in range(1):
     print(ray.get(workers[0].iteration_time.remote()))  # this blocks
     print("query1")
     print(ray.get(workers[0].value.remote()))
