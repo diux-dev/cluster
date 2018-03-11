@@ -153,6 +153,7 @@ def main():
   install_script="""#!/bin/bash -e
 source /home/ubuntu/anaconda3/bin/deactivate
 source /home/ubuntu/anaconda3/bin/activate pytorch_p36
+pip install --default-timeout=200 -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl || echo "failed, retrying"
 pip install --default-timeout=200 -U https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-0.3.1-cp36-cp36m-manylinux1_x86_64.whl
 pip install tensorflow  # cpu-only version, needed for ../util.py
 
