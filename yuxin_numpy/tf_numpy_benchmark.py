@@ -550,6 +550,14 @@ def pytorchgpu_from_numpy():
       result = torch.from_numpy(params0)
       result = result.cuda()
   
+def pytorch_sharememory():
+  import torch
+  
+  params0 = create_array()
+  for i in range(args.num_iters):
+    with timeit('pytorch_sharememory'):
+      result = torch.share_memory(params0)
+  
 
 def allocator_alignment():
   for allocator in ['numpy', 'ray', 'pytorch', 'tf']:
