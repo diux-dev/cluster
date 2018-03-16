@@ -94,6 +94,7 @@ def main():
     print("Found to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
 
     cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
+    break
   
   if not cmd:
     print("no instance id contains fragment '%s'"%(fragment,))
