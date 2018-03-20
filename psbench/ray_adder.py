@@ -36,7 +36,6 @@ parser.add_argument("--memcpy-threads", default=0, type=int,
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
 local_redis = False if args.redis_address else True
-num_gpus_per_worker = 0 if local_redis else 1
 
 import torch
 
@@ -47,12 +46,12 @@ class FileLogger:
      logger('somemessage')
      logger('somemessage: %s %.2f', 'value', 2.5)
   """
-  
+
   def __init__(self, fn, mirror=False):
     self.fn = fn
     self.f = open(fn, 'w')
     self.mirror = mirror
-    
+
   def __call__(self, s='', *args):
     """Either ('asdf %f', 5) or (val1, val2, val3, ...)"""
     if (isinstance(s, str) or isinstance(s, bytes)) and '%' in s :
@@ -60,7 +59,7 @@ class FileLogger:
     else:
       toks = [s]+list(args)
       formatted_s = ', '.join(str(s) for s in toks)
-      
+
     self.f.write(formatted_s+'\n')
     self.f.flush()
     if self.mirror:
@@ -73,14 +72,14 @@ global_timeit_dict = OrderedDict()
 class timeit:
   """Decorator to measure length of time spent in the block in millis and log
   it to TensorBoard."""
-  
+
   def __init__(self, tag=""):
     self.tag = tag
-    
+
   def __enter__(self):
     self.start = time.perf_counter()
     return self
-  
+
   def __exit__(self, *args):
     self.end = time.perf_counter()
     interval_ms = 1000*(self.end - self.start)
@@ -89,7 +88,7 @@ class timeit:
     global_timeit_dict.setdefault(self.tag, []).append(interval_ms)
 
 
-@ray.remote(num_gpus=num_gpus_per_worker)
+@ray.remote(resources={"PSMachine": 1})
 class ParameterServer(object):
   def __init__(self, num_params):
     params0 = np.zeros(num_params, dtype=np.float32)
@@ -113,7 +112,7 @@ class ParameterServer(object):
     return ray.services.get_node_ip_address()
 
 
-@ray.remote(num_gpus=num_gpus_per_worker)
+@ray.remote(num_gpus=1)
 class Worker(object):
   def __init__(self, dim):
     self.gradients = np.ones(dim, dtype=np.float32)
@@ -122,7 +121,7 @@ class Worker(object):
 
   @ray.method(num_return_vals=args.ps)
   def compute_gradients(self, *weights):
-    
+
     # TODO(rkn): Potentially use array_split to avoid requiring an
     # exact multiple.
     if args.ps == 1:
@@ -135,14 +134,16 @@ class Worker(object):
 
 def main():
   global logger
-  
+
   if args_dim % args.ps != 0:
     raise Exception("The dimension argument must be divisible by the "
                     "number of parameter servers.")
 
   if args.redis_address is None:
     try:
-      ray.init(object_store_memory=(5 * 10 ** 9))
+      ray.init(num_gpus=args.workers,
+               resources={"PSMachine": args.ps},
+               object_store_memory=(5 * 10 ** 9))
     except:
       ray.init()
   else:
