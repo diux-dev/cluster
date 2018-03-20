@@ -17,7 +17,8 @@
 // Stream copy 8 threads:  6.3 ms, 15.97 GB/sec
 // Stream copy 16 threads: 5.6 ms, 17.88 GB/sec
 // Stream copy 32 threads: 6.0 ms, 16.54 GB/sec
-
+//
+// borrowed from https://stackoverflow.com/a/44948720/419116
 
 #include <immintrin.h>
 #include <cstdint>
