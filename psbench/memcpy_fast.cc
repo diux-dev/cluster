@@ -1,38 +1,25 @@
 // To run
-// g++ -std=c++0x memcpy.cc -pthread -march=native -O6
-// ./a.out <num_iters> <num_threads>
-//
+// g++ -std=c++0x memcpy_fast.cc -pthread -march=native -O6 -o memcpy_fast
+// numactl --cpunodebind 0 --membind 0 ./memcpy_fast 100 1
 //
 //
 // c5.18xlarge
-// Stream copy 1 threads:  15.5 ms, 6.45 GB/sec
-// Stream copy 4 threads:  7.8 ms, 12.84 GB/sec
-// Stream copy 8 threads:  6.7 ms, 14.83 GB/sec
-// Stream copy 16 threads: 5.4 ms, 18.42 GB/sec
-// Stream copy 32 threads: 6.4 ms, 15.63 GB/sec
+// Stream copy 1 threads: 15.0 ms, 6.65 GB/sec
+// Stream copy 2 threads: 8.0 ms, 12.47 GB/sec
+// Stream copy 4 threads: 5.0 ms, 19.81 GB/sec
+// Stream copy 8 threads: 3.2 ms, 31.71 GB/sec
+// Stream copy 16 threads: 2.6 ms, 37.78 GB/sec
+
 //
 // p3.16xlarge
-// Stream copy 1 threads:  20.7 ms, 4.84 GB/sec
-// Stream copy 4 threads:  7.9 ms, 12.70 GB/sec
-// Stream copy 8 threads:  6.3 ms, 15.97 GB/sec
-// Stream copy 16 threads: 5.6 ms, 17.88 GB/sec
-// Stream copy 32 threads: 6.0 ms, 16.54 GB/sec
+// Stream copy 1 threads: 11.8 ms, 8.51 GB/sec
+// Stream copy 2 threads: 6.0 ms, 16.78 GB/sec
+// Stream copy 4 threads: 3.8 ms, 26.30 GB/sec
+// Stream copy 8 threads: 3.8 ms, 26.16 GB/sec
+// Stream copy 16 threads: 4.0 ms, 24.74 GB/sec
 //
 // borrowed from https://stackoverflow.com/a/44948720/419116
 //
-// Effect of NUMA
-//
-// sudo apt install numactl
-// numactl --cpunodebind 0 --membind 0 ./a.out 1000 16
-// Stream copy 16 threads: 2.7 ms, 36.75 GB/sec
-// numactl --cpunodebind 0 --membind 1 ./a.out 1000 16
-// Stream copy 16 threads: 4.7 ms, 21.11 GB/sec
-
-// numactl --physcpubind 0 --membind 1 ./a.out
-// Stream copy 1 threads: 15.6 ms, 6.41 GB/sec
-//
-// numactl --physcpubind 0 --membind 0 ./a.out 
-// Stream copy 1 threads: 21.3 ms, 4.69 GB/sec
 
 
 

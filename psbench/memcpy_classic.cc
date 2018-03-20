@@ -2,6 +2,20 @@
 // g++ -std=c++0x memcpy_slow.cc -pthread -march=native -O6
 // ./a.out <num_iters> <num_threads>
 //
+// c5
+// numactl --cpunodebind 0 --membind 0 ./memcpy_classic 100 
+// memcpy: 23.0 ms, 4.35 GB/sec
+// memcpy: 23.0 ms, 4.36 GB/sec
+// memcpy: 23.0 ms, 4.35 GB/sec
+
+// p3
+// numactl --cpunodebind 0 --membind 0 ./memcpy_classic 100
+// memcpy: 12.8 ms, 7.82 GB/sec
+// memcpy: 12.7 ms, 7.84 GB/sec
+// memcpy: 12.8 ms, 7.84 GB/sec
+
+
+
 
 
 
