@@ -44,7 +44,7 @@ def grow_ebs_for_task(task_fragment, target_size_gb):
 
   ec2 = u.create_ec2_resource()
   instances = [(u.seconds_from_datetime(i.launch_time), i) for i in ec2.instances.all()]
-  sorted_instances = sorted(instances, key=itemgetter(0))
+  sorted_instances = reversed(sorted(instances, key=itemgetter(0)))
 
   for (seconds, instance) in sorted_instances:
     task_name = u.get_name(instance.tags)
