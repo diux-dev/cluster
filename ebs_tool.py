@@ -1,4 +1,5 @@
-# tools to deal with EBS
+#!/usr/bin/env python
+# Tools for EFS related tasks
 
 import boto3
 import sys
