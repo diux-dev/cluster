@@ -11,7 +11,7 @@ import util as u
 
 parser = argparse.ArgumentParser(description='Launch CIFAR training')
 # TODO: rename to gradient instance type
-parser.add_argument('--instance-type', type=str, default='t2.micro',
+parser.add_argument('--instance-type', type=str, default='t2.large',
                     help='instance type to use')
 parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
