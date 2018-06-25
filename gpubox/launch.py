@@ -7,28 +7,6 @@
 #
 # https://aws.amazon.com/blogs/ai/new-aws-deep-learning-amis-for-machine-learning-practitioners/
 # 
-# Ubuntu Conda based Amazon Deep Learning AMI
-# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
-# US East (N. Virginia)	ami-9ba7c4e1
-# US East (Ohio)        ami-69f6df0c
-# US West (Oregon)	ami-3b6bce43
-# EU (Ireland)	        ami-5bf34b22
-# Asia Pacific (Sydney)	ami-4fa3542d
-# Asia Pacific (Seoul)	ami-7d872113
-# Asia Pacific (Tokyo)	ami-90b432f6
-
-# Amazon Linux version:
-# https://aws.amazon.com/marketplace/fulfillment?productId=f3afce45-648d-47d7-9f6c-1ec273f7df70&ref_=dtl_psb_continue
-# US East (N. Virginia)        ami-3a533040
-# US East (Ohio)               ami-72f4dd17
-# US West (Oregon)             ami-5c60c524
-# EU (Frankfurt)               ami-88aa23e7
-# EU (Ireland)                 ami-70fe4609
-# Asia Pacific (Singapore)     ami-0798fc7b
-# Asia Pacific (Sydney)	       ami-38a5525a
-# Asia Pacific (Seoul)	       ami-a4b91fca
-# Asia Pacific (Tokyo)	       ami-98ad2bfe
-# Asia Pacific (Mumbai)	       ami-6ce8a103
 
 from collections import OrderedDict
 import argparse
@@ -38,35 +16,13 @@ import time
 
 import boto3
 
-# TODO: move pip install to init script?
-
-# map availability zones that contain given instance type
-# TODO: this mapping is randomized between username on AWS side
-# availability_mapping_us_east_1 = {'g3': ['us-east-1a', 'us-east-1b',
-#                                          'us-east-1e', 'us-east-1c'],
-#                                   'p2': ['us-east-1f'],
-#                                   'p3': [us-east-1d, us-east-1c, us-east-1f]}
-# availability_mapping_us_west_2 = {'g3': ['us-west-2a'],
-#                                   'p2': ['us-west-2a', 'us-west-2b'],
-#                                   'p3': ['us-west-2b', 'us-west-2c']}
-# availability_mapping = {'us-east-1': availability_mapping_us_east_1,
-#                         'us-west-2': availability_mapping_us_west_2}
-
-# Deep Learning AMI v3
-# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
-
-# Deep learning AMI v5
+# Deep learning AMI v10
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
 ami_dict_ubuntu = {
-  "us-east-1": "ami-7336d50e",
-  "us-east-2": "ami-eb596e8e",
-  "us-west-2": "ami-c27af5ba",
+  "us-east-1": "ami-6d720012",
+  "us-east-2": "ami-23c4fb46",
+  "us-west-2": "ami-e580c79d",
 }
-
-#ami_dict_amazon = {
-#    "us-west-2": "ami-5c60c524",
-#    "us-east-1": "ami-3a533040"
-#}
 
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
