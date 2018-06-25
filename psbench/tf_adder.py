@@ -33,6 +33,13 @@ parser.add_argument("--label", default='', type=str,
                     help="location of logging directory")
 parser.add_argument("--ps", default=1, type=int,
                     help="number of parameter server shards")
+parser.add_argument("--do-push", default=0, type=int,
+                    help="whether to push parameters to parameter server")
+parser.add_argument("--do-fetch", default=1, type=int,
+                    help="whether to pull values from parameter server")
+parser.add_argument("--do-local-val", default=1, type=int,
+                    help="whether to do local value fetch (sanity check)")
+
 args = parser.parse_args()
 params_size = args.size_mb * 250*1000
 sharded_params_size = params_size//args.ps
@@ -326,11 +333,14 @@ def run_worker():
     sess_run_succeeded = False
     while not sess_run_succeeded:
       try:
-        with timeit('worker_fetch'):
-          sessrun(fetch_ops)    # ps -> worker tf
-        with timeit('worker_push'):
-          sessrun(push_ops)
-        local_val = sessrun(local_val_op)
+        if args.do_fetch:
+          with timeit('worker_fetch'):
+            sessrun(fetch_ops)    # ps -> worker tf
+        if args.do_push:
+          with timeit('worker_push'):
+            sessrun(push_ops)
+        if args.do_local_val:
+          local_val = sessrun(local_val_op)
         sess_run_succeeded = True
         
       # Exception when ps restarts, need to recreate session

@@ -51,6 +51,7 @@ class Run(backend.Run):
     availability_zone = kwargs['availability_zone']
     placement_group = kwargs.get('placement_group', '')
     install_script = kwargs.get('install_script','')
+    skip_efs_mount = kwargs.get('skip_efs_mount', False)
     linux_type = kwargs.get('linux_type', 'ubuntu')
     user_data = kwargs.get('user_data', '')
 
@@ -118,7 +119,8 @@ class Run(backend.Run):
     job = Job(self, job_name, instances=instances,
               install_script=install_script,
               linux_type=linux_type,
-              user_data=user_data)
+              user_data=user_data,
+              skip_efs_mount=skip_efs_mount)
     self.jobs.append(job)
     return job
 
@@ -130,7 +132,7 @@ class Run(backend.Run):
 class Job(backend.Job):
   # TODO: get rid of linux_type
   def __init__(self, run, name, instances, install_script=None,
-               linux_type=None, user_data=''):
+               linux_type=None, user_data='', skip_efs_mount=False):
     self._run = run
     self.name = name
 
@@ -142,7 +144,8 @@ class Job(backend.Job):
     for instance in instances:
       task_id = instance.ami_launch_index
       task = Task(instance, self, task_id, install_script=install_script,
-                             linux_type=linux_type, user_data=user_data)
+                  linux_type=linux_type, user_data=user_data,
+                  skip_efs_mount=skip_efs_mount)
       self.tasks[task_id] = task
 
   def _initialize(self):
@@ -153,7 +156,7 @@ class Job(backend.Job):
 class Task(backend.Task):
   # TODO: replace linux_type with username
   def __init__(self, instance, job, task_id, install_script=None,
-               linux_type=None, user_data=''):
+               linux_type=None, user_data='', skip_efs_mount=False):
     self.initialize_called = False
     self.instance = instance
     self.job = job
@@ -162,6 +165,7 @@ class Task(backend.Task):
     self._run_counter = 0
     self.cached_ip = None
     self.cached_public_ip = None
+    self.skip_efs_mount = skip_efs_mount
     
     self.initialized = False
 
@@ -235,7 +239,8 @@ class Task(backend.Task):
     # todo: install tmux
     self._setup_tmux()
     self.run('mkdir -p '+self.remote_scratch)
-    self._mount_efs()
+    if not self.skip_efs_mount:
+      self._mount_efs()
 
     # run initialization commands here
     if self._is_initialized_file_present():
@@ -251,6 +256,10 @@ class Task(backend.Task):
       assert self._is_initialized_file_present()
     else:
       # installation happens through user-data instead of install script
+      # TODO(y): there's an edge case, if there's no install script or
+      # userdata passed, then nothing
+      print("Warning: must be using USERDATA, otherwise is_initialized file "
+            "is not created")
       pass
 
 
@@ -386,7 +395,7 @@ tmux a
 
   # todo: transition to higher-level SshClient instead of paramiko.SSHClient
   def run(self, cmd, sync=True, ignore_errors=False,
-          max_wait_sec=600, check_interval=1):
+          max_wait_sec=600, check_interval=0.1):
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
 

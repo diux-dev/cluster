@@ -599,8 +599,6 @@ def lookup_aws_instances(job_name):
     #    print("Obtained job name", current_job_name, "task", task_id)
 
     if current_job_name == job_name:
-      if result:
-        print("Warning, multiple instances with identical name "+str(result))
       result.append(i)
 
 

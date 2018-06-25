@@ -38,6 +38,7 @@ import time
 
 import boto3
 
+# TODO: move pip install to init script?
 
 # map availability zones that contain given instance type
 # TODO: this mapping is randomized between username on AWS side

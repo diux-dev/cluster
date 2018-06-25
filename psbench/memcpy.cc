@@ -19,6 +19,23 @@
 // Stream copy 32 threads: 6.0 ms, 16.54 GB/sec
 //
 // borrowed from https://stackoverflow.com/a/44948720/419116
+//
+// Effect of NUMA
+//
+// sudo apt install numactl
+// numactl --cpunodebind 0 --membind 0 ./a.out 1000 16
+// Stream copy 16 threads: 2.7 ms, 36.75 GB/sec
+// numactl --cpunodebind 0 --membind 1 ./a.out 1000 16
+// Stream copy 16 threads: 4.7 ms, 21.11 GB/sec
+
+// numactl --physcpubind 0 --membind 1 ./a.out
+// Stream copy 1 threads: 15.6 ms, 6.41 GB/sec
+//
+// numactl --physcpubind 0 --membind 0 ./a.out 
+// Stream copy 1 threads: 21.3 ms, 4.69 GB/sec
+
+
+
 
 #include <immintrin.h>
 #include <cstdint>

@@ -191,7 +191,7 @@ def keypair_setup():
   if keypair:
     print("Reusing keypair "+KEYPAIR_NAME)
     # check that local pem file exists and is readable
-    assert os.path.exists(keypair_fn)
+    assert os.path.exists(keypair_fn), "Keypair %s exists, but corresponding .pem file %s is not found, delete keypair %s through console and run again to recreate keypair/.pem together"%(KEYPAIR_NAME, keypair_fn, KEYPAIR_NAME)
     keypair_contents = open(keypair_fn).read()
     assert len(keypair_contents)>0
     # todo: check that fingerprint matches keypair.key_fingerprint
@@ -200,7 +200,7 @@ def keypair_setup():
   print("Creating keypair "+KEYPAIR_NAME)
   ec2 = u.create_ec2_resource()
   keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
-  assert not os.path.exists(keypair_fn), "previous, keypair exists, delete it with 'sudo rm %s'"%(keypair_fn)
+  assert not os.path.exists(keypair_fn), "previous, keypair exists, delete it with 'sudo rm %s' and also delete corresponding keypair through console"%(keypair_fn)
   
   open(keypair_fn, 'w').write(keypair.key_material)
   os.system('chmod 400 '+keypair_fn)

@@ -176,6 +176,7 @@ def main():
 
   install_script="""#!/bin/bash
 source /home/ubuntu/anaconda3/bin/activate tensorflow_p36
+python -c "import tensorflow as tf; sess=tf.Session()"
 pip install ray
 echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
 """
