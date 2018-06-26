@@ -198,7 +198,7 @@ class Task(backend.Task):
 
   # todo: replace with file_read
   def _is_initialized_file_present(self):
-    self.log("Checking for initialized file")
+    self.log("Checking for /tmp/is_initialized file")
     try:
       # TODO: either get rid of /tmp or taskdir
       # this location is hardwired in uninitialize.py
@@ -257,11 +257,8 @@ class Task(backend.Task):
       assert self._is_initialized_file_present()
     else:
       # installation happens through user-data instead of install script
-      # TODO(y): there's an edge case, if there's no install script or
-      # userdata passed, then nothing
-      print("Warning: must be using USERDATA, otherwise is_initialized file "
-            "is not created")
-      pass
+      # if neither one is passed, manually create is_initialized
+      self.run('echo ok > /tmp/is_initialized')
 
 
     self.connect_instructions = """
@@ -396,7 +393,7 @@ tmux a
 
   # todo: transition to higher-level SshClient instead of paramiko.SSHClient
   def run(self, cmd, sync=True, ignore_errors=False,
-          max_wait_sec=600, check_interval=0.1):
+          max_wait_sec=600, check_interval=0.5):
     """Runs command in tmux session. No need for multiple tmux sessions per
     task, so assume tmux session/window is always called tmux:0"""
 
