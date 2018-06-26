@@ -20,19 +20,24 @@ LOGDIR_PREFIX='/efs/runs'
 # TODO: use separate session for each task, for parity with AWS job launcher
 
 # TODO: add kwargs so that tmux backend can be drop-in replacement
-def make_run(name, install_script=None):
+def make_run(name, install_script='', **kwargs):
+  if kwargs:
+    print("Warning, unused kwargs", kwargs)
   return Run(name, install_script)
 
 
 class Run(backend.Run):
-  def __init__(self, name, install_script=None):
+  def __init__(self, name, install_script=''):
     self.name = name
     self.install_script = install_script
     self.jobs = []
 
   # TODO: rename job_name to role_name
-  def make_job(self, job_name, num_tasks=1, install_script=None):
+  def make_job(self, job_name, num_tasks=1, install_script='', **kwargs):
     assert num_tasks>=0
+
+    if kwargs:
+      print("Warning, unused kwargs", kwargs)
 
     # TODO, remove mandatory delete and make separate method for killing?
     tmux_name = self.name+'-'+job_name # tmux can't use . in name
@@ -58,7 +63,7 @@ class Run(backend.Run):
 
 
 class Job(backend.Job):
-  def __init__(self, run, name, tmux_windows, install_script=None):
+  def __init__(self, run, name, tmux_windows, install_script=''):
     self._run = run
     self.name = name
     self.tasks = []
