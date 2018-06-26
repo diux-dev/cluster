@@ -53,7 +53,7 @@ def list_efss():
       
 
 def _create_ec2_client():
-  REGION = os.environ['AWS_DEFAULT_REGION']
+  REGION = u.get_region()
   return boto3.client('ec2', region_name=REGION)
 
 

@@ -295,12 +295,12 @@ def _maybe_create_placement_group(name):
 
 
 def _create_ec2_client():
-  REGION = os.environ['AWS_DEFAULT_REGION']
+  REGION = u.get_region()
   return boto3.client('ec2', region_name=REGION)
 
 
 def _create_ec2_resource():
-  REGION = os.environ['AWS_DEFAULT_REGION']
+  REGION = u.get_region()
   return boto3.resource('ec2',region_name=REGION)
 
 
@@ -376,7 +376,7 @@ def simple_job(name, num_tasks=1, instance_type=None, install_script='',
     if placement_group:
       args['Placement']={'GroupName': placement_group}
 
-    assert _check_security_group_exists(SECURITY_GROUP), "Security group '%s' does not exist in region '%s'" %(SECURITY_GROUP, os.environ['AWS_DEFAULT_REGION'])
+    assert _check_security_group_exists(SECURITY_GROUP), "Security group '%s' does not exist in region '%s'" %(SECURITY_GROUP, u.get_region)
     
     instances = ec2.create_instances(**args)
     
@@ -433,7 +433,7 @@ def server_job(name, num_tasks=1, instance_type=None, install_script='',
 
   # todo: get rid of this global variable?
   SSH_KEY_PATH = "%s/%s-%s.pem" % (os.environ["HOME"], DEFAULT_NAME,
-                                          os.environ['AWS_DEFAULT_REGION'],)
+                                          u.get_region(),)
 
   if instances:
     assert len(instances) == num_tasks, ("Found job with same name, but number"

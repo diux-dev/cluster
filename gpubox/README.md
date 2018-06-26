@@ -24,6 +24,17 @@ pip install -r ../requirements.txt
 
 ## Step 3: AWS credentials
 
+```
+https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html
+```
+```
+$ aws configure --profile user2
+AWS Access Key ID [None]: AKIAI44QH8DHBEXAMPLE
+AWS Secret Access Key [None]: je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY
+Default region name [None]: us-east-1
+Default output format [None]: text
+```
+
 Get your public/private access key from AWS console and fill them in
 
 ```

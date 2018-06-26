@@ -64,6 +64,8 @@ class Run(backend.Run):
     if instances:
       assert len(instances) == num_tasks, ("Found job with same name, but number of tasks %d doesn't match requested %d, kill job manually." % (len(instances), num_tasks))
       print("Found existing job "+job_name)
+      for i in instances:
+            if i.state['Name'] == 'stopped': i.start()
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 
@@ -116,7 +118,6 @@ class Run(backend.Run):
             self.log("create_tags failed with %s, retrying in %d seconds"%(
               str(e), TIMEOUT_SEC))
             time.sleep(TIMEOUT_SEC)
-
     job = Job(self, job_name, instances=instances,
               install_script=install_script,
               linux_type=linux_type,
@@ -163,6 +164,7 @@ class Task(backend.Task):
     self.job = job
     self.id = task_id
     self.install_script = install_script
+    self.user_data = user_data
     self._run_counter = 0
     self.cached_ip = None
     self.cached_public_ip = None
@@ -251,11 +253,12 @@ class Task(backend.Task):
 
       self.install_script+='\necho ok > /tmp/is_initialized\n'
       self.file_write('install.sh', u._add_echo(self.install_script))
-      self.run('bash -e install.sh') # fail on errors
+      self.run('bash -e install.sh', max_wait_sec=2400) # fail on errors
       # TODO(y): propagate error messages printed on console to the user
       # right now had to log into tmux to see it
       assert self._is_initialized_file_present()
     else:
+      self.log('No install script. Skipping to end')
       # installation happens through user-data instead of install script
       # if neither one is passed, manually create is_initialized
       self.run('echo ok > /tmp/is_initialized')
