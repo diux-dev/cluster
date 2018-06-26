@@ -71,7 +71,8 @@ class Run(backend.Run):
       keypair = u.get_keypair_dict()[u.get_keypair_name()]
       vpc = u.get_vpc_dict()[u.get_resource_name()]
       subnet_dict = u.get_subnet_dict(vpc)
-      assert availability_zone in subnet_dict, "Availability zone %s is not in subnet dict, available subnets are %s"%(availability_zone, ', '.join(subnet_dict.keys()))
+      region = u.get_region()
+      assert availability_zone in subnet_dict, "Availability zone %s is not in subnet dict for current AWS default region %s, available subnets are %s. (hint, set AWS_DEFAULT_REGION)"%(availability_zone, region, ', '.join(subnet_dict.keys()))
       subnet = subnet_dict[availability_zone]
       ec2 = u.create_ec2_resource()
       u.maybe_create_placement_group(placement_group)
