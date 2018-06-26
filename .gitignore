@@ -12,3 +12,5 @@ __pycache__
 /psbench/aws-gpu
 /psbench/data-aws
 /psbench/macbook-cpu
+.vscode/
+.ipynb_checkpoints/

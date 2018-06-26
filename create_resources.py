@@ -109,6 +109,7 @@ def network_setup():
       print("Creating subnet %s in zone %s"%(cidr_block, zone))
       subnet = vpc.create_subnet(CidrBlock=cidr_block,
                                  AvailabilityZone=zone)
+      subnet.create_tags(Tags=[{'Key':'Name','Value':f'{VPC_NAME}-subnet'}, {'Key':'Region','Value':zone}])
       u.wait_until_available(subnet)
       route_table.associate_with_subnet(SubnetId=subnet.id)
 
@@ -228,7 +229,7 @@ def placement_group_setup(group_name):
   
 def create_resources():
 
-  region = os.environ['AWS_DEFAULT_REGION']
+  region = u.get_region()
   print("Creating %s resources in region %s"%(DEFAULT_NAME, region,))
 
   vpc, security_group = network_setup()

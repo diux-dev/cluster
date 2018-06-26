@@ -29,7 +29,7 @@ def main():
     assert len(names)==1
     return names[0]
 
-  region = os.environ['AWS_DEFAULT_REGION']
+  region = u.get_region()
   client = boto3.client('ec2', region_name=region)
   ec2 = boto3.resource('ec2', region_name=region)
   response = client.describe_instances()

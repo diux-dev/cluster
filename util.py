@@ -44,9 +44,8 @@ def validate_resource_name(name):
   # disallow unicode names to avoid pain
   assert resource_regexp.match(name)
 
-def get_resource_name():
+def get_resource_name(default='nexus'):
   """Gives global default name for singleton AWS resources (VPC name, keypair name, etc)."""
-  default = 'nexus'
   name =os.environ.get('RESOURCE_NAME', default)
   if name != default:
     validate_resource_name(name)
@@ -100,10 +99,13 @@ def format_task_name(task_id, role, run):
 def make_name(name):
   return [{'Key': 'Name', 'Value': name}]
 
+def get_session(profile_name='diux'):
+  return boto3.Session(profile_name=profile_name)
 
 def get_region():
-  assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
-  return os.environ['AWS_DEFAULT_REGION']
+  # assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
+  # return os.environ['AWS_DEFAULT_REGION']
+  return get_session().region_name
 
 def get_keypair_name():
   """Returns keypair name to use for current region and user."""
@@ -114,18 +116,15 @@ def get_keypair_name():
   return u.get_resource_name() +'-'+username
 
 def create_ec2_client():
-  REGION = os.environ['AWS_DEFAULT_REGION']
-  return boto3.client('ec2', region_name=REGION)
+  return get_session().client('ec2')
 
 
 def create_efs_client():
-  REGION = os.environ['AWS_DEFAULT_REGION']
-  return boto3.client('efs', region_name=REGION)
+  return get_session().client('efs')
 
 
 def create_ec2_resource():
-  REGION = os.environ['AWS_DEFAULT_REGION']
-  return boto3.resource('ec2',region_name=REGION)
+  return get_session().resource('ec2')
 
 
 def is_good_response(response):
@@ -476,7 +475,7 @@ def get_keypair_fn(keypair_name):
   """Generate canonical location for .pem file for given keypair and
   default region."""
   return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
-                           os.environ['AWS_DEFAULT_REGION'],)
+                           get_region(),)
 
 class SshClient:
   def __init__(self,
@@ -580,7 +579,7 @@ def _StreamOutputToStdout(fd):  # todo: pep convention
   
   return t
 
-def lookup_aws_instances(job_name):
+def lookup_aws_instances(job_name, states=['running', 'stopped']):
   """Returns all AWS instances for given AWS job name, like
    simple.worker"""
 
@@ -591,7 +590,7 @@ def lookup_aws_instances(job_name):
 
   # TODO: add waiting so that instances in state "initializing" are supported
   instances = ec2.instances.filter(
-    Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+    Filters=[{'Name': 'instance-state-name', 'Values': states}])
 
   result = []
   for i in instances.all():
