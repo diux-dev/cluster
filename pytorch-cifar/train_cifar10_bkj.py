@@ -15,7 +15,6 @@ def pad(img, p=4, padding_mode='reflect'):
     return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))
 
 def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
-    if not os.path.exists(data_path/'train'): download_cifar10(data_path)
 
     val_bs = val_bs or bs
     # Data loading code
@@ -29,8 +28,9 @@ def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
         transforms.RandomHorizontalFlip(),
     ] + tfms)
 
-    train_dataset = datasets.ImageFolder(traindir, train_tfms)
-    val_dataset = datasets.ImageFolder(valdir, transforms.Compose(tfms))
+    train_dataset = datasets.CIFAR10(root=data_path, train=True, download=True, transform=train_tfms)
+    val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=True, transform=val_tfms)
+    aug_dataset = datasets.CIFAR10(root=data_path, train=False, download=True, transform=train_tfms)
 
     train_loader = DataLoader(
         train_dataset, batch_size=bs, shuffle=True,

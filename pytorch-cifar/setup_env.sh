@@ -9,7 +9,7 @@ if [ ! -d "$FASTAI_DIR" ]; then
     conda env update fastai
 
     # Distributed requires putorch 0.4 - consider using cuda91
-    conda install pytorch torchvision cuda90 -c pytorch -y
+    conda install pytorch torchvision cuda90 -c pytorch -y -n fastai
     ln -s ~/fastai/fastai ~/anaconda3/envs/fastai/lib/python3.6/site-packages
 fi
 
@@ -26,3 +26,4 @@ if [ ! -d "$DATA_DIR" ]; then
     mkdir data
 fi
 
+ulimit -n 9000 # to prevent tcp too many files open error
