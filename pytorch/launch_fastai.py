@@ -35,12 +35,18 @@ parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
+parser.add_argument('--num-tasks', type=int, default=1,
+                    help='number of instances to create')
+parser.add_argument('--install-script', type=str, default='',
+                    help='location of script to install')
+parser.add_argument('--attach-volume', type=str, default='',
+                    help='tag name of ebs volume to attach')
 args = parser.parse_args()
 
 
-def attach_imagnet_ebs(aws_instance, job, tag='imagenet_high_perf'):
+def attach_imagnet_ebs(aws_instance, job, tag):
   ec2 = util.create_ec2_resource()
-  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':['imagenet_high_perf']}]).all())
+  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
   if not v: return
   v = v[0]
   if v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id:
@@ -62,11 +68,11 @@ def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
-  job = run.make_job('pytorch', instance_type=args.instance_type)
+  job = run.make_job('distributed', instance_type=args.instance_type)
   job.wait_until_ready()
   print(job.connect_instructions)
 
-  attach_imagnet_ebs(job.tasks[0].instance, job)
+  if args.attach_volume: attach_imagnet_ebs(job.tasks[0].instance, job, tag=args.attach_volume)
   
 #   run pytorch
   job.run('source activate pytorch_p36')
@@ -74,12 +80,10 @@ def main():
 
   # upload files
   job.upload('resnet.py')
-  job.upload('distributed.py')
-  job.upload('multiproc.py')
   job.upload('train_imagenet_fastai.py')
-  job.upload('setup_env_fastai.sh')
 
   # run setup script
+  job.upload('setup_env_fastai.sh')
   job.run('./setup_env_fastai.sh')
 
   # run multi-gpu single machine training
