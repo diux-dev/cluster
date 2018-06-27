@@ -5,6 +5,7 @@ from fastai.dataset import *
 from fastai.fp16 import *
 from fastai.conv_learner import *
 from pathlib import *
+import sys
 
 import torch
 from torch.autograd import Variable
@@ -213,9 +214,7 @@ def top5(output, target): return top_k(output, target, 5)
 cudnn.benchmark = True
 args = get_parser().parse_args()
 print('Running script with args:', args)
-if args.local_rank > 0:
-    import sys
-    sys.stdout = open(args.save_dir/f'GPU_{args.local_rank}', 'w')
+if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
 def main():
     if args.distributed:

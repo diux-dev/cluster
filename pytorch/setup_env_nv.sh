@@ -1,6 +1,6 @@
 #!/bin/bash
 
-
+# to be used with vanilla nvidia ami: ami-e580c79d
 echo 'Starting script'
 
 pip uninstall pillow --yes

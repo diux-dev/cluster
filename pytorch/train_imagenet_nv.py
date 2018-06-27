@@ -2,6 +2,7 @@ import argparse, os, shutil, time, warnings
 from datetime import datetime
 from pathlib import Path
 import numpy as np
+import sys
 
 import torch
 from torch.autograd import Variable
@@ -61,12 +62,9 @@ def get_parser():
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
 
+    parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--dist-url', default='file://sync.file', type=str,
                         help='url used to set up distributed training')
-    parser.add_argument('--dist-addr', default=None, type=str,
-                        help='IP of master node used to set up distributed training')
-    parser.add_argument('--dist-port', default=None, type=str,
-                        help='Port used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
     parser.add_argument('--local_rank', default=0, type=int,
                         help='Used for multi-process training. Can either be manually set ' +
@@ -75,10 +73,7 @@ def get_parser():
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
-
-if args.local_rank > 0:
-    import sys
-    sys.stdout = open(args.save_dir/f'GPU_{args.local_rank}', 'w')
+if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
 def get_loaders(traindir, valdir, use_val_sampler=True, min_scale=0.08):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -132,7 +127,7 @@ def main():
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
-    if args.distributed: model = DDP(model)
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
     elif args.dp:
         model = nn.DataParallel(model)
         args.batch_size *= n_dev
@@ -200,7 +195,7 @@ def main():
         if args.prof: break
         prec1 = validate(val_loader, model, criterion, epoch, start_time)
 
-        if args.rank == 0:
+        if args.local_rank == 0:
             is_best = prec1 > best_prec1
             best_prec1 = max(prec1, best_prec1)
             save_checkpoint({
@@ -312,7 +307,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         end = time.time()
         input, target = prefetcher.next()
 
-        if args.rank == 0 and i % args.print_freq == 0 and i > 1:
+        if args.local_rank == 0 and i % args.print_freq == 0 and i > 1:
             print('Epoch: [{0}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -367,7 +362,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if args.rank == 0 and i % args.print_freq == 0:
+        if args.local_rank == 0 and i % args.print_freq == 0:
             print('Test: [{0}/{1}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
@@ -438,7 +433,9 @@ def accuracy(output, target, topk=(1,)):
 def reduce_tensor(tensor):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    rt /= args.world_size
+    size = dist.get_world_size()
+    # rt /= args.world_size
+    rt /= size
     return rt
 
 if __name__ == '__main__': main()

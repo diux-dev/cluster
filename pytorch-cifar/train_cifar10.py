@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 import time
+import sys
 
 from fastai.transforms import *
 from fastai.dataset import *
@@ -10,8 +11,6 @@ from fastai.conv_learner import *
 from pathlib import *
 from fastai import io
 import tarfile
-
-
 
 import torch
 from torch.autograd import Variable
@@ -26,8 +25,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
 # import models.cifar10 as cifar10models
-
-
 
 # print(models.cifar10.__dict__)
 # model_names = sorted(name for name in models.__dict__
@@ -82,16 +79,10 @@ parser.add_argument('--loss-scale', type=float, default=1,
                     help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
 parser.add_argument('--warmup', action='store_true', help='Do a warm-up epoch first')
 parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
-parser.add_argument('--dist-url', default=None, type=str,
+parser.add_argument('--distributed', action='store_true', help='Run distributed training')
+parser.add_argument('--dist-url', default='file://sync.file', type=str,
                     help='url used to set up distributed training')
-parser.add_argument('--dist-addr', default=None, type=str,
-                    help='IP of master node used to set up distributed training')
-parser.add_argument('--dist-port', default=None, type=str,
-                    help='Port used to set up distributed training')
-parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
-parser.add_argument('--world-size', default=1, type=int,
-                    help='Number of GPUs to use. Can either be manually set ' +
-                    'or automatically set by using \'python -m multiproc\'.')
+parser.add_argument('--dist-backend', default='gloo', type=str, help='distributed backend')
 parser.add_argument('--local_rank', default=0, type=int,
                     help='Used for multi-process training.')
 
@@ -99,7 +90,7 @@ def pad(img, p=4, padding_mode='reflect'):
         return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))
 
 def torch_loader(data_path, size, use_val_sampler=False):
-
+    
     # Data loading code
     traindir = os.path.join(data_path, 'train')
     valdir = os.path.join(data_path, 'test')
@@ -152,6 +143,7 @@ def torch_loader(data_path, size, use_val_sampler=False):
     data.aug_dl = aug_loader
     if train_sampler is not None: data.trn_sampler = train_sampler
     if val_sampler is not None: data.val_sampler = val_sampler
+
 
     return data
 
@@ -221,7 +213,7 @@ class ImagenetLoggingCallback(Callback):
 
 # Logging + saving models
 def save_args(name, save_dir):
-    if (args.rank != 0) or not args.save_dir: return {}
+    if (args.local_rank != 0) or not args.save_dir: return {}
 
     log_dir = f'{save_dir}/training_logs'
     os.makedirs(log_dir, exist_ok=True)
@@ -234,7 +226,7 @@ def save_args(name, save_dir):
     }
 
 def save_sched(sched, save_dir):
-    if (args.rank != 0) or not args.save_dir: return {}
+    if (args.local_rank != 0) or not args.save_dir: return {}
     log_dir = f'{save_dir}/training_logs'
     sched.save_path = log_dir
     sched.plot_loss()
@@ -251,25 +243,15 @@ def update_model_dir(learner, base_dir):
 cudnn.benchmark = True
 global arg
 args = parser.parse_args()
-#print(args); exit()
-if args.cycle_len > 1: args.cycle_len = int(args.cycle_len)
+if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 if args.cpu:
     import fastai.core as core
     core.USE_GPU = False
 
 def main():
-    args.distributed = args.world_size > 1
-    args.gpu = 0
     if args.distributed:
-        if not args.cpu:
-            args.gpu = args.rank % torch.cuda.device_count()
-            torch.cuda.set_device(args.gpu)
-        if args.dist_addr: os.environ['MASTER_ADDR'] = args.dist_addr
-        if args.dist_port: os.environ['MASTER_PORT'] = args.dist_port
-        os.environ['WORLD_SIZE'] = str(args.world_size)
-        os.environ['RANK'] = str(args.rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-        print('Distributed: init_process_group success')
+        if not args.cpu: torch.cuda.set_device(args.local_rank)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
 
     if args.fp16: assert torch.backends.cudnn.enabled, "missing cudnn"
 
@@ -280,7 +262,8 @@ def main():
     model = resnet.resnet50()
 
     if not args.cpu: model = model.cuda()
-    if args.distributed: model = DDP(model)
+    if args.fp16: model = FP16(model) # Seeing if half precision works if we set it before DistributedDataParallel
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
     if args.data_parallel: model = nn.DataParallel(model, [0,1,2,3])
 
     data = torch_loader(args.data, args.sz)

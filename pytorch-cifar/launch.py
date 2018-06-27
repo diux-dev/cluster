@@ -35,11 +35,13 @@ parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
+parser.add_argument('--num-tasks', type=int, default=1,
+                    help='number of instances to create')
 args = parser.parse_args()
 
 
 gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
-def create_job(run, job_name, num_tasks=2):
+def create_job(run, job_name, num_tasks):
   install_script = ''
   with open('setup_env.sh', 'r') as script:
     install_script = script.read()
@@ -52,11 +54,7 @@ def create_job(run, job_name, num_tasks=2):
 
   # upload files
   job.upload('resnet.py')
-  job.upload('distributed.py')
-  job.upload('multiproc.py')
   job.upload('train_cifar10.py')
-  job.upload('train_cifar10_cpu.py')
-  job.upload('train_cifar10_dist.py')
   job.upload('setup_env.sh')
 
   # setup env
@@ -83,7 +81,7 @@ def create_job(run, job_name, num_tasks=2):
     num_gpus = gpu_count[args.instance_type]
     training_args = '~/data --loss-scale 512 --fp16 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10_dist.py {training_args}')
+    t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
 
 
 
@@ -93,7 +91,7 @@ def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
-  create_job(run, 'dist_multi_node')
+  create_job(run, 'distributed', args.num_tasks)
 
 if __name__=='__main__':
   main()
