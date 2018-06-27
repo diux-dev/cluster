@@ -18,7 +18,6 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import models
-from distributed import DistributedDataParallel as DDP
 from datetime import datetime
 
 # model_names = sorted(name for name in models.__dict__
@@ -60,14 +59,11 @@ def get_parser():
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
 
+    parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--dist-url', default='file://sync.file', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
-
-    parser.add_argument('--world-size', default=1, type=int,
-                        help='Number of GPUs to use. Can either be manually set ' +
-                        'or automatically set by using \'python -m multiproc\'.')
-    parser.add_argument('--rank', default=0, type=int,
+    parser.add_argument('--local_rank', default=0, type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                         'or automatically set by using \'python -m multiproc\'.')
     return parser
@@ -90,19 +86,19 @@ def torch_loader(data_path, use_val_sampler=True, min_scale=0.08, bs=192):
         ] + tensor_tfm))
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
-    val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
+    val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed and use_val_sampler else None)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=bs, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler if use_val_sampler else None)
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
     data = ModelData(data_path, train_loader, val_loader)
     data.sz = args.sz
-    if train_sampler is not None:
-        data.trn_sampler,data.val_sampler = train_sampler,val_sampler
+    if train_sampler is not None: data.trn_sampler = train_sampler
+    if val_sampler is not None: data.val_sampler = val_sampler
     return data
 
 # Seems to speed up training by ~2%
@@ -217,16 +213,14 @@ def top5(output, target): return top_k(output, target, 5)
 cudnn.benchmark = True
 args = get_parser().parse_args()
 print('Running script with args:', args)
+if args.local_rank > 0:
+    import sys
+    sys.stdout = open(args.save_dir/f'GPU_{args.local_rank}', 'w')
 
 def main():
-    args.distributed = args.world_size > 1
-    args.gpu = 0
-    if args.distributed: args.gpu = args.rank % torch.cuda.device_count()
-
     if args.distributed:
-        torch.cuda.set_device(args.gpu)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
-
+        torch.cuda.set_device(args.local_rank)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
     
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else:               model = models.__dict__[args.arch]()
@@ -234,7 +228,8 @@ def main():
     model = resnet.resnet50()
 
     model = model.cuda()
-    if args.distributed: model = DDP(model)
+    if args.fp16: model = FP16(model) # Seeing if half precision works if we set it before DistributedDataParallel
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     data1 = torch_loader(args.data, args.sz)
     learner = Learner.from_model_data(model, data1)

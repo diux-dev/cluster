@@ -54,6 +54,7 @@ class Run(backend.Run):
     skip_efs_mount = kwargs.get('skip_efs_mount', False)
     linux_type = kwargs.get('linux_type', 'ubuntu')
     user_data = kwargs.get('user_data', '')
+    ebs = kwargs.get('ebs', '')
 
     if user_data:
       user_data+='\necho userdata_ok >> /tmp/is_initialized\n'
@@ -86,7 +87,9 @@ class Run(backend.Run):
               'MinCount': num_tasks,
               'MaxCount': num_tasks,
               'KeyName': keypair.name}
-
+              
+      # storage setup
+      if ebs: args['BlockDeviceMappings'] = ebs
       # network setup
       args['NetworkInterfaces'] = [{'SubnetId': subnet.id,
                                     'DeviceIndex': 0,

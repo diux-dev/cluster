@@ -24,7 +24,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
 # import models.cifar10 as cifar10models
-# from distributed import DistributedDataParallel as DDP
 
 # print(models.cifar10.__dict__)
 # model_names = sorted(name for name in models.__dict__
@@ -83,8 +82,7 @@ parser.add_argument('--dist-url', default='file://sync.file', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='gloo', type=str, help='distributed backend')
 parser.add_argument('--local_rank', default=0, type=int,
-                    help='Used for multi-process training. Can either be manually set ' +
-                    'or automatically set by using \'python -m multiproc\'.')
+                    help='Used for multi-process training.')
 
 def pad(img, p=4, padding_mode='reflect'):
         return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))

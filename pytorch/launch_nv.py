@@ -22,9 +22,9 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='ami-e580c79d',
                      help="name of AMI to use ")
-parser.add_argument('--group', type=str, default='dawn_runs',
+parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
-parser.add_argument('--name', type=str, default='pytorch_test',
+parser.add_argument('--name', type=str, default='pytorch_gpus',
                      help="name of the current run")
 # parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
 parser.add_argument('--instance-type', type=str, default='t2.large',
@@ -56,41 +56,41 @@ def attach_imagnet_ebs(aws_instance, job, tag='imagenet_high_perf'):
   job.run('sudo mount /dev/xvdf mount_point')
   
 
-def main():
-  import aws_backend
+gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 
-  run = aws_backend.make_run(args.name, ami=args.ami,
-                             availability_zone=args.zone,
-                             linux_type=args.linux_type)
-  job = run.make_job('pytorch', instance_type=args.instance_type)
+
+def create_job(run, job_name, num_tasks=2):
+      install_script = ''
+  with open('setup_env.sh', 'r') as script:
+    install_script = script.read()
+
+
+  
+  ebs = [{
+    'DeviceName': '/dev/sda1',
+    'Ebs': {
+        'VolumeSize': 1000, 
+        'DeleteOnTermination': True,
+        'VolumeType': 'io1',
+        'Iops': 32000
+    }
+  }]
+
+  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
   job.wait_until_ready()
   print(job.connect_instructions)
 
   attach_imagnet_ebs(job.tasks[0].instance, job)
-  
-
-  # tensorboard stuff
-  # if tensorboard is running, kill it, it will prevent efs logdir from being
-  # deleted
-#   job.run("tmux kill-session -t tb || echo ok")
-#   logdir = '/efs/runs/%s/%s'%(args.group, args.name)
-#   job.run('rm -Rf %s || echo failed' % (logdir,)) # delete prev logs
-  
-  # Launch tensorboard visualizer in separate tmux session
-#   job.run("tmux new-session -s tb -n 0 -d")
-#   job.run("tmux send-keys -t tb:0 'source activate pytorch_p36' Enter")
-#   job.run("tmux send-keys -t tb:0 'tensorboard --logdir %s' Enter"%(logdir,))
-
 
 #   run pytorch
-  job.run('source activate pytorch_p36')
   job.run('killall python || echo failed')  # kill previous run
+  job.run('source activate pytorch_p36')
 
   # upload files
   job.upload('resnet.py')
   job.upload('fp16util.py')
-  job.upload('distributed.py')
-  job.upload('multiproc.py')
+  # job.upload('distributed.py')
+  # job.upload('multiproc.py')
   job.upload('train_imagenet_nv.py')
   job.upload('resize_images.py')
 
@@ -100,8 +100,36 @@ def main():
   
 
   # start training
-  job.run_async('python -m multiproc train_imagenet_nv.py ~/mount_point/imagenet -b 128 -a resnet50 -j 8 --fp16 -a resnet50 --lr 0.40 --epochs 45 --small')
   # job.run_async('python -m multiproc train_imagenet_fastai.py ~/mount_point/imagenet  --sz 224 -b 192 -j 8 --fp16 -a resnet50 --lr 0.40 --epochs 45 --small')
+
+  # single machine, multi-gpu
+  if num_tasks == 1:
+    job.run_async('python -m multiproc train_imagenet_nv.py ~/mount_point/imagenet -b 128 -a resnet50 -j 8 --fp16 -a resnet50 --lr 0.40 --epochs 45 --small')
+    return
+
+  # multi job
+  world_0_ip = job.tasks[0].instance.private_ip_address
+  port = '6006' # 6006, 6007, 6008, 8890, 6379
+
+  for i,t in enumerate(job.tasks):
+    # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
+    # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
+    
+    # Pytorch distributed
+    num_gpus = gpu_count[args.instance_type]
+    training_args = '~/data --loss-scale 512 --fp16 --lr 0.4 -b 128 -j 7 --dist-url env:// --dist-backend gloo --distributed' # half precision
+    dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+    t.run_async(f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}')
+
+
+
+def main():
+  import aws_backend
+
+  run = aws_backend.make_run(args.name, ami=args.ami,
+                             availability_zone=args.zone,
+                             linux_type=args.linux_type)
+  create_job(run, 'distributed_imagenet')
 
 
 if __name__=='__main__':
