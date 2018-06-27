@@ -110,7 +110,7 @@ def main():
 
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=8)
         print('Distributed: init_process_group success')
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
@@ -160,8 +160,8 @@ def main():
         valdir = os.path.join(args.data+'-sz/160', 'validation')
         args.sz = 128
     else:
-        traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'validation')
+        traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+        valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
         args.sz = 224
 
     train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, use_val_sampler=True)
@@ -174,8 +174,8 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         adjust_learning_rate(optimizer, epoch)
         if epoch==int(args.epochs*0.4+0.5):
-            traindir = os.path.join(args.data, 'train')
-            valdir = os.path.join(args.data, 'validation')
+            traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+            valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
             args.sz = 224
             train_loader,val_loader,train_sampler,val_sampler = get_loaders( traindir, valdir)
         if epoch==int(args.epochs*0.92+0.5):
@@ -348,8 +348,8 @@ def validate(val_loader, model, criterion, epoch, start_time):
 
         if args.distributed:
             reduced_loss = reduce_tensor(loss.data)
-            reduced_prec1 = reduce_tensor(prec1)
-            redued_prec5 = reduce_tensor(prec5)
+            prec1 = reduce_tensor(prec1)
+            prec5 = reduce_tensor(prec5)
         else:
             reduced_loss = loss.data
             

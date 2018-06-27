@@ -48,7 +48,9 @@ args = parser.parse_args()
 def attach_imagnet_ebs(aws_instance, job, tag):
   ec2 = util.create_ec2_resource()
   v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
-  if not v: return
+  if not v: 
+    job.run('sudo mount /dev/xvdf mount_point')
+    return
   v = v[0]
   if v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id:
         return
@@ -90,7 +92,8 @@ def create_job(run, job_name, num_tasks):
 
 #   run pytorch
   job.run('killall python || echo failed')  # kill previous run
-  job.run('source activate pytorch_p36')
+  job.run('source activate pytorch_updated') # (AS) WARNING remember to revert back 
+  # job.run('source activate pytorch_p36')
 
   # upload files
   job.upload('resnet.py')
@@ -108,10 +111,12 @@ def create_job(run, job_name, num_tasks):
     # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
     
     # Pytorch distributed
-    save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
+    # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
+    save_dir = f'~/training/{datestr}-{job_name}-{i}'
     job.run(f'mkdir {save_dir}')
     num_gpus = gpu_count[args.instance_type]
-    training_args = f'~/mount_point/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 128 -j 7 --lr 0.40 --epochs 45 --small --dist-url env:// --dist-backend gloo --distributed' # half precision
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 4 --lr 0.40 --epochs 45 --small --dist-url file://sync.file --dist-backend nccl --distributed' # old file sync
+    # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 4 --lr 0.40 --epochs 45 --small --dist-url env:// --dist-backend gloo --distributed' # half precision
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     t.run_async(f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}')
 
