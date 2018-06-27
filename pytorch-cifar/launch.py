@@ -24,7 +24,7 @@ parser.add_argument('--ami', type=str, default='ami-e580c79d',
                      help="name of AMI to use ")
 parser.add_argument('--group', type=str, default='dawn_runs',
                      help="name of the current run")
-parser.add_argument('--name', type=str, default='as_cifar10',
+parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 # parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
 parser.add_argument('--instance-type', type=str, default='t2.large',
@@ -37,6 +37,8 @@ parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 args = parser.parse_args()
 
+
+gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks=2):
   install_script = ''
   with open('setup_env.sh', 'r') as script:
@@ -54,6 +56,7 @@ def create_job(run, job_name, num_tasks=2):
   job.upload('multiproc.py')
   job.upload('train_cifar10.py')
   job.upload('train_cifar10_cpu.py')
+  job.upload('train_cifar10_dist.py')
   job.upload('setup_env.sh')
 
   # setup env
@@ -71,15 +74,22 @@ def create_job(run, job_name, num_tasks=2):
   # multi job
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
-  use_tcp = False
-        
+
   for i,t in enumerate(job.tasks):
     # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
-    if use_tcp: dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp'
-    else: dist_params = f'--world-size {num_tasks} --rank {i} --dist-addr {world_0_ip} --dist-port {port} --dist-url env:// --dist-backend gloo'
+    # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
     
-    # t.run_async(f'python train_cifar10.py ~/data --loss-scale 512 --fp16 --lr 1.4 -b 128 --lr 1.3 {dist_params}') # multi-gpu
-    t.run_async(f'python train_cifar10_cpu.py ~/data --lr 1.4 -b 128 --lr 1.3 {dist_params} --cpu') # multi-cpu
+    # Nvidia distributed.py
+    # dist_params = f'--world-size {num_tasks} --rank {i} --dist-addr {world_0_ip} --dist-port {port} --dist-url env:// --dist-backend gloo' # gloo
+    # t.run_async(f'python train_cifar10_cpu.py ~/data --loss-scale 512 --fp16 --lr 1.4 -b 128 --lr 1.3 {dist_params}') # multi-gpu
+    # t.run_async(f'python train_cifar10_cpu.py ~/data --lr 1.4 -b 128 --lr 1.3 {dist_params} --cpu') # multi-cpu
+
+    # Pytorch distributed
+    num_gpus = gpu_count[args.instance_type]
+    training_args = '~/data --loss-scale 512 --fp16 --lr 1.4 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed' # half precision - seems to error out
+    # training_args = '~/data --lr 1.4 -b 128 --lr 1.3 --dist-url env:// --dist-backend gloo --distributed' # full precision
+    dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+    t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10_dist.py {training_args}')
 
 
 
@@ -89,7 +99,7 @@ def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
-  create_job(run, 'cifar10_multi')
+  create_job(run, 'dist_multi_node')
 
 if __name__=='__main__':
   main()
