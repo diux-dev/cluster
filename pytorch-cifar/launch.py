@@ -22,7 +22,7 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='ami-e580c79d',
                      help="name of AMI to use ")
-parser.add_argument('--group', type=str, default='dawn_runs',
+parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
@@ -43,7 +43,7 @@ def create_job(run, job_name, num_tasks=2):
   install_script = ''
   with open('setup_env.sh', 'r') as script:
     install_script = script.read()
-  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, install_script=install_script)
+  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
   job.wait_until_ready()
   print(job.connect_instructions)
 
@@ -79,15 +79,9 @@ def create_job(run, job_name, num_tasks=2):
     # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
     # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
     
-    # Nvidia distributed.py
-    # dist_params = f'--world-size {num_tasks} --rank {i} --dist-addr {world_0_ip} --dist-port {port} --dist-url env:// --dist-backend gloo' # gloo
-    # t.run_async(f'python train_cifar10_cpu.py ~/data --loss-scale 512 --fp16 --lr 1.4 -b 128 --lr 1.3 {dist_params}') # multi-gpu
-    # t.run_async(f'python train_cifar10_cpu.py ~/data --lr 1.4 -b 128 --lr 1.3 {dist_params} --cpu') # multi-cpu
-
     # Pytorch distributed
     num_gpus = gpu_count[args.instance_type]
-    training_args = '~/data --loss-scale 512 --fp16 --lr 1.4 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed' # half precision - seems to error out
-    # training_args = '~/data --lr 1.4 -b 128 --lr 1.3 --dist-url env:// --dist-backend gloo --distributed' # full precision
+    training_args = '~/data --loss-scale 512 --fp16 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10_dist.py {training_args}')
 

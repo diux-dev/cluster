@@ -22,9 +22,9 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='ami-e580c79d',
                      help="name of AMI to use ")
-parser.add_argument('--group', type=str, default='dawn_runs',
+parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
-parser.add_argument('--name', type=str, default='pytorch_test',
+parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 # parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
 parser.add_argument('--instance-type', type=str, default='t2.large',

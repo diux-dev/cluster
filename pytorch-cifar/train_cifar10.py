@@ -11,6 +11,8 @@ from pathlib import *
 from fastai import io
 import tarfile
 
+
+
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -24,7 +26,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
 # import models.cifar10 as cifar10models
-from distributed import DistributedDataParallel as DDP
+
+
 
 # print(models.cifar10.__dict__)
 # model_names = sorted(name for name in models.__dict__
@@ -70,6 +73,7 @@ parser.add_argument('--weight-decay', '--wd', default=2e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
 parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
 parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
+parser.add_argument('--cpu', action='store_true', help='Run model in cpu mode.')
 parser.add_argument('--use-tta', default=False, type=bool, help='Validate model with TTA at the end of traiing.')
 parser.add_argument('--sz',       default=32, type=int, help='Size of transformed image.')
 parser.add_argument('--use-clr', default='50,12.5,0.95,0.85', type=str,
@@ -78,20 +82,24 @@ parser.add_argument('--loss-scale', type=float, default=1,
                     help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
 parser.add_argument('--warmup', action='store_true', help='Do a warm-up epoch first')
 parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
-parser.add_argument('--dist-url', default='file://sync.file', type=str,
+parser.add_argument('--dist-url', default=None, type=str,
                     help='url used to set up distributed training')
+parser.add_argument('--dist-addr', default=None, type=str,
+                    help='IP of master node used to set up distributed training')
+parser.add_argument('--dist-port', default=None, type=str,
+                    help='Port used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
 parser.add_argument('--world-size', default=1, type=int,
                     help='Number of GPUs to use. Can either be manually set ' +
                     'or automatically set by using \'python -m multiproc\'.')
-parser.add_argument('--rank', default=0, type=int,
-                    help='Used for multi-process training. Can either be manually set ' +
-                    'or automatically set by using \'python -m multiproc\'.')
+parser.add_argument('--local_rank', default=0, type=int,
+                    help='Used for multi-process training.')
 
 def pad(img, p=4, padding_mode='reflect'):
         return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))
 
 def torch_loader(data_path, size, use_val_sampler=False):
+
     # Data loading code
     traindir = os.path.join(data_path, 'train')
     valdir = os.path.join(data_path, 'test')
@@ -131,9 +139,10 @@ def torch_loader(data_path, size, use_val_sampler=False):
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-    train_loader = DataPrefetcher(train_loader)
-    val_loader = DataPrefetcher(val_loader)
-    aug_loader = DataPrefetcher(aug_loader)
+    if not args.cpu:
+        train_loader = DataPrefetcher(train_loader)
+        val_loader = DataPrefetcher(val_loader)
+        aug_loader = DataPrefetcher(aug_loader)
     if args.prof:
         train_loader.stop_after = 200
         val_loader.stop_after = 0
@@ -143,7 +152,6 @@ def torch_loader(data_path, size, use_val_sampler=False):
     data.aug_dl = aug_loader
     if train_sampler is not None: data.trn_sampler = train_sampler
     if val_sampler is not None: data.val_sampler = val_sampler
-
 
     return data
 
@@ -245,16 +253,23 @@ global arg
 args = parser.parse_args()
 #print(args); exit()
 if args.cycle_len > 1: args.cycle_len = int(args.cycle_len)
+if args.cpu:
+    import fastai.core as core
+    core.USE_GPU = False
 
 def main():
     args.distributed = args.world_size > 1
     args.gpu = 0
-    if args.distributed: args.gpu = args.rank % torch.cuda.device_count()
-
     if args.distributed:
-        torch.cuda.set_device(args.gpu)
+        if not args.cpu:
+            args.gpu = args.rank % torch.cuda.device_count()
+            torch.cuda.set_device(args.gpu)
+        if args.dist_addr: os.environ['MASTER_ADDR'] = args.dist_addr
+        if args.dist_port: os.environ['MASTER_PORT'] = args.dist_port
+        os.environ['WORLD_SIZE'] = str(args.world_size)
+        os.environ['RANK'] = str(args.rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
-        # dist.init_process_group(backend='tcp', init_method='tcp://54.213.160.204:6006', world_size=1)
+        print('Distributed: init_process_group success')
 
     if args.fp16: assert torch.backends.cudnn.enabled, "missing cudnn"
 
@@ -264,7 +279,7 @@ def main():
     import resnet
     model = resnet.resnet50()
 
-    model = model.cuda()
+    if not args.cpu: model = model.cuda()
     if args.distributed: model = DDP(model)
     if args.data_parallel: model = nn.DataParallel(model, [0,1,2,3])
 

@@ -15,7 +15,6 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
-from distributed import DistributedDataParallel as DDP
 from fp16util import network_to_half, set_grad, copy_in_params
 
 # model_names = sorted(name for name in models.__dict__
@@ -69,17 +68,17 @@ def get_parser():
     parser.add_argument('--dist-port', default=None, type=str,
                         help='Port used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
-
-    parser.add_argument('--world-size', default=1, type=int,
-                        help='Number of GPUs to use. Can either be manually set ' +
-                        'or automatically set by using \'python -m multiproc\'.')
-    parser.add_argument('--rank', default=0, type=int,
+    parser.add_argument('--local_rank', default=0, type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                         'or automatically set by using \'python -m multiproc\'.')
     return parser
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
+
+if args.local_rank > 0:
+    import sys
+    sys.stdout = open(args.save_dir/f'GPU_{args.local_rank}', 'w')
 
 def get_loaders(traindir, valdir, use_val_sampler=True, min_scale=0.08):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -113,17 +112,10 @@ def get_loaders(traindir, valdir, use_val_sampler=True, min_scale=0.08):
 def main():
     print("~~epoch\thours\ttop1Accuracy\n")
     start_time = datetime.now()
-    args.distributed = args.world_size > 1
-    args.gpu = 0
+
     if args.distributed:
-        args.gpu = args.rank % torch.cuda.device_count()
-        torch.cuda.set_device(args.gpu)
-        # dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
-        if args.dist_addr: os.environ['MASTER_ADDR'] = args.dist_addr
-        if args.dist_port: os.environ['MASTER_PORT'] = args.dist_port
-        os.environ['WORLD_SIZE'] = str(args.world_size)
-        os.environ['RANK'] = str(args.rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
+        torch.cuda.set_device(args.local_rank)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
         print('Distributed: init_process_group success')
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
