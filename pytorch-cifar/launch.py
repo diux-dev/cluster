@@ -6,7 +6,7 @@
 # numpy00: ami-f9d6dc83
 # numpy01: ami-5b524f21
 
-from collections import OrderedDict
+import collections
 import argparse
 import os
 import sys
@@ -26,8 +26,9 @@ parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
-# parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
-parser.add_argument('--instance-type', type=str, default='t2.large',
+parser.add_argument('--job-name', type=str, default='distributed',
+                     help="name of the jobs to run")
+parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -37,13 +38,15 @@ parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 parser.add_argument('--num-tasks', type=int, default=1,
                     help='number of instances to create')
+parser.add_argument('--install-script', type=str, default='setup_env.sh',
+                    help='location of script to install')
 args = parser.parse_args()
 
 
 gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks):
   install_script = ''
-  with open('setup_env.sh', 'r') as script:
+  with open(args.install_script, 'r') as script:
     install_script = script.read()
   job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
   job.wait_until_ready()
@@ -55,11 +58,8 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload('resnet.py')
   job.upload('train_cifar10.py')
-  job.upload('setup_env.sh')
 
   # setup env
-  job.run('chmod +x setup_env.sh')
-  job.run('./setup_env.sh')
   job.run('source activate fastai')
 
 
@@ -72,6 +72,7 @@ def create_job(run, job_name, num_tasks):
   # multi job
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
+  job.run('ulimit -n 9000') # to prevent tcp too many files open error
 
   for i,t in enumerate(job.tasks):
     # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
@@ -91,7 +92,7 @@ def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
-  create_job(run, 'distributed', args.num_tasks)
+  create_job(run, args.job_name, args.num_tasks)
 
 if __name__=='__main__':
   main()

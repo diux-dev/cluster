@@ -18,7 +18,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import models
+# import models
 from datetime import datetime
 
 # model_names = sorted(name for name in models.__dict__
@@ -71,7 +71,7 @@ def get_parser():
 
 def torch_loader(data_path, use_val_sampler=True, min_scale=0.08, bs=192):
     traindir = os.path.join(data_path, 'train')
-    valdir = os.path.join(data_path, 'val')
+    valdir = os.path.join(data_path, 'validation')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     tensor_tfm = [transforms.ToTensor(), normalize]
 
@@ -175,7 +175,7 @@ class ImagenetLoggingCallback(Callback):
     def log(self, string): self.f.write(string+"\n")
 
 def save_args(name, save_dir):
-    if (args.rank != 0) or not args.save_dir: return {}
+    if (args.local_rank != 0) or not args.save_dir: return {}
 
     log_dir = f'{save_dir}/training_logs'
     os.makedirs(log_dir, exist_ok=True)
@@ -187,7 +187,7 @@ def save_args(name, save_dir):
     }
 
 def save_sched(sched, save_dir):
-    if (args.rank != 0) or not args.save_dir: return {}
+    if (args.local_rank != 0) or not args.save_dir: return {}
     log_dir = f'{save_dir}/training_logs'
     sched.save_path = log_dir
     sched.plot_loss()
@@ -219,7 +219,7 @@ if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank
 def main():
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=8)
     
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else:               model = models.__dict__[args.arch]()

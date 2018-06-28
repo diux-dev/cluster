@@ -10,9 +10,11 @@ if [ ! -d "$FASTAI_DIR" ]; then
     conda env update fastai
 
     # Distributed requires putorch 0.4 - consider using cuda91
-    conda install pytorch torchvision cuda90 -c pytorch
+    conda install pytorch torchvision cuda91 -c pytorch -n fastai
     ln -s ~/fastai/fastai ~/anaconda3/envs/fastai/lib/python3.6/site-packages
-
+    
+    # (AS) WARNING: conda activate does not work inside a script. You might need to use pip
+    # conda activate fastai
     pip uninstall pillow --yes
     CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 fi
@@ -27,7 +29,7 @@ cd ~/
 
 DATA_DIR=~/data
 if [ ! -d "$DATA_DIR" ]; then
-    mkdir data
+    mkdir -p data
 fi
 
 
