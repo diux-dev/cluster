@@ -27,6 +27,8 @@ parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
+parser.add_argument('--job-name', type=str, default='distributed',
+                     help="name of the jobs to run")
 # parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
 parser.add_argument('--instance-type', type=str, default='t2.large',
                      help="type of instance")
@@ -71,7 +73,7 @@ gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4
 def create_job(run, job_name, num_tasks):
   install_script = ''
   if args.install_script:
-    with open('setup_env.sh', 'r') as f:
+    with open(args.install_script, 'r') as f:
       install_script = f.read()
   
   ebs = [{
@@ -80,7 +82,7 @@ def create_job(run, job_name, num_tasks):
         'VolumeSize': 1000, 
         'DeleteOnTermination': True,
         'VolumeType': 'io1',
-        'Iops': 32000
+        'Iops': 20000
     }
   }]
 
@@ -92,7 +94,7 @@ def create_job(run, job_name, num_tasks):
 
 #   run pytorch
   job.run('killall python || echo failed')  # kill previous run
-  job.run('source activate pytorch_updated') # (AS) WARNING remember to revert back 
+  job.run('conda activate pytorch_updated') # (AS) WARNING remember to revert back 
   # job.run('source activate pytorch_p36')
 
   # upload files
@@ -105,6 +107,7 @@ def create_job(run, job_name, num_tasks):
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   datestr = datetime.datetime.now().replace(microsecond=0).isoformat()
+  job.run('ulimit -n 9000') # to prevent tcp too many files open error
 
   for i,t in enumerate(job.tasks):
     # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
@@ -115,8 +118,8 @@ def create_job(run, job_name, num_tasks):
     save_dir = f'~/training/{datestr}-{job_name}-{i}'
     job.run(f'mkdir {save_dir}')
     num_gpus = gpu_count[args.instance_type]
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 4 --lr 0.40 --epochs 45 --small --dist-url file://sync.file --dist-backend nccl --distributed' # old file sync
-    # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 4 --lr 0.40 --epochs 45 --small --dist-url env:// --dist-backend gloo --distributed' # half precision
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 8 --lr 0.30 --epochs 45 --small --dist-url file://sync.file --dist-backend nccl --distributed' # old file sync
+    # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 -j 7 --lr 0.40 --epochs 45 --small --dist-url env:// --dist-backend gloo --distributed' # half precision
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     t.run_async(f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}')
 
@@ -128,7 +131,7 @@ def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
-  create_job(run, 'distributed', args.num_tasks)
+  create_job(run, args.job_name, args.num_tasks)
 
 
 if __name__=='__main__':

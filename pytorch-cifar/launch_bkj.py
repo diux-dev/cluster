@@ -6,14 +6,13 @@
 # numpy00: ami-f9d6dc83
 # numpy01: ami-5b524f21
 
-from collections import OrderedDict
+import collections
 import argparse
 import os
 import sys
 import time
-import collections
+
 import boto3
-import datetime
 
 module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
@@ -29,8 +28,7 @@ parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 parser.add_argument('--job-name', type=str, default='distributed',
                      help="name of the jobs to run")
-# parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
-parser.add_argument('--instance-type', type=str, default='t2.large',
+parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -40,71 +38,40 @@ parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 parser.add_argument('--num-tasks', type=int, default=1,
                     help='number of instances to create')
-parser.add_argument('--install-script', type=str, default='',
+parser.add_argument('--install-script', type=str, default='setup_env.sh',
                     help='location of script to install')
-parser.add_argument('--attach-volume', type=str, default='',
-                    help='tag name of ebs volume to attach')
 args = parser.parse_args()
 
 
-def attach_imagnet_ebs(aws_instance, job, tag):
-  ec2 = util.create_ec2_resource()
-  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
-  if not v: 
-    job.run('sudo mount /dev/xvdf mount_point')
-    return
-  v = v[0]
-  if v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id:
-    return
-  if v.state != 'available': 
-    print('Detaching from current instance')
-    v.detach_from_instance()
-    time.sleep(3)
-  print('Attaching to instance:' , aws_instance.id)
-  v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
-  time.sleep(3)
-  job.run('sudo mkdir mount_point -p')
-  job.run('sudo mount /dev/xvdf mount_point')
-  
-
 gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
-
 def create_job(run, job_name, num_tasks):
   install_script = ''
-  if args.install_script:
-    with open(args.install_script, 'r') as f:
-      install_script = f.read()
-  
-  ebs = [{
-    'DeviceName': '/dev/sda1',
-    'Ebs': {
-      'VolumeSize': 1000, 
-      'DeleteOnTermination': True,
-      'VolumeType': 'io1',
-      'Iops': 32000
-    }
-  }]
-
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
+  with open(args.install_script, 'r') as script:
+    install_script = script.read()
+  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
   job.wait_until_ready()
   print(job.connect_instructions)
 
-  if args.attach_volume: attach_imagnet_ebs(job.tasks[0].instance, job, tag=args.attach_volume)
-
-
 #   run pytorch
   job.run('killall python || echo failed')  # kill previous run
-  job.run('conda activate fastai') # (AS) WARNING remember to revert back 
-  # job.run('source activate pytorch_p36')
 
   # upload files
   job.upload('resnet.py')
-  job.upload('train_imagenet_fastai.py')
-  
+  job.upload('train_cifar10_bkj.py')
+
+  # setup env
+  job.run('source activate fastai')
+
+
+  # single machine
+  if num_tasks == 1:
+    # job.run_async('python train_cifar10.py ~/data --loss-scale 512 --fp16 --lr 1.3') # multi-gpu
+    job.run_async('python train_cifar10_bkj.py') # single instance
+    return
+
   # multi job
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
-  datestr = datetime.datetime.now().replace(microsecond=0).isoformat()
   job.run('ulimit -n 9000') # to prevent tcp too many files open error
 
   for i,t in enumerate(job.tasks):
@@ -112,15 +79,11 @@ def create_job(run, job_name, num_tasks):
     # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
     
     # Pytorch distributed
-    # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/training/{datestr}-{job_name}-{i}'
-    job.run(f'mkdir {save_dir}')
     num_gpus = gpu_count[args.instance_type]
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url file://sync.file --dist-backend nccl --distributed' # old file sync
-    # (AS) WARNING: try 0.3 learning rate
-    # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    training_args = '~/data --loss-scale 512 --fp16 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    t.run_async(f'python -m torch.distributed.launch {dist_args} train_imagenet_fastai.py {training_args}')
+    t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
+
 
 
 def main():
@@ -130,7 +93,6 @@ def main():
                              availability_zone=args.zone,
                              linux_type=args.linux_type)
   create_job(run, args.job_name, args.num_tasks)
-
 
 if __name__=='__main__':
   main()

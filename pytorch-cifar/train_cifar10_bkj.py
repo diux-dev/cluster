@@ -1,5 +1,5 @@
 from fastai.conv_learner import *
-from fastai.models.cifar10.wideresnet import wrn_22_cat, wrn_22, WideResNetConcat
+# from fastai.models.cifar10.wideresnet import wrn_22_cat, wrn_22, WideResNetConcat
 torch.backends.cudnn.benchmark = True
 PATH = Path("data/cifar10/")
 os.makedirs(PATH,exist_ok=True)
@@ -18,8 +18,6 @@ def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
 
     val_bs = val_bs or bs
     # Data loading code
-    traindir = str(data_path/'train')
-    valdir = str(data_path/'test')
     tfms = [transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
 
     train_tfms = transforms.Compose([
@@ -27,6 +25,7 @@ def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
         transforms.RandomCrop(size),
         transforms.RandomHorizontalFlip(),
     ] + tfms)
+    val_tfms = transforms.Compose(tfms)
 
     train_dataset = datasets.CIFAR10(root=data_path, train=True, download=True, transform=train_tfms)
     val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=True, transform=val_tfms)
@@ -41,7 +40,7 @@ def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
         num_workers=workers, pin_memory=True)
     
     aug_loader = DataLoader(
-        datasets.ImageFolder(valdir, train_tfms),
+        aug_dataset,
         batch_size=bs, shuffle=False,
         num_workers=workers, pin_memory=True)
 
@@ -182,13 +181,21 @@ def get_TTA_accuracy_2(learn):
     acc = accuracy(torch.FloatTensor(preds),torch.LongTensor(y))
     print('TTA acc:', acc)
 
-# m = PreActResNet(PreActBlock, [2,2,2,2], concatpool=True)
-bs=256
-sz=32
+# orig submission params
+# bs = 128
+# lrs = (0, 1e-1, 5e-3, 0)
+
+# higher batch size - able to converge around epoch 31 ~ 3:48
+bs = 256
+lrs = (0, 2e-1, 1e-2, 0)
+
+
+
+sz = 32
 data = torch_loader(PATH, sz, bs, 512)
 
 m = ResNet18()
-m = FP16(m.cuda())
+m = FP16(m.cuda()) # accuracy actually increases if we don't copy over fp32 weights (learner.half())
 learn = Learner.from_model_data(m, data)
 # learn.half()
 learn.crit = F.cross_entropy
@@ -201,9 +208,9 @@ learn.opt_fn = partial(optim.SGD, nesterov=True, momentum=0.9)
 def_phase = {'opt_fn':learn.opt_fn, 'wds':wd, 'momentum':0.9}
 
 phases = [
-    TrainingPhase(**def_phase, epochs=15, lr=(0, 2e-1), lr_decay=DecayType.LINEAR),
-    TrainingPhase(**def_phase, epochs=15, lr=(2e-1, 1e-2), lr_decay=DecayType.LINEAR),
-    TrainingPhase(**def_phase, epochs=5, lr=(1e-2, 0), lr_decay=DecayType.LINEAR),
+    TrainingPhase(**def_phase, epochs=15, lr=lrs[:2], lr_decay=DecayType.LINEAR),
+    TrainingPhase(**def_phase, epochs=15, lr=lrs[1:3], lr_decay=DecayType.LINEAR),
+    TrainingPhase(**def_phase, epochs=5, lr=lrs[-2:], lr_decay=DecayType.LINEAR),
 ]
 
 learn.fit_opt_sched(phases)
