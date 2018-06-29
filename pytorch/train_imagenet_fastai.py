@@ -161,11 +161,11 @@ class ImagenetLoggingCallback(Callback):
         self.batch = 0
         self.epoch = 0
         self.f = open(self.save_path, "a", 1)   
-        self.log("epoch\thours\ttop1Accuracy\ttop5Accuracy")
+        self.log("epoch\thours\tAccuracy\ttop1Accuracy\ttop5Accuracy")
     def on_epoch_end(self, metrics):
         current_time = datetime.now()
         time_diff = current_time - self.start_time
-        log_str = f'{self.epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{metrics[1]}\t{metrics[2]}'
+        log_str = f'{self.epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{metrics[1]}\t{metrics[2]}\t{metrics[3]}'
         self.log(log_str)
         self.epoch += 1
     def on_batch_end(self, metrics):
@@ -230,7 +230,7 @@ def main():
     if args.fp16: model = FP16(model) # Seeing if half precision works if we set it before DistributedDataParallel
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
-    data1 = torch_loader(args.data, size=args.sz, bs=192)
+    data1 = torch_loader(f'{args.data}-sz/320', size=args.sz, bs=192) # AS Try this laters
     learner = Learner.from_model_data(model, data1)
     learner.crit = F.cross_entropy
     learner.metrics = [accuracy, top1, top5]

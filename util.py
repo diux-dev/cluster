@@ -471,6 +471,55 @@ def get_mount_targets_dict(efs_id):
   return result
 
 
+
+def wait_on_fulfillment(ec2c, reqs):
+    def get_instance_id(req):
+      while req['State'] != 'active':
+          print('Waiting on spot fullfillment...')
+          time.sleep(5)
+          reqs = ec2c.describe_spot_instance_requests(Filters=[{'Name': 'spot-instance-request-id', 'Values': [req['SpotInstanceRequestId']]}])
+          req = reqs['SpotInstanceRequests'][0]
+          req_status = req['Status']
+          if req_status['Code'] not in ['pending-evaluation', 'pending-fulfillment', 'fulfilled']:
+              print('Spot instance request failed:', req_status['Message'])
+              print('Cancelling request. Please try again or use on demand.')
+              ec2c.cancel_spot_instance_requests(SpotInstanceRequestIds=[req['SpotInstanceRequestId']])
+              print(req)
+              return None
+      instance_id = req['InstanceId']
+      print('Fulfillment completed. InstanceId:', instance_id)
+      return instance_id
+    return [get_instance_id(req) for req in reqs]
+
+def create_spot_instances(launch_specs, spot_price=None):
+    ec2c = create_ec2_client()
+    num_tasks = launch_specs['MinCount']
+    del launch_specs['MinCount']
+    del launch_specs['MaxCount']
+
+    if spot_price is None:
+      spot_requests = ec2c.request_spot_instances(LaunchSpecification=launch_specs, InstanceCount=num_tasks)    
+    else:
+      spot_requests = ec2c.request_spot_instances(SpotPrice=spot_price, LaunchSpecification=launch_specs, InstanceCount=num_tasks)
+    spot_requests = spot_requests['SpotInstanceRequests']
+    instance_ids = wait_on_fulfillment(ec2c, spot_requests)
+    for i in instance_ids: 
+      if i == None: 
+        print('Failed to create spot instances')
+        return
+
+    print('Success...')
+    ec2 = create_ec2_resource()
+    instances = list(ec2.instances.filter(Filters=[{'Name': 'instance-id', 'Values': instance_ids}]))
+    # instance.reboot()
+    # instance.wait_until_running()
+    # instance.create_tags(Tags=[{'Key':'Name','Value':f'{name}'}])
+    # volume = list(instance.volumes.all())[0]
+    # volume.create_tags(Tags=[{'Key':'Name','Value':f'{name}'}])
+    # print(f'Completed. SSH: ', get_ssh_command(instance))
+    return instances
+
+
 def get_keypair_fn(keypair_name):
   """Generate canonical location for .pem file for given keypair and
   default region."""

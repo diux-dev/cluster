@@ -127,8 +127,9 @@ def create_job(run, job_name, num_tasks):
     # (AS) WARNING: try 0.3 learning rate
     # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url env:// --dist-backend nccl --distributed' # old file sync
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    t.run_async(f'python -m torch.distributed.launch {dist_args} train_imagenet_fastai.py {training_args}')
-
+    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_fastai.py {training_args}'
+    t.run(f'echo "{cmd}" > {save_dir}/script.log')
+    t.run_async(cmd)
 
 def main():
   import aws_backend
