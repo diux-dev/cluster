@@ -94,7 +94,7 @@ def create_job(run, job_name, num_tasks):
 
 #   run pytorch
   job.run('killall python || echo failed')  # kill previous run
-  job.run('conda activate fastai') # (AS) WARNING remember to revert back 
+  job.run('source activate fastai') # (AS) WARNING remember to revert back 
   # job.run('source activate pytorch_p36')
 
   # upload files
@@ -106,6 +106,14 @@ def create_job(run, job_name, num_tasks):
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   datestr = datetime.datetime.now().replace(microsecond=0).isoformat()
   job.run('ulimit -n 9000') # to prevent tcp too many files open error
+  num_gpus = gpu_count[args.instance_type]
+
+  if num_gpus <= 1:
+    save_dir = f'~/training/{datestr}-{job_name}'
+    job.run(f'mkdir {save_dir} -p')
+    training_args = f'~/mount_point/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45' # old file sync
+    job.run_async(f'python train_imagenet_fastai.py {training_args}')
+    return
 
   for i,t in enumerate(job.tasks):
     # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
@@ -114,8 +122,7 @@ def create_job(run, job_name, num_tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
     save_dir = f'~/training/{datestr}-{job_name}-{i}'
-    job.run(f'mkdir {save_dir}')
-    num_gpus = gpu_count[args.instance_type]
+    job.run(f'mkdir {save_dir} -p')
     training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url file://sync.file --dist-backend nccl --distributed' # old file sync
     # (AS) WARNING: try 0.3 learning rate
     # training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url env:// --dist-backend nccl --distributed' # old file sync

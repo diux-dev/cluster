@@ -69,7 +69,7 @@ def get_parser():
                         'or automatically set by using \'python -m multiproc\'.')
     return parser
 
-def torch_loader(data_path, use_val_sampler=True, min_scale=0.08, bs=192):
+def torch_loader(data_path, size, use_val_sampler=True, min_scale=0.08, bs=192):
     traindir = os.path.join(data_path, 'train')
     valdir = os.path.join(data_path, 'validation')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -77,13 +77,13 @@ def torch_loader(data_path, use_val_sampler=True, min_scale=0.08, bs=192):
 
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
-            transforms.RandomResizedCrop(args.sz, scale=(min_scale, 1.0)),
+            transforms.RandomResizedCrop(size, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
         ] + tensor_tfm))
     val_dataset = datasets.ImageFolder(
         valdir, transforms.Compose([
-            transforms.Resize(int(args.sz*1.14)),
-            transforms.CenterCrop(args.sz),
+            transforms.Resize(int(size*1.14)),
+            transforms.CenterCrop(size),
         ] + tensor_tfm))
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
@@ -97,7 +97,7 @@ def torch_loader(data_path, use_val_sampler=True, min_scale=0.08, bs=192):
         num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
     data = ModelData(data_path, train_loader, val_loader)
-    data.sz = args.sz
+    data.sz = size
     if train_sampler is not None: data.trn_sampler = train_sampler
     if val_sampler is not None: data.val_sampler = val_sampler
     return data
@@ -160,7 +160,7 @@ class ImagenetLoggingCallback(Callback):
     def on_train_begin(self):
         self.batch = 0
         self.epoch = 0
-        self.f = open(self.save_path, "a", 1)
+        self.f = open(self.save_path, "a", 1)   
         self.log("epoch\thours\ttop1Accuracy\ttop5Accuracy")
     def on_epoch_end(self, metrics):
         current_time = datetime.now()
@@ -230,7 +230,7 @@ def main():
     if args.fp16: model = FP16(model) # Seeing if half precision works if we set it before DistributedDataParallel
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
-    data1 = torch_loader(args.data, args.sz)
+    data1 = torch_loader(args.data, size=args.sz, bs=192)
     learner = Learner.from_model_data(model, data1)
     learner.crit = F.cross_entropy
     learner.metrics = [accuracy, top1, top5]
@@ -238,8 +238,8 @@ def main():
 
     if args.prof: args.epochs = 1
     if args.use_clr: args.use_clr = tuple(map(float, args.use_clr.split(',')))
-    data0 = torch_loader(f'{args.data}-sz/160', 128)
-    data2 = torch_loader(args.data, 288, bs=128, min_scale=0.5)
+    data0 = torch_loader(f'{args.data}-sz/160', size=128, bs=192)
+    data2 = torch_loader(args.data, size=288, bs=128, min_scale=0.5)
 
     update_model_dir(learner, args.save_dir)
     sargs = save_args('first_run', args.save_dir)
