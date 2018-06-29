@@ -55,6 +55,7 @@ class Run(backend.Run):
     linux_type = kwargs.get('linux_type', 'ubuntu')
     user_data = kwargs.get('user_data', '')
     ebs = kwargs.get('ebs', '')
+    use_spot = kwargs.get('use_spot', False)
 
     if user_data:
       user_data+='\necho userdata_ok >> /tmp/is_initialized\n'
@@ -103,7 +104,8 @@ class Run(backend.Run):
       args['Placement'] = placement_arg
       args['UserData'] = user_data
 
-      instances = ec2.create_instances(**args)
+      if use_spot: instances = u.create_spot_instances(args)
+      else: instances = ec2.create_instances(**args)
       assert len(instances) == num_tasks
 
       # assign proper names to tasks
