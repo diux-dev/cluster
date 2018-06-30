@@ -160,10 +160,10 @@ def main():
         valdir = os.path.join(args.data+'-sz/160', 'validation')
         args.sz = 128
     else:
-        traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-        valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-        # traindir = os.path.join(args.data, 'train')
-        # valdir = os.path.join(args.data, 'validation')
+        # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+        # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
+        traindir = os.path.join(args.data, 'train')
+        valdir = os.path.join(args.data, 'validation')
         args.sz = 224
 
     train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, use_val_sampler=True)
@@ -173,15 +173,15 @@ def main():
     print("Created data loaders")
 
     print("Begin training")
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs+5):
         adjust_learning_rate(optimizer, epoch)
         if epoch==int(args.epochs*0.4+0.5):
-            traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-            valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-            # traindir = os.path.join(args.data, 'train')
-            # valdir = os.path.join(args.data, 'validation')
+            # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+            # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
+            traindir = os.path.join(args.data, 'train')
+            valdir = os.path.join(args.data, 'validation')
             args.sz = 224
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders( traindir, valdir)
+            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir)
         if epoch==int(args.epochs*0.92+0.5):
             args.sz=288
             args.batch_size=128

@@ -91,13 +91,13 @@ class Job:
     
   def run(self, cmd, *args, **kwargs):
     """Runs command on every task in the job."""
-    
+
     for task in self.tasks:
       task.run(cmd, *args, **kwargs)
 
   def run_async_join(self, cmd, *args, **kwargs):
     import threading
-    """Runs command on every task in the job."""
+    """Runs command on every task in the job async. Then waits for all to finish"""
     def t_run_cmd(t): t.run(cmd, *args, **kwargs)
     t_threads = [threading.Thread(name=f't_{i}', target=t_run_cmd, args=[t]) for i,t in enumerate(self.tasks)]
     for thread in t_threads: thread.start()
