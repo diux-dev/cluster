@@ -7,10 +7,10 @@ if [ ! -d "$FASTAI_DIR" ]; then
     # Control will enter here if $DIRECTORY doesn't exist.
     git clone https://github.com/fastai/fastai.git
     cd ~/fastai
-    conda env update fastai
+    conda env update fastai -y
 
     # Distributed requires putorch 0.4 - consider using cuda91
-    conda install pytorch torchvision cuda91 -c pytorch -n fastai
+    conda install pytorch torchvision cuda90 -c pytorch -n fastai -y
     ln -s ~/fastai/fastai ~/anaconda3/envs/fastai/lib/python3.6/site-packages
     
     # (AS) WARNING: conda activate does not work inside a script. You might need to use pip
@@ -33,8 +33,21 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 
 
+if [ ! -d "$DATA_DIR/imagenet" ]; then
+    cd $DATA_DIR
+    rsync --progress /efs/imagenet-data-sorted.tar $DATA_DIR
+    tar -xvf $DATA_DIR/imagenet-data-sorted.tar
+    rm $DATA_DIR/imagenet-data-sorted.tar
+    mv $DATA_DIR/raw-data $DATA_DIR/imagenet
 
+    rsync --progress /efs/imagenet-sz.tar $DATA_DIR
+    tar -xvf $DATA_DIR/imagenet-sz.tar
+    rm $DATA_DIR/imagenet-sz.tar
+    
+    cd ~/
+fi
 
+echo ok > /tmp/fastai_setup_complete
 
 
 # POSITIONAL=()

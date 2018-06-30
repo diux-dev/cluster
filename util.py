@@ -492,6 +492,9 @@ def wait_on_fulfillment(ec2c, reqs):
     return [get_instance_id(req) for req in reqs]
 
 def create_spot_instances(launch_specs, spot_price=None):
+    # (AS) forcing spot price to be higher for now
+    spot_price = '25'
+    
     ec2c = create_ec2_client()
     num_tasks = launch_specs['MinCount']
     del launch_specs['MinCount']

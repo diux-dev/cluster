@@ -219,7 +219,7 @@ if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank
 def main():
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=8)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
     
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else:               model = models.__dict__[args.arch]()
@@ -230,7 +230,8 @@ def main():
     if args.fp16: model = FP16(model) # Seeing if half precision works if we set it before DistributedDataParallel
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
-    data1 = torch_loader(f'{args.data}-sz/320', size=args.sz, bs=192) # AS Try this laters
+    # data1 = torch_loader(f'{args.data}-sz/320', size=args.sz, bs=192) # AS Try this laters
+    data1 = torch_loader(args.data, size=args.sz, bs=192) # AS Try this laters
     learner = Learner.from_model_data(model, data1)
     learner.crit = F.cross_entropy
     learner.metrics = [accuracy, top1, top5]
@@ -240,6 +241,7 @@ def main():
     if args.use_clr: args.use_clr = tuple(map(float, args.use_clr.split(',')))
     data0 = torch_loader(f'{args.data}-sz/160', size=128, bs=192)
     data2 = torch_loader(args.data, size=288, bs=128, min_scale=0.5)
+    data3 = torch_loader(args.data, size=288, bs=128, min_scale=0.5, use_val_sampler=False)
 
     update_model_dir(learner, args.save_dir)
     sargs = save_args('first_run', args.save_dir)
@@ -253,7 +255,7 @@ def main():
             TrainingPhase(**def_phase, epochs=1, lr=(lr/100,lr), lr_decay=DecayType.LINEAR),
             TrainingPhase(**def_phase, epochs=1, lr=(lr,lr/100), lr_decay=DecayType.LINEAR)]
     else:
-        data = [data0,data0,data1,data1,data1,data2,data2]
+        data = [data0,data0,data1,data1,data1,data2,data3]
         phases = [
             TrainingPhase(**def_phase, epochs=4, lr=(lr/100,lr), lr_decay=DecayType.LINEAR),
             TrainingPhase(**def_phase, epochs=epoch_sched[0]-6, lr=lr),
