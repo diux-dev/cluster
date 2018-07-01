@@ -9,6 +9,9 @@
 # master command:
 # python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c
 
+# spot command:
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
+
 from collections import OrderedDict
 import argparse
 import os
@@ -153,7 +156,8 @@ def create_job(run, job_name, num_tasks):
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
     save_dir = f'~/data/training/{datestr}-{job_name}-{i}'
     t.run(f'mkdir {save_dir} -p')
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    lr = 0.4 * num_tasks
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 45 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo "{cmd}" > {save_dir}/script.log')
