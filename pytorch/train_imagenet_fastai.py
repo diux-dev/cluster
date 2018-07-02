@@ -239,16 +239,17 @@ def main():
 
     if args.prof: args.epochs = 1
     if args.use_clr: args.use_clr = tuple(map(float, args.use_clr.split(',')))
-    data0 = torch_loader(f'{args.data}-sz/160', size=128, bs=192)
-    data2 = torch_loader(args.data, size=288, bs=128, min_scale=0.5)
-    data3 = torch_loader(args.data, size=288, bs=128, min_scale=0.5, use_val_sampler=False)
+    data0 = torch_loader(f'{args.data}-sz/160', size=128, bs=256)
+    data2 = torch_loader(args.data, size=288, bs=160, min_scale=0.5)
+    data3 = torch_loader(args.data, size=288, bs=160, min_scale=0.5, use_val_sampler=False)
 
     update_model_dir(learner, args.save_dir)
     sargs = save_args('first_run', args.save_dir)
 
     def_phase = {'opt_fn':optim.SGD, 'wds':args.weight_decay}
     lr = args.lr
-    epoch_sched = [int(args.epochs*o+0.5) for o in (0.47, 0.31, 0.17, 0.05)]
+    epoch_sched = [int(args.epochs*o+0.5) for o in (0, 0.1, 0.4, 0.47, 0.78, 0.92, 0.95, 1)]
+    num_epochs = [epoch_sched[n]-epoch_sched[n-1] for n in range(1,len(epoch_sched))]
     if args.warmonly:
         data = [data0,data1]
         phases = [
@@ -257,14 +258,19 @@ def main():
     else:
         data = [data0,data0,data1,data1,data1,data2,data3]
         phases = [
-            TrainingPhase(**def_phase, epochs=4, lr=(lr/100,lr), lr_decay=DecayType.LINEAR),
-            TrainingPhase(**def_phase, epochs=epoch_sched[0]-6, lr=lr),
-            TrainingPhase(**def_phase, epochs=2,                lr=lr),
-            TrainingPhase(**def_phase, epochs=epoch_sched[1],   lr=lr/10),
-            TrainingPhase(**def_phase, epochs=epoch_sched[2]-2, lr=lr/100),
-            TrainingPhase(**def_phase, epochs=2,                lr=lr/100),
-            TrainingPhase(**def_phase, epochs=epoch_sched[3],   lr=lr/1000)]
+            TrainingPhase(**def_phase, epochs=num_epochs[0], lr=(lr/100,lr), lr_decay=DecayType.LINEAR),
+            TrainingPhase(**def_phase, epochs=num_epochs[1], lr=lr),
+            TrainingPhase(**def_phase, epochs=num_epochs[2], lr=lr),
+            TrainingPhase(**def_phase, epochs=num_epochs[3],   lr=lr/10),
+            TrainingPhase(**def_phase, epochs=num_epochs[4], lr=lr/100),
+            TrainingPhase(**def_phase, epochs=num_epochs[5], lr=lr/100),
+            TrainingPhase(**def_phase, epochs=num_epochs[6],   lr=lr/1000)]
 
+    # getting out of memory. Maybe we need to collect memory?
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+    
     learner.fit_opt_sched(phases, data_list=data, loss_scale=args.loss_scale, **sargs)
     save_sched(learner.sched, args.save_dir)
 
