@@ -58,27 +58,27 @@ args = parser.parse_args()
 
 
 ## Setup instance:
-ebs = None
-ebs = [{
-  'DeviceName': '/dev/sda1',
-  'Ebs': {
-    'VolumeSize': 1000, 
-    'DeleteOnTermination': True,
-    'VolumeType': 'io1',
-    'Iops': 14000
-  }
-}]
-
-# For using external ebs (so we don't hit iops limit)
+# ebs = None
 # ebs = [{
 #   'DeviceName': '/dev/sda1',
 #   'Ebs': {
-#     'VolumeSize': 300, 
+#     'VolumeSize': 1000, 
 #     'DeleteOnTermination': True,
 #     'VolumeType': 'io1',
-#     'Iops': 8000
+#     'Iops': 14000
 #   }
 # }]
+
+# For using external ebs (so we don't hit iops limit)
+ebs = [{
+  'DeviceName': '/dev/sda1',
+  'Ebs': {
+    'VolumeSize': 500, 
+    'DeleteOnTermination': True,
+    'VolumeType': 'io1',
+    'Iops': 8000
+  }
+}]
 
 def attach_instance_ebs(aws_instance, tag):
   ec2 = util.create_ec2_resource()
@@ -128,8 +128,7 @@ def create_job(run, job_name, num_tasks):
   job.upload('resnet.py')
   job.upload('fp16util.py')
   job.upload('train_imagenet_nv.py')
-  job.upload('resize_images.py')
-
+  job.upload('train_imagenet_nv_8gpu.py')
 
   # setup machines
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
@@ -157,12 +156,12 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr1d6-e55'
+    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e68-lars'
     t.run(f'mkdir {save_dir} -p')
-    lr = 0.4 * num_tasks
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    lr = 1.5 * num_tasks
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --epochs 68 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv_8gpu.py {training_args}'
     t.run(f'echo "{cmd}" > {save_dir}/script.log')
     task_cmds.append(cmd)
 

@@ -37,6 +37,8 @@ def get_parser():
                         help='number of data loading workers (default: 4)')
     parser.add_argument('--epochs', default=90, type=int, metavar='N',
                         help='number of total epochs to run')
+    parser.add_argument('--warmup', default=0, type=int, metavar='N',
+                        help='number of additional epochs to warmup')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -75,10 +77,10 @@ cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
-def get_loaders(traindir, valdir, use_val_sampler=True, min_scale=0.08):
+def get_loaders(traindir, valdir, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     tensor_tfm = [transforms.ToTensor(), normalize]
-
+    val_bs = val_bs or bs
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
             transforms.RandomResizedCrop(args.sz, scale=(min_scale, 1.0)),
@@ -94,15 +96,14 @@ def get_loaders(traindir, valdir, use_val_sampler=True, min_scale=0.08):
     val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        train_dataset, batch_size=bs, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=int(args.batch_size), shuffle=False,
+        val_dataset, batch_size=val_bs, shuffle=False,
         num_workers=args.workers, pin_memory=True, sampler=val_sampler if use_val_sampler else None)
 
     return train_loader,val_loader,train_sampler,val_sampler
-
 
 def main():
     print("~~epoch\thours\ttop1Accuracy\n")
@@ -166,29 +167,39 @@ def main():
         valdir = os.path.join(args.data, 'validation')
         args.sz = 224
 
-    train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, use_val_sampler=True)
+    train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, use_val_sampler=True)
 
     if args.evaluate: return validate(val_loader, model, criterion, epoch, start_time)
 
     print("Created data loaders")
 
     print("Begin training")
-    for epoch in range(args.start_epoch, args.epochs+5):
+    for epoch in range(args.start_epoch, args.epochs+args.warmup):
         adjust_learning_rate(optimizer, epoch)
-        if epoch==int(args.epochs*0.4+0.5):
+        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
             # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
             # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             args.sz = 224
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir)
-        if epoch==int(args.epochs*0.92+0.5):
+            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.bs)
+        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
             args.sz=288
-            args.batch_size=128
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, use_val_sampler=False, min_scale=0.5)
+                traindir, valdir, bs=160, val_bs=128, use_val_sampler=True, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-2:
+            args.sz=288
+            traindir = os.path.join(args.data, 'train')
+            valdir = os.path.join(args.data, 'validation')
+            train_loader,val_loader,train_sampler,val_sampler = get_loaders(
+                traindir, valdir, bs=160, val_bs=128, use_val_sampler=False, min_scale=0.5)
+
+        # getting out of memory. Maybe we need to collect memory?
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -209,10 +220,16 @@ def main():
                 'best_prec1': best_prec1, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
-        # getting out of memory. Maybe we need to collect memory?
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
+def adjust_learning_rate(optimizer, epoch):
+    """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
+    if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
+    elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+    elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+    elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+    else         : lr = args.lr/1000
+    if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/3 # even smaller lr for warmup
+    for param_group in optimizer.param_groups: param_group['lr'] = lr
+
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
@@ -319,14 +336,17 @@ def train(train_loader, model, criterion, optimizer, epoch):
         input, target = prefetcher.next()
 
         if args.local_rank == 0 and i % args.print_freq == 0 and i > 1:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1=top1, top5=top5))
+            output = ('Epoch: [{0}][{1}/{2}]\t' \
+                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
+                    + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
+                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
+                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
+                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
+                    epoch, i, len(train_loader), batch_time=batch_time,
+                    data_time=data_time, loss=losses, top1=top1, top5=top5)
+            print(output)
+            with open(f'{args.save_dir}/full.log', 'a') as f:
+                f.write(output + '\n')
 
 
 def validate(val_loader, model, criterion, epoch, start_time):
@@ -373,13 +393,16 @@ def validate(val_loader, model, criterion, epoch, start_time):
         end = time.time()
 
         if args.local_rank == 0 and i % args.print_freq == 0:
-            print('Test: [{0}/{1}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
-                   i, len(val_loader), batch_time=batch_time, loss=losses,
-                   top1=top1, top5=top5))
+            output = ('Test: [{0}/{1}]\t' \
+                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
+                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
+                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
+                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
+                    i, len(val_loader), batch_time=batch_time, loss=losses,
+                    top1=top1, top5=top5)
+            print(output)
+            with open(f'{args.save_dir}/full.log', 'a') as f:
+                f.write(output + '\n')
 
         input, target = prefetcher.next()
 
@@ -412,17 +435,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
-
-def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-    if   epoch<4 : lr = args.lr/(4-epoch)
-    elif epoch<int(args.epochs*0.47+0.5): lr = args.lr/1
-    elif epoch<int(args.epochs*0.78+0.5): lr = args.lr/10
-    elif epoch<int(args.epochs*0.95+0.5): lr = args.lr/100
-    else         : lr = args.lr/1000
-    for param_group in optimizer.param_groups: param_group['lr'] = lr
-
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""

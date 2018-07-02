@@ -70,7 +70,7 @@ ebs = [{
 # ebs = [{
 #   'DeviceName': '/dev/sda1',
 #   'Ebs': {
-#     'VolumeSize': 500, 
+#     'VolumeSize': 300, 
 #     'DeleteOnTermination': True,
 #     'VolumeType': 'io1',
 #     'Iops': 5000
@@ -87,13 +87,16 @@ def attach_instance_ebs(aws_instance, tag):
   if v.state != 'available': 
     print('Detaching from current instance')
     v.detach_from_instance()
-    time.sleep(3)
-  v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+    time.sleep(5)
+  try:
+    v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+  except Exception as e:
+    print('Error attaching volume. Continuing...', e)
   time.sleep(3)
 
 def mount_volume_data(job, tag):
   for i,t in enumerate(job.tasks):
-    attach_instance_ebs(t.instance, f'{tag}_{i}')
+    attach_instance_ebs(t.instance, f'{tag}_{i+1}')
   job.run('sudo mkdir data -p')
   job.run('sudo mount /dev/xvdf data', ignore_errors=True)
   job.run('sudo chown `whoami` data')
@@ -119,6 +122,7 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload('resnet.py')
   job.upload('train_imagenet_fastai.py')
+  job.upload('train_imagenet_fastai_v2.py')
   
   # setup machines
   setup_complete = [t.file_exists('/tmp/fastai_setup_complete') for t in job.tasks]
@@ -143,7 +147,7 @@ def create_job(run, job_name, num_tasks):
   if num_gpus <= 1:
     save_dir = f'~/training/fastai/{datestr}-{job_name}'
     job.run(f'mkdir {save_dir} -p')
-    training_args = f'~/mount_point/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45' # old file sync
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45' # old file sync
     job.run_async(f'python train_imagenet_fastai.py {training_args}')
     return
 
@@ -151,11 +155,12 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/fastai/{datestr}-{job_name}-{i}'
+    save_dir = f'~/data/training/fastai/{datestr}-{job_name}-{i}-lr3d84-e55'
     t.run(f'mkdir {save_dir} -p')
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45 --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    lr = 0.40 * num_tasks
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --dist-url env:// --dist-backend nccl --distributed' # old file sync
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_fastai.py {training_args}'
+    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_fastai_v2.py {training_args}'
     t.run(f'echo "{cmd}" > {save_dir}/script.log')
     task_cmds.append(cmd)
 
