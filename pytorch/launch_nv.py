@@ -73,10 +73,10 @@ ebs = [{
 # ebs = [{
 #   'DeviceName': '/dev/sda1',
 #   'Ebs': {
-#     'VolumeSize': 500, 
+#     'VolumeSize': 300, 
 #     'DeleteOnTermination': True,
 #     'VolumeType': 'io1',
-#     'Iops': 5000
+#     'Iops': 8000
 #   }
 # }]
 
@@ -90,13 +90,16 @@ def attach_instance_ebs(aws_instance, tag):
   if v.state != 'available': 
     print('Detaching from current instance')
     v.detach_from_instance()
-    time.sleep(3)
-  v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+    time.sleep(7)
+  try:
+    v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+  except Exception as e:
+    print('Error attaching volume. Continuing...', e)
   time.sleep(3)
 
 def mount_volume_data(job, tag):
   for i,t in enumerate(job.tasks):
-    attach_instance_ebs(t.instance, f'{tag}_{i}')
+    attach_instance_ebs(t.instance, f'{tag}_{i+1}')
   job.run('sudo mkdir data -p')
   job.run('sudo mount /dev/xvdf data', ignore_errors=True)
   job.run('sudo chown `whoami` data')

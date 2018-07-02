@@ -68,6 +68,7 @@ class Run(backend.Run):
       print("Found existing job "+job_name)
       for i in instances:
             if i.state['Name'] == 'stopped': i.start()
+      print(instances)
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 
@@ -149,10 +150,13 @@ class Job(backend.Job):
     # initialize list of tasks, in order of AMI launch index
     self.tasks = [None]*len(instances)
     for instance in instances:
-      task_id = instance.ami_launch_index
+      # task_id = instance.ami_launch_index
+      task_id, current_job_name =u.get_parsed_job_name(instance.tags)
+      print('Task_id:', task_id)
       task = Task(instance, self, task_id, install_script=install_script,
                   linux_type=linux_type, user_data=user_data,
                   skip_efs_mount=skip_efs_mount)
+      print('Task:', task)
       self.tasks[task_id] = task
 
   def _initialize(self):
