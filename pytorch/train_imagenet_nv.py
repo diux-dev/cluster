@@ -209,6 +209,11 @@ def main():
                 'best_prec1': best_prec1, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
+        # getting out of memory. Maybe we need to collect memory?
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
     if hasattr(t, 'item'):
