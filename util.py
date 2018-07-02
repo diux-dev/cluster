@@ -476,6 +476,7 @@ def wait_on_fulfillment(ec2c, reqs):
     def get_instance_id(req):
       while req['State'] != 'active':
           print('Waiting on spot fullfillment...')
+          print(req)
           time.sleep(5)
           reqs = ec2c.describe_spot_instance_requests(Filters=[{'Name': 'spot-instance-request-id', 'Values': [req['SpotInstanceRequestId']]}])
           req = reqs['SpotInstanceRequests'][0]
@@ -494,11 +495,13 @@ def wait_on_fulfillment(ec2c, reqs):
 def create_spot_instances(launch_specs, spot_price=None):
     # (AS) forcing spot price to be higher for now
     spot_price = '25'
-    
+
     ec2c = create_ec2_client()
     num_tasks = launch_specs['MinCount']
     del launch_specs['MinCount']
     del launch_specs['MaxCount']
+
+    print(launch_specs)
 
     if spot_price is None:
       spot_requests = ec2c.request_spot_instances(LaunchSpecification=launch_specs, InstanceCount=num_tasks)    
