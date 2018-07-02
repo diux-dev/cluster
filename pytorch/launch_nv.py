@@ -154,10 +154,10 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/{datestr}-{job_name}-{i}'
+    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr1d6-e55'
     t.run(f'mkdir {save_dir} -p')
     lr = 0.4 * num_tasks
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 45 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo "{cmd}" > {save_dir}/script.log')

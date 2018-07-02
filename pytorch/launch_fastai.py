@@ -141,7 +141,7 @@ def create_job(run, job_name, num_tasks):
   num_gpus = gpu_count[args.instance_type]
 
   if num_gpus <= 1:
-    save_dir = f'~/training/{datestr}-{job_name}'
+    save_dir = f'~/training/fastai/{datestr}-{job_name}'
     job.run(f'mkdir {save_dir} -p')
     training_args = f'~/mount_point/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45' # old file sync
     job.run_async(f'python train_imagenet_fastai.py {training_args}')
