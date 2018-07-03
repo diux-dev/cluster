@@ -77,19 +77,19 @@ cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
-def get_loaders(traindir, valdir, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
+def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     tensor_tfm = [transforms.ToTensor(), normalize]
     val_bs = val_bs or bs
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
-            transforms.RandomResizedCrop(args.sz, scale=(min_scale, 1.0)),
+            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
         ] + tensor_tfm))
     val_dataset = datasets.ImageFolder(
         valdir, transforms.Compose([
-            transforms.Resize(int(args.sz*1.14)),
-            transforms.CenterCrop(args.sz),
+            transforms.Resize(int(sz*1.14)),
+            transforms.CenterCrop(sz),
         ] + tensor_tfm))
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
@@ -167,7 +167,7 @@ def main():
         valdir = os.path.join(args.data, 'validation')
         args.sz = 224
 
-    train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, use_val_sampler=True)
+    train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=args.sz, use_val_sampler=True)
 
     if args.evaluate: return validate(val_loader, model, criterion, epoch, start_time)
 
@@ -181,20 +181,17 @@ def main():
             # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
-            args.sz = 224
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.bs)
+            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=224)
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
-            args.sz=288
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=160, val_bs=128, use_val_sampler=True, min_scale=0.5)
-        if epoch==args.epochs+args.warmup-2:
-            args.sz=288
+                traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=True, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-3:
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=160, val_bs=128, use_val_sampler=False, min_scale=0.5)
+                traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=False, min_scale=0.5)
 
         # getting out of memory. Maybe we need to collect memory?
         import gc

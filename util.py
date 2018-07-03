@@ -476,7 +476,6 @@ def wait_on_fulfillment(ec2c, reqs):
     def get_instance_id(req):
       while req['State'] != 'active':
           print('Waiting on spot fullfillment...')
-          print(req)
           time.sleep(5)
           reqs = ec2c.describe_spot_instance_requests(Filters=[{'Name': 'spot-instance-request-id', 'Values': [req['SpotInstanceRequestId']]}])
           req = reqs['SpotInstanceRequests'][0]
