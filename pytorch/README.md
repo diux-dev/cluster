@@ -10,7 +10,10 @@ Attempt to reproduce DawnBench results here: https://github.com/fastai/imagenet-
 git clone https://github.com/diux-dev/cluster.git
 cd cluster
 conda env update
+source activate gpubox
 ```
+
+(todo: rename gpubox to something else here and in environment.yml)
 
 ### Step 2: Setup AWS credentials
 ```
@@ -54,9 +57,26 @@ Option 4: Create a few instances and just reuse those for training.
 
 # Training pytorch script
 
+Training on 1 p3.16xlarge instance
+
+```
+export REPOROOT=<git_repo_root/cluster>
+cd ${REPOROOT}/pytorch
+python launch_nv.py --instance-type p3.16xlarge --num-tasks 1 --job-name cluster_4_region_c --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c
+```
+
+To view progress and interact
+
+```
+export PATH=${PATH}:${REPOROOT}
+connect cluster_4_region_c
+# press "CTRL+b d" to disconnect
+# press "CTRL+b c" to create new window in same session
+```
+
 Training on 4 p3.16xlarge instances
 ```
-cd pytorch
+cd ${REPOROOT}/pytorch
 python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c
 ```
 This command will launch 4 p3.16xlarge instances. Setup the environment. 
