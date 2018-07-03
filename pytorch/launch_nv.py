@@ -59,26 +59,26 @@ args = parser.parse_args()
 
 ## Setup instance:
 # ebs = None
-# ebs = [{
-#   'DeviceName': '/dev/sda1',
-#   'Ebs': {
-#     'VolumeSize': 1000, 
-#     'DeleteOnTermination': True,
-#     'VolumeType': 'io1',
-#     'Iops': 14000
-#   }
-# }]
-
-# For using external ebs (so we don't hit iops limit)
 ebs = [{
   'DeviceName': '/dev/sda1',
   'Ebs': {
-    'VolumeSize': 500, 
+    'VolumeSize': 1000, 
     'DeleteOnTermination': True,
     'VolumeType': 'io1',
-    'Iops': 8000
+    'Iops': 14000
   }
 }]
+
+# For using external ebs (so we don't hit iops limit)
+# ebs = [{
+#   'DeviceName': '/dev/sda1',
+#   'Ebs': {
+#     'VolumeSize': 500, 
+#     'DeleteOnTermination': True,
+#     'VolumeType': 'io1',
+#     'Iops': 8000
+#   }
+# }]
 
 def attach_instance_ebs(aws_instance, tag):
   ec2 = util.create_ec2_resource()
@@ -121,8 +121,8 @@ def create_job(run, job_name, num_tasks):
 
   if args.attach_volume: mount_volume_data(job, tag=args.attach_volume)
 #   run pytorch
-  job.run('killall python || echo failed')  # kill previous run
-  job.run('source activate pytorch_p36')
+  job.run_async_join('killall python || echo failed')  # kill previous run
+  job.run_async_join('source activate pytorch_p36')
 
   # upload files
   job.upload('resnet.py')
@@ -134,7 +134,7 @@ def create_job(run, job_name, num_tasks):
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
     job.upload('setup_env_nv.sh')
-    job.run('chmod +x setup_env_nv.sh')
+    job.run_async_join('chmod +x setup_env_nv.sh')
     job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=60)
 
   
@@ -156,14 +156,43 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e68-lars'
+    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e68-bs256-warmup-4'
     t.run(f'mkdir {save_dir} -p')
-    lr = 1.5 * num_tasks
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --epochs 68 --small --dist-url env:// --dist-backend nccl --distributed' # old file sync
+    lr = 0.4 * num_tasks
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --warmup 4 --epochs 68 --small --dist-url env:// --dist-backend nccl --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv_8gpu.py {training_args}'
+    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo "{cmd}" > {save_dir}/script.log')
     task_cmds.append(cmd)
+
+  # trainig on 4 machines
+  # task_cmds = []
+  # for i,t in enumerate(job.tasks):
+  #   # Pytorch distributed
+  #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
+  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e65-bs256-warmup-2'
+  #   t.run(f'mkdir {save_dir} -p')
+  #   lr = 0.4 * num_tasks
+  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --small --dist-url env:// --dist-backend nccl --distributed'
+  #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+  #   cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+  #   t.run(f'echo "{cmd}" > {save_dir}/script.log')
+  #   task_cmds.append(cmd)
+
+  # lars
+  # task_cmds = []
+  # for i,t in enumerate(job.tasks):
+  #   # Pytorch distributed
+  #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
+  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr3d2-e68-bs128-poly'
+  #   t.run(f'mkdir {save_dir} -p')
+  #   lr = 0.4 * num_tasks
+  #   lr = 2.5
+  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --warmup 5 --epochs 65 --small --dist-url env:// --dist-backend nccl --distributed'
+  #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+  #   cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv_8gpu.py {training_args}'
+  #   t.run(f'echo "{cmd}" > {save_dir}/script.log')
+  #   task_cmds.append(cmd)
 
   # async calls need to be run last for multiple tasks. Otherwise they don't all run
   for t,cmd in zip(job.tasks, task_cmds):

@@ -116,9 +116,7 @@ class Run(backend.Run):
             # sometimes get "An error occurred (InvalidInstanceID.NotFound)"
             task_name = u.format_task_name(instance.ami_launch_index, role_name,
                                            self.name)
-            # TODO: use instance.create_tags instead like in create_resources.py
-            ec2.create_tags(Resources=[instance.id],
-                            Tags=u.make_name(task_name))
+            instance.create_tags(Tags=u.make_name(task_name))
             break
           except Exception as e:
             self.log("create_tags failed with %s, retrying in %d seconds"%(
@@ -150,13 +148,11 @@ class Job(backend.Job):
     # initialize list of tasks, in order of AMI launch index
     self.tasks = [None]*len(instances)
     for instance in instances:
-      # task_id = instance.ami_launch_index
-      task_id, current_job_name =u.get_parsed_job_name(instance.tags)
-      print('Task_id:', task_id)
+      task_id, current_job_name = u.get_parsed_job_name(instance.tags) # use job name in case ami's were not launched at the same time
+      task_id = task_id or instance.ami_launch_index
       task = Task(instance, self, task_id, install_script=install_script,
                   linux_type=linux_type, user_data=user_data,
                   skip_efs_mount=skip_efs_mount)
-      print('Task:', task)
       self.tasks[task_id] = task
 
   def _initialize(self):

@@ -106,7 +106,7 @@ def get_loaders(traindir, valdir, bs, val_bs=None, use_val_sampler=True, min_sca
     return train_loader,val_loader,train_sampler,val_sampler
 
 
-
+from torch.optim import Optimizer
 
 class LARS(Optimizer):
     # SGD https://raw.githubusercontent.com/pytorch/pytorch/master/torch/optim/sgd.py
@@ -114,6 +114,7 @@ class LARS(Optimizer):
     def __init__(self, params, lr, momentum=0, dampening=0,
                  weight_decay=0, nesterov=False, eta=0.0001):
         self.lr = lr
+        self.epoch = 0
         if lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if momentum < 0.0:
@@ -132,8 +133,22 @@ class LARS(Optimizer):
             group.setdefault('nesterov', False)
 
     # We don't need this as we are using our own scheduler
-    def get_global_lr(epoch, total_epoch):
-        return self.lr * (1 - epoch/total_epoch) ** 2
+    def get_global_lr():
+        if self.epoch<int(args.epochs*0.1)+args.warmup:
+            return self.lr/(int(args.epochs*0.1)-epoch+args.warmup)/2
+        
+        return self.lr * (1 - (self.epoch+args.warmup)/(args.epochs+args.warmup)) ** 2
+
+
+def adjust_learning_rate(optimizer, epoch):
+    """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
+    if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
+    elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+    elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+    elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+    else         : lr = args.lr/1000
+    if (epoch <= args.warmup) and (args.lr > 3.0): lr = lr/2 # even smaller lr for warmup
+    for param_group in optimizer.param_groups: param_group['lr'] = lr
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -159,7 +174,13 @@ class LARS(Optimizer):
                 d_p = p.grad.data
                 if weight_decay != 0:
                     d_p.add_(weight_decay, p.data)
+
                 local_lr = eta * torch.norm(p.data) / torch.norm(d_p)
+                n_warmups = int(args.epochs*0.1)+args.warmup
+                global_lr = self.get_global_lr()
+                if self.epoch < n_warmups: local_lr = 1
+
+
                 if momentum != 0:
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
@@ -174,7 +195,7 @@ class LARS(Optimizer):
                         d_p = buf
                 # print('Learning rate:', local_lr, local_lr*group['lr'])
                 # p.data.add_(-group['lr'], d_p)
-                p.data.add_(-local_lr*group['lr'], d_p)
+                p.data.add_(-local_lr*global_lr, d_p)
 
         return loss
 
@@ -250,26 +271,27 @@ def main():
 
     print("Begin training")
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
-        adjust_learning_rate(optimizer, epoch)
+        # adjust_learning_rate(optimizer, epoch)
+        if isinstance(optimizer, LARS): optimizer.epoch = epoch
         if epoch==int(args.epochs*0.4+0.5)+args.warmup:
             # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
             # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             args.sz = 224
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.bs)
+            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size)
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
             args.sz=288
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=160, val_bs=128, use_val_sampler=True, min_scale=0.5)
-        if epoch==args.epochs+args.warmup-2:
+                traindir, valdir, bs=128, val_bs=128, use_val_sampler=True, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-3:
             args.sz=288
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=160, val_bs=128, use_val_sampler=False, min_scale=0.5)
+                traindir, valdir, bs=128, val_bs=128, use_val_sampler=False, min_scale=0.5)
 
         # getting out of memory. Maybe we need to collect memory?
         import gc
@@ -302,7 +324,7 @@ def adjust_learning_rate(optimizer, epoch):
     elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
     elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
     else         : lr = args.lr/1000
-    if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/3 # even smaller lr for warmup
+    if (epoch <= args.warmup) and (args.lr > 3.0): lr = lr/2 # even smaller lr for warmup
     for param_group in optimizer.param_groups: param_group['lr'] = lr
 
 
