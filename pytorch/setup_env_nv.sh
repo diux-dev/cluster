@@ -1,6 +1,9 @@
 #!/bin/bash
 
-# to be used with vanilla nvidia ami: ami-e580c79d
+# to be used with vanilla DLAMI v10
+# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
+# "us-east-1": "ami-6d720012", "us-east-2": "ami-23c4fb46", "us-west-2": "ami-e580c79d",
+  
 echo 'Starting script'
 
 if ! conda list Pillow-SIMD | grep -q Pillow-SIMD; then
