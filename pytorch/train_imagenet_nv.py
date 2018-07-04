@@ -144,17 +144,74 @@ class DataManager():
         if args.distributed:
             self.trn_smp.set_epoch(epoch)
             self.val_smp.set_epoch(epoch)
+
+    def get_trn_iter(self):
+        trn_iter = self.trn_iter
+        self.trn_iter = FastPrefetcher(self.trn_dl)
+        return trn_iter
+
+    def get_val_iter(self):
+        val_iter = self.val_iter
+        self.val_iter = FastPrefetcher(self.val_dl)
+        return val_iter
         
     def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+dir_prefix+'/validation'
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
 
+        self.trn_len = len(self.trn_dl)
+        self.val_len = len(self.val_dl)
+        self.trn_iter = FastPrefetcher(self.trn_dl)
+        self.val_iter = FastPrefetcher(self.val_dl)
+
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
 
 
+class FastPrefetcher():
+    def __init__(self, loader):
+        self.loader = iter(loader)
+        self.stream = torch.cuda.Stream()
+        self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+        self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+        if args.fp16:
+            self.mean = self.mean.half()
+            self.std = self.std.half()
+        self.preload()
+
+    def preload(self):
+        try:
+            self.next_input, self.next_target = next(self.loader)
+        except StopIteration:
+            self.next_input = None
+            self.next_target = None
+            return
+        with torch.cuda.stream(self.stream):
+            self.next_input = self.next_input.cuda(async=True)
+            self.next_target = self.next_target.cuda(async=True)
+            if args.fp16:
+                self.next_input = self.next_input.half()
+            else:
+                self.next_input = self.next_input.float()
+            self.next_input = self.next_input.sub_(self.mean).div_(self.std)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        i,t = self.next()
+        if i is None: raise StopIteration()
+        return i, t
+
+    def next(self):
+        torch.cuda.current_stream().wait_stream(self.stream)
+        input = self.next_input
+        target = self.next_target
+        self.preload()
+        return input, target
+        
 # Seems to speed up training by ~2%
 class DataPrefetcher():
     def __init__(self, loader, stop_after=None, prefetch=True):
@@ -191,9 +248,10 @@ class DataPrefetcher():
             self.next_input = self.next_input.sub_(self.mean).div_(self.std)
             
     def __iter__(self):
-        if not self.prefetch: return self
         count = 0
         self.loaditer = iter(self.loader)
+        if not self.prefetch: return self.load_iter
+
         self.preload()
         while self.next_input is not None:
             torch.cuda.current_stream().wait_stream(self.stream)
@@ -216,6 +274,10 @@ def main():
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
+
+    dm = DataManager()
+    print("Created data loaders")
+
     # create model
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else: model = models.__dict__[args.arch]()
@@ -224,7 +286,6 @@ def main():
     model = resnet.resnet50()
 
     print("Loaded model")
-
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
@@ -253,24 +314,28 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
-    dm = DataManager()
-
     if args.evaluate: return validate(dm.val_dl, model, criterion, epoch, start_time)
 
-    print("Created data loaders")
-
     print("Begin training")
+    estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
+        # print("Begin epoch:", time.time()-estart)
+        estart = time.time()
         adjust_learning_rate(optimizer, epoch)
+        # print("Adjust learning rate:", time.time()-estart)
         dm.set_epoch(epoch)
+        # print("Setting datamanager epoch:", time.time()-estart)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.trn_dl, model, criterion, optimizer, epoch)
+            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, epoch)
+
+        # print("Done training:", time.time()-estart)
 
         if args.prof: break
-        prec1 = validate(dm.val_dl, model, criterion, epoch, start_time)
+        prec1 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
 
+        # print("Done validating:", time.time()-estart)
 
         is_best = prec1 > best_prec1
         if args.local_rank == 0 and is_best:
@@ -279,6 +344,8 @@ def main():
                 'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
                 'best_prec1': best_prec1, 'optimizer' : optimizer.state_dict(),
             }, is_best)
+
+        # print("Done checkpointing:", time.time()-estart)
 
 # class Scheduler():
 #     def __init__(self, optimizer):
@@ -329,7 +396,7 @@ def to_python_float(t):
     else:
         return t[0]
 
-def train(train_loader, model, criterion, optimizer, epoch):
+def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -340,16 +407,17 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
     end = time.time()
 
-    prefetcher = DataPrefetcher(train_loader, prefetch=True)
     i = -1
-    for input,target in iter(prefetcher):
+    for input,target in trn_iter:
         i += 1
         if args.prof and (i > 200): break
         # measure data loading time
         data_time.update(time.time() - end)
 
-        input_var = Variable(input)
-        target_var = Variable(target)
+        # input_var = Variable(input)
+        # target_var = Variable(target)
+        input_var = input
+        target_var = target
 
         # compute output
         output = model(input_var)
@@ -402,14 +470,14 @@ def train(train_loader, model, criterion, optimizer, epoch):
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    epoch, i, len(train_loader), batch_time=batch_time,
+                    epoch, i, trn_len, batch_time=batch_time,
                     data_time=data_time, loss=losses, top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
 
 
-def validate(val_loader, model, criterion, epoch, start_time):
+def validate(val_iter, val_len, model, criterion, epoch, start_time):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -418,14 +486,15 @@ def validate(val_loader, model, criterion, epoch, start_time):
     model.eval()
     end = time.time()
 
-    prefetcher = DataPrefetcher(val_loader, prefetch=True)
     i = -1
-    for input,target in iter(prefetcher):
+    for input,target in val_iter:
         i += 1
 
-        target = target.cuda(async=True)
-        input_var = Variable(input)
-        target_var = Variable(target)
+        # target = target.cuda(async=True)
+        # input_var = Variable(input)
+        # target_var = Variable(target)
+        input_var = input
+        target_var = target
 
         # compute output
         with torch.no_grad():
@@ -457,7 +526,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    i, len(val_loader), batch_time=batch_time, loss=losses,
+                    i, val_len, batch_time=batch_time, loss=losses,
                     top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
