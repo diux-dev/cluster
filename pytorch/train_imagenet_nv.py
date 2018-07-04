@@ -147,70 +147,29 @@ class DataManager():
 
     def get_trn_iter(self):
         trn_iter = self.trn_iter
-        self.trn_iter = FastPrefetcher(self.trn_dl)
+        self.trn_iter = iter(self.trn_dl)
         return trn_iter
 
     def get_val_iter(self):
         val_iter = self.val_iter
-        self.val_iter = FastPrefetcher(self.val_dl)
+        self.val_iter = iter(self.val_dl)
         return val_iter
         
     def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+dir_prefix+'/validation'
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
+        self.trn_dl = DataPrefetcher(self.trn_dl)
+        self.val_dl = DataPrefetcher(self.val_dl)
 
         self.trn_len = len(self.trn_dl)
         self.val_len = len(self.val_dl)
-        self.trn_iter = FastPrefetcher(self.trn_dl)
-        self.val_iter = FastPrefetcher(self.val_dl)
+        self.trn_iter = iter(self.trn_dl)
+        self.val_iter = iter(self.val_dl)
 
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
-
-
-class FastPrefetcher():
-    def __init__(self, loader):
-        self.loader = iter(loader)
-        self.stream = torch.cuda.Stream()
-        self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
-        self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
-        if args.fp16:
-            self.mean = self.mean.half()
-            self.std = self.std.half()
-        self.preload()
-
-    def preload(self):
-        try:
-            self.next_input, self.next_target = next(self.loader)
-        except StopIteration:
-            self.next_input = None
-            self.next_target = None
-            return
-        with torch.cuda.stream(self.stream):
-            self.next_input = self.next_input.cuda(async=True)
-            self.next_target = self.next_target.cuda(async=True)
-            if args.fp16:
-                self.next_input = self.next_input.half()
-            else:
-                self.next_input = self.next_input.float()
-            self.next_input = self.next_input.sub_(self.mean).div_(self.std)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        i,t = self.next()
-        if i is None: raise StopIteration()
-        return i, t
-
-    def next(self):
-        torch.cuda.current_stream().wait_stream(self.stream)
-        input = self.next_input
-        target = self.next_target
-        self.preload()
-        return input, target
         
 # Seems to speed up training by ~2%
 class DataPrefetcher():
@@ -274,18 +233,14 @@ def main():
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
-
-    dm = DataManager()
-    print("Created data loaders")
-
     # create model
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else: model = models.__dict__[args.arch]()
     # AS: force use resnet50 for now, until we figure out whether to upload model directory
     import resnet
     model = resnet.resnet50()
-
     print("Loaded model")
+
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
@@ -303,7 +258,7 @@ def main():
 
     print("Defined loss and optimizer")
 
-    best_prec1 = 92 # only save models over 92%. Otherwise it stops to save every time
+    best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -314,38 +269,33 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
+    dm = DataManager()
+    print("Created data loaders")
+
     if args.evaluate: return validate(dm.val_dl, model, criterion, epoch, start_time)
+
 
     print("Begin training")
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
-        # print("Begin epoch:", time.time()-estart)
         estart = time.time()
         adjust_learning_rate(optimizer, epoch)
-        # print("Adjust learning rate:", time.time()-estart)
         dm.set_epoch(epoch)
-        # print("Setting datamanager epoch:", time.time()-estart)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
             train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, epoch)
 
-        # print("Done training:", time.time()-estart)
-
         if args.prof: break
-        prec1 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
+        prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
 
-        # print("Done validating:", time.time()-estart)
-
-        is_best = prec1 > best_prec1
+        is_best = prec5 > best_prec5
         if args.local_rank == 0 and is_best:
-            best_prec1 = max(prec1, best_prec1)
+            best_prec5 = max(prec5, best_prec5)
             save_checkpoint({
                 'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
-                'best_prec1': best_prec1, 'optimizer' : optimizer.state_dict(),
+                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
             }, is_best)
-
-        # print("Done checkpointing:", time.time()-estart)
 
 # class Scheduler():
 #     def __init__(self, optimizer):
@@ -536,7 +486,7 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
     print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top5.avg:.3f}\n')
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
 
-    return top1.avg
+    return top5.avg
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):

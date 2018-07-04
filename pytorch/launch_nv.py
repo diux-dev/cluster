@@ -164,7 +164,7 @@ def create_job(run, job_name, num_tasks):
     warmup = 2
     batch_size = 192
     lr = 0.4 * num_tasks
-    tag = '320imgsz_nosave'
+    tag = 'fastdl_preload_v2'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
     training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
