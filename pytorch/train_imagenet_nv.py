@@ -18,6 +18,8 @@ import torchvision.datasets as datasets
 # import models
 from fp16util import network_to_half, set_grad, copy_in_params
 
+from larc import LARC
+
 # model_names = sorted(name for name in models.__dict__
 #                      if name.islower() and not name.startswith("__")
 #                      and callable(models.__dict__[name]))
@@ -58,6 +60,7 @@ def get_parser():
     parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
     parser.add_argument('--dp', action='store_true', help='Run model fp16 mode.')
+    parser.add_argument('--larc', action='store_true', help='Run model with larc enabled.')
     parser.add_argument('--sz',       default=224, type=int, help='Size of transformed image.')
     parser.add_argument('--decay-int', default=30, type=int, help='Decay LR by 10 every decay-int epochs')
     parser.add_argument('--loss-scale', type=float, default=1,
@@ -217,6 +220,37 @@ def main():
                 'best_prec1': best_prec1, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
+# class Scheduler():
+#     def __init__(self, optimizer):
+#         self.optimizer = optimizer
+#         self.current_lr = None
+#         self.current_epoch = 0
+
+#     def get_lr(epoch, batch=None):
+#         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
+#         if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
+#         elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+#         elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+#         elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+#         else         : lr = args.lr/1000
+#         if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/((args.warmup+1)/(epoch+1)) # even smaller lr for warmup
+#         return lr
+
+#     def set_epoch(epoch):
+#         lr = get_lr(epoch)
+
+#         if args.larc and (epoch >= int(args.warmup+args.epochs*0.1)):
+#             self.optimizer = LARC(self.optimizer, trust_coefficient=0.001)
+#             self.current_lr = None
+
+#         if self.current_lr == lr: return
+#         self.current_lr = lr
+#         for param_group in self.optimizer.param_groups: param_group['lr'] = lr
+
+#     def set_batch(batch):
+#         1 - 1/(batch+1)
+
+    
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
     if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
@@ -333,6 +367,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         input, target = prefetcher.next()
 
         if args.local_rank == 0 and i % args.print_freq == 0 and i > 1:
+            
             output = ('Epoch: [{0}][{1}/{2}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                     + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
