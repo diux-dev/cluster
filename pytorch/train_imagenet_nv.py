@@ -187,7 +187,7 @@ def main():
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
                 traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=True, min_scale=0.5)
-        if epoch==args.epochs+args.warmup-3:
+        if epoch==args.epochs+args.warmup-2:
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
@@ -224,7 +224,7 @@ def adjust_learning_rate(optimizer, epoch):
     elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
     elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
     else         : lr = args.lr/1000
-    if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/3 # even smaller lr for warmup
+    if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/((args.warmup+1)/(epoch+1)) # even smaller lr for warmup
     for param_group in optimizer.param_groups: param_group['lr'] = lr
 
 

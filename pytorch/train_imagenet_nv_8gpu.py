@@ -140,15 +140,15 @@ class LARS(Optimizer):
         return self.lr * (1 - (self.epoch+args.warmup)/(args.epochs+args.warmup)) ** 2
 
 
-def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-    if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
-    elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-    elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-    elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
-    else         : lr = args.lr/1000
-    if (epoch <= args.warmup) and (args.lr > 3.0): lr = lr/2 # even smaller lr for warmup
-    for param_group in optimizer.param_groups: param_group['lr'] = lr
+    # def adjust_learning_rate(optimizer, epoch):
+    #     """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
+    #     if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
+    #     elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+    #     elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+    #     elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+    #     else         : lr = args.lr/1000
+    #     if (epoch <= args.warmup) and (args.lr > 3.0): lr = lr/2 # even smaller lr for warmup
+    #     for param_group in optimizer.param_groups: param_group['lr'] = lr
 
     def step(self, closure=None):
         """Performs a single optimization step.

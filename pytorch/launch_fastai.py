@@ -122,7 +122,6 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload('resnet.py')
   job.upload('train_imagenet_fastai.py')
-  job.upload('train_imagenet_fastai_v2.py')
   
   # setup machines
   setup_complete = [t.file_exists('/tmp/fastai_setup_complete') for t in job.tasks]
@@ -134,7 +133,6 @@ def create_job(run, job_name, num_tasks):
     job.run_async_join('bash setup_env_fastai.sh', max_wait_sec=60*60, check_interval=60)
 
   job.run('source activate fastai') # (AS) WARNING remember to revert back 
-  # job.run('source activate pytorch_p36')
 
 
   # multi job
