@@ -148,7 +148,7 @@ def main():
 
     print("Defined loss and optimizer")
 
-    best_prec1 = 0
+    best_prec1 = 92 # only save models over 92%. Otherwise it stops to save every time
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -164,10 +164,10 @@ def main():
         valdir = os.path.join(args.data+'-sz/160', 'validation')
         args.sz = 128
     else:
-        # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-        # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-        traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'validation')
+        traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+        valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
+        # traindir = os.path.join(args.data, 'train')
+        # valdir = os.path.join(args.data, 'validation')
         args.sz = 224
 
     train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=args.sz, use_val_sampler=True)
@@ -177,29 +177,34 @@ def main():
     print("Created data loaders")
 
     print("Begin training")
+    data_loader_changed = False
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         adjust_learning_rate(optimizer, epoch)
         if epoch==int(args.epochs*0.4+0.5)+args.warmup:
-            # traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-            # valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-            traindir = os.path.join(args.data, 'train')
-            valdir = os.path.join(args.data, 'validation')
+            traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
+            valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
+            # traindir = os.path.join(args.data, 'train')
+            # valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=224)
+            data_loader_changed = True
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
                 traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=True, min_scale=0.5)
+            data_loader_changed = True
         if epoch==args.epochs+args.warmup-2:
             traindir = os.path.join(args.data, 'train')
             valdir = os.path.join(args.data, 'validation')
             train_loader,val_loader,train_sampler,val_sampler = get_loaders(
                 traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=False, min_scale=0.5)
-
-        # getting out of memory. Maybe we need to collect memory?
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
+            data_loader_changed = True
+        if data_loader_changed:
+            # getting out of memory. Maybe we need to collect memory?
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+        data_loader_changed = False
 
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -212,8 +217,9 @@ def main():
         if args.prof: break
         prec1 = validate(val_loader, model, criterion, epoch, start_time)
 
-        if args.local_rank == 0:
-            is_best = prec1 > best_prec1
+
+        is_best = prec1 > best_prec1
+        if args.local_rank == 0 and is_best:
             best_prec1 = max(prec1, best_prec1)
             save_checkpoint({
                 'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
