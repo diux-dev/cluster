@@ -80,31 +80,49 @@ cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
+
+def fast_collate(batch):
+    imgs = [img[0] for img in batch]
+    targets = torch.tensor([target[1] for target in batch], dtype=torch.int64)
+    w = imgs[0].size[0]
+    h = imgs[0].size[1]
+    tensor = torch.zeros( (len(imgs), 3, h, w), dtype=torch.uint8 )
+    for i, img in enumerate(imgs):
+        nump_array = np.asarray(img, dtype=np.uint8)
+        tens = torch.from_numpy(nump_array)
+        if(nump_array.ndim < 3):
+            nump_array = np.expand_dims(nump_array, axis=-1)
+        nump_array = np.rollaxis(nump_array, 2)
+
+        tensor[i] += torch.from_numpy(nump_array)
+        
+    return tensor, targets
+
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    tensor_tfm = [transforms.ToTensor(), normalize]
     val_bs = val_bs or bs
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
-        ] + tensor_tfm))
+        ]))
     val_dataset = datasets.ImageFolder(
         valdir, transforms.Compose([
             transforms.Resize(int(sz*1.14)),
             transforms.CenterCrop(sz),
-        ] + tensor_tfm))
+        ]))
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
     val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
+        sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=val_bs, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler if use_val_sampler else None)
+        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
+        sampler=val_sampler if use_val_sampler else None)
 
     return train_loader,val_loader,train_sampler,val_sampler
 
@@ -149,6 +167,12 @@ class DataPrefetcher():
             self.next_input = None
             self.next_target = None
 
+            self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+            self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+            if args.fp16:
+                self.mean = self.mean.half()
+                self.std = self.std.half()
+
     def __len__(self): return len(self.loader)
 
     def preload(self):
@@ -162,6 +186,10 @@ class DataPrefetcher():
             self.next_input = self.next_input.cuda(async=True)
             self.next_target = self.next_target.cuda(async=True)
 
+            if args.fp16: self.next_input = self.next_input.half()
+            else: self.next_input = self.next_input.float()
+            self.next_input = self.next_input.sub_(self.mean).div_(self.std)
+            
     def __iter__(self):
         if not self.prefetch: return self
         count = 0
