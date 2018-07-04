@@ -133,7 +133,7 @@ def create_job(run, job_name, num_tasks):
   job.upload('resnet.py')
   job.upload('fp16util.py')
   job.upload('train_imagenet_nv.py')
-  job.upload('train_imagenet_nv_8gpu.py')
+  job.upload('larc.py')
 
   # setup machines
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
@@ -146,7 +146,7 @@ def create_job(run, job_name, num_tasks):
   # multi job
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
-  datestr = datetime.datetime.now().replace(microsecond=0).isoformat()
+  datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
   num_gpus = gpu_count[args.instance_type]
 
@@ -158,25 +158,31 @@ def create_job(run, job_name, num_tasks):
     return
 
   def get_ring_order(machine_order, gpu_order):
+    gpu_order = list(gpu_order)
+    machine_order = list(machine_order)
     ngpus = len(gpu_order)
-    r_order = [((x+1)*ngpus) + y for x in machine_order for y in gpu_order]
+    r_order = [(x*ngpus) + y for x in machine_order for y in gpu_order]
     return ' '.join(map(str, r_order))
 
   task_cmds = []
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e62-bs256-warmup-2'
-    t.run(f'mkdir {save_dir} -p')
+    epochs = 65
+    warmup = 2
+    batch_size = 192
     lr = 0.4 * num_tasks
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --warmup 2 --epochs 62 --small --dist-url env:// --dist-backend nccl --distributed'
+    save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}'
+    t.run(f'mkdir {save_dir} -p')
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
 
     ring = get_ring_order(range(num_tasks), range(num_gpus))
     ring_rev = get_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
-    ring_skip = get_ring_order([1,4,7,2,5,0,3,6], range(num_gpus))
+    ring_skip = get_ring_order([1,4,7,2,5,0,3,6], [3,2,1,0,7,6,5,4])
     ring_skip_rev = get_ring_order(reversed([1,4,7,2,5,0,3,6]), [3,2,1,0,7,6,5,4])
-    nccl_args = f'NCCL_RINGS="{ring} | {ring_rev} | {ring_skip} | {ring_skip_rev}" NCCL_DEBUG=INFO'
+    
+    nccl_args = f'NCCL_RINGS="{ring} | {ring_rev} | {ring_skip} | {ring_skip_rev}" NCCL_DEBUG=VERSION'
 
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo {cmd} > {save_dir}/script.log')
@@ -193,21 +199,6 @@ def create_job(run, job_name, num_tasks):
   #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --small --dist-url env:// --dist-backend nccl --distributed'
   #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
   #   cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-  #   t.run(f'echo "{cmd}" > {save_dir}/script.log')
-  #   task_cmds.append(cmd)
-
-  # lars
-  # task_cmds = []
-  # for i,t in enumerate(job.tasks):
-  #   # Pytorch distributed
-  #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr3d2-e68-bs128-poly'
-  #   t.run(f'mkdir {save_dir} -p')
-  #   lr = 0.4 * num_tasks
-  #   lr = 2.5
-  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --warmup 5 --epochs 65 --small --dist-url env:// --dist-backend nccl --distributed'
-  #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-  #   cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv_8gpu.py {training_args}'
   #   t.run(f'echo "{cmd}" > {save_dir}/script.log')
   #   task_cmds.append(cmd)
 
