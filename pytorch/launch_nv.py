@@ -7,10 +7,14 @@
 # numpy01: ami-5b524f21
 
 # master command:
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c
+
+# 8 gpu training
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_b --zone us-west-2b --placement-group pytorch_cluster_b --ami ami-6583d71d
 
 # spot command:
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
+# you can use default aws provided ami
 
 from collections import OrderedDict
 import argparse
@@ -59,26 +63,26 @@ args = parser.parse_args()
 
 ## Setup instance:
 # ebs = None
-ebs = [{
-  'DeviceName': '/dev/sda1',
-  'Ebs': {
-    'VolumeSize': 1000, 
-    'DeleteOnTermination': True,
-    'VolumeType': 'io1',
-    'Iops': 14000
-  }
-}]
-
-# For using external ebs (so we don't hit iops limit)
 # ebs = [{
 #   'DeviceName': '/dev/sda1',
 #   'Ebs': {
-#     'VolumeSize': 500, 
+#     'VolumeSize': 1000, 
 #     'DeleteOnTermination': True,
 #     'VolumeType': 'io1',
-#     'Iops': 8000
+#     'Iops': 14000
 #   }
 # }]
+
+# For using external ebs (so we don't hit iops limit)
+ebs = [{
+  'DeviceName': '/dev/sda1',
+  'Ebs': {
+    'VolumeSize': 500, 
+    'DeleteOnTermination': True,
+    'VolumeType': 'io1',
+    'Iops': 18000
+  }
+}]
 
 def attach_instance_ebs(aws_instance, tag):
   ec2 = util.create_ec2_resource()
@@ -123,6 +127,7 @@ def create_job(run, job_name, num_tasks):
 #   run pytorch
   job.run_async_join('killall python || echo failed')  # kill previous run
   job.run_async_join('source activate pytorch_p36')
+  # job.run_async_join('source activate pytorch_source', ignore_errors=True)
 
   # upload files
   job.upload('resnet.py')
@@ -142,7 +147,7 @@ def create_job(run, job_name, num_tasks):
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   datestr = datetime.datetime.now().replace(microsecond=0).isoformat()
-  job.run('ulimit -n 9000') # to prevent tcp too many files open error
+  job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
   num_gpus = gpu_count[args.instance_type]
 
   if num_gpus <= 1:
@@ -152,17 +157,29 @@ def create_job(run, job_name, num_tasks):
     job.run_async(f'python train_imagenet_nv.py {training_args}')
     return
 
+  def get_ring_order(machine_order, gpu_order):
+    ngpus = len(gpu_order)
+    r_order = [((x+1)*ngpus) + y for x in machine_order for y in gpu_order]
+    return ' '.join(map(str, r_order))
+
   task_cmds = []
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e68-bs256-warmup-4'
+    save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e62-bs256-warmup-2'
     t.run(f'mkdir {save_dir} -p')
     lr = 0.4 * num_tasks
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 256 --sz 224 -j 8 --lr {lr} --warmup 4 --epochs 68 --small --dist-url env:// --dist-backend nccl --distributed'
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --warmup 2 --epochs 62 --small --dist-url env:// --dist-backend nccl --distributed'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-    t.run(f'echo "{cmd}" > {save_dir}/script.log')
+
+    ring = get_ring_order(range(num_tasks), range(num_gpus))
+    ring_rev = get_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
+    ring_skip = get_ring_order([1,4,7,2,5,0,3,6], range(num_gpus))
+    ring_skip_rev = get_ring_order(reversed([1,4,7,2,5,0,3,6]), [3,2,1,0,7,6,5,4])
+    nccl_args = f'NCCL_RINGS="{ring} | {ring_rev} | {ring_skip} | {ring_skip_rev}" NCCL_DEBUG=INFO'
+
+    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+    t.run(f'echo {cmd} > {save_dir}/script.log')
     task_cmds.append(cmd)
 
   # trainig on 4 machines
