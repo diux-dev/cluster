@@ -19,6 +19,7 @@ import torchvision.datasets as datasets
 from fp16util import network_to_half, set_grad, copy_in_params
 
 from larc import LARC
+import gc
 
 # model_names = sorted(name for name in models.__dict__
 #                      if name.islower() and not name.startswith("__")
@@ -59,7 +60,6 @@ def get_parser():
                         help='evaluate model on validation set')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
-    parser.add_argument('--dp', action='store_true', help='Run model fp16 mode.')
     parser.add_argument('--larc', action='store_true', help='Run model with larc enabled.')
     parser.add_argument('--sz',       default=224, type=int, help='Size of transformed image.')
     parser.add_argument('--decay-int', default=30, type=int, help='Decay LR by 10 every decay-int epochs')
@@ -108,6 +108,75 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min
 
     return train_loader,val_loader,train_sampler,val_sampler
 
+class DataManager():
+    def __init__(self):
+        if args.small: self.load_data('-sz/160', args.batch_size, 128)
+        # else: self.load_data('-sz/320', args.batch_size, 224)
+        else: self.load_data('', args.batch_size, 224)
+        
+    def set_epoch(self, epoch):
+        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+            # self.load_data('-sz/320', args.batch_size, 224)
+            self.load_data('', args.batch_size, 224)
+        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+            self.load_data('', 128, 288, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-2:
+            self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
+
+        if args.distributed:
+            self.trn_smp.set_epoch(epoch)
+            self.val_smp.set_epoch(epoch)
+        
+    def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
+        traindir = args.data+dir_prefix+'/train'
+        valdir = args.data+dir_prefix+'/validation'
+        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
+
+        # clear memory
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+# Seems to speed up training by ~2%
+class DataPrefetcher():
+    def __init__(self, loader, stop_after=None, prefetch=True):
+        self.loader = loader
+        # self.dataset = loader.dataset
+        self.prefetch = prefetch
+        if prefetch:
+            self.stream = torch.cuda.Stream()
+            self.stop_after = stop_after
+            self.next_input = None
+            self.next_target = None
+
+    def __len__(self): return len(self.loader)
+
+    def preload(self):
+        try:
+            self.next_input, self.next_target = next(self.loaditer)
+        except StopIteration:
+            self.next_input = None
+            self.next_target = None
+            return
+        with torch.cuda.stream(self.stream):
+            self.next_input = self.next_input.cuda(async=True)
+            self.next_target = self.next_target.cuda(async=True)
+
+    def __iter__(self):
+        if not self.prefetch: return self
+        count = 0
+        self.loaditer = iter(self.loader)
+        self.preload()
+        while self.next_input is not None:
+            torch.cuda.current_stream().wait_stream(self.stream)
+            input = self.next_input
+            target = self.next_target
+            self.preload()
+            count += 1
+            yield input, target
+            if type(self.stop_after) is int and (count > self.stop_after):
+                break
+
 def main():
     print("~~epoch\thours\ttop1Accuracy\n")
     start_time = datetime.now()
@@ -132,9 +201,6 @@ def main():
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    elif args.dp:
-        model = nn.DataParallel(model)
-        args.batch_size *= n_dev
 
     global param_copy
     if args.fp16:
@@ -159,63 +225,23 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
-    if args.small:
-        traindir = os.path.join(args.data+'-sz/160', 'train')
-        valdir = os.path.join(args.data+'-sz/160', 'validation')
-        args.sz = 128
-    else:
-        traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-        valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-        # traindir = os.path.join(args.data, 'train')
-        # valdir = os.path.join(args.data, 'validation')
-        args.sz = 224
+    dm = DataManager()
 
-    train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=args.sz, use_val_sampler=True)
-
-    if args.evaluate: return validate(val_loader, model, criterion, epoch, start_time)
+    if args.evaluate: return validate(dm.val_dl, model, criterion, epoch, start_time)
 
     print("Created data loaders")
 
     print("Begin training")
-    data_loader_changed = False
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         adjust_learning_rate(optimizer, epoch)
-        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
-            traindir = os.path.join(args.data+'-sz/320', 'train') # (AS) WARNING: added 320
-            valdir = os.path.join(args.data+'-sz/320', 'validation') # (AS) WARNING: added 320
-            # traindir = os.path.join(args.data, 'train')
-            # valdir = os.path.join(args.data, 'validation')
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(traindir, valdir, bs=args.batch_size, sz=224)
-            data_loader_changed = True
-        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
-            traindir = os.path.join(args.data, 'train')
-            valdir = os.path.join(args.data, 'validation')
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=True, min_scale=0.5)
-            data_loader_changed = True
-        if epoch==args.epochs+args.warmup-2:
-            traindir = os.path.join(args.data, 'train')
-            valdir = os.path.join(args.data, 'validation')
-            train_loader,val_loader,train_sampler,val_sampler = get_loaders(
-                traindir, valdir, bs=128, val_bs=128, sz=288, use_val_sampler=False, min_scale=0.5)
-            data_loader_changed = True
-        if data_loader_changed:
-            # getting out of memory. Maybe we need to collect memory?
-            import gc
-            gc.collect()
-            torch.cuda.empty_cache()
-        data_loader_changed = False
-
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-            val_sampler.set_epoch(epoch)
+        dm.set_epoch(epoch)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(train_loader, model, criterion, optimizer, epoch)
+            train(dm.trn_dl, model, criterion, optimizer, epoch)
 
         if args.prof: break
-        prec1 = validate(val_loader, model, criterion, epoch, start_time)
+        prec1 = validate(dm.val_dl, model, criterion, epoch, start_time)
 
 
         is_best = prec1 > best_prec1
@@ -275,36 +301,6 @@ def to_python_float(t):
     else:
         return t[0]
 
-class data_prefetcher():
-    def __init__(self, loader, prefetch=True):
-        self.loader,self.prefetch = iter(loader),prefetch
-        if prefetch:
-            self.stream = torch.cuda.Stream()
-            self.preload()
-
-    def preload(self):
-        try:
-            self.next_input, self.next_target = next(self.loader)
-        except StopIteration:
-            self.next_input = None
-            self.next_target = None
-            return
-        with torch.cuda.stream(self.stream):
-            self.next_input = self.next_input.cuda(async=True)
-            self.next_target = self.next_target.cuda(async=True)
-
-    def next(self):
-        if not self.prefetch:
-            input,target = next(self.loader)
-            return input.cuda(async=True),target.cuda(async=True)
-
-        torch.cuda.current_stream().wait_stream(self.stream)
-        input = self.next_input
-        target = self.next_target
-        self.preload()
-        return input, target
-
-
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -316,10 +312,9 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
     end = time.time()
 
-    prefetcher = data_prefetcher(train_loader, prefetch=True)
-    input, target = prefetcher.next()
+    prefetcher = DataPrefetcher(train_loader, prefetch=True)
     i = -1
-    while input is not None:
+    for input,target in iter(prefetcher):
         i += 1
         if args.prof and (i > 200): break
         # measure data loading time
@@ -370,7 +365,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
         batch_time.update(time.time() - end)
 
         end = time.time()
-        input, target = prefetcher.next()
 
         if args.local_rank == 0 and i % args.print_freq == 0 and i > 1:
             
@@ -396,10 +390,9 @@ def validate(val_loader, model, criterion, epoch, start_time):
     model.eval()
     end = time.time()
 
-    prefetcher = data_prefetcher(val_loader)
-    input, target = prefetcher.next()
+    prefetcher = DataPrefetcher(val_loader, prefetch=True)
     i = -1
-    while input is not None:
+    for input,target in iter(prefetcher):
         i += 1
 
         target = target.cuda(async=True)
@@ -441,8 +434,6 @@ def validate(val_loader, model, criterion, epoch, start_time):
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
-
-        input, target = prefetcher.next()
 
     time_diff = datetime.now()-start_time
     print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top5.avg:.3f}\n')
