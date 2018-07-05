@@ -129,15 +129,15 @@ def create_job(run, job_name, num_tasks):
   # job.run_async_join('source activate pytorch_source', ignore_errors=True)
 
   # upload files
-  job.upload('resnet.py')
-  job.upload('fp16util.py')
-  job.upload('train_imagenet_nv.py')
-  job.upload('larc.py')
+  job.upload('training/resnet.py')
+  job.upload('training/fp16util.py')
+  job.upload('training/train_imagenet_nv.py')
+  job.upload('training/distributed.py')
 
   # setup machines
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
-    job.upload('setup_env_nv.sh')
+    job.upload('setup/setup_env_nv.sh')
     job.run_async_join('chmod +x setup_env_nv.sh')
     job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=60)
 
@@ -164,7 +164,7 @@ def create_job(run, job_name, num_tasks):
     warmup = 2
     batch_size = 192
     lr = 0.4 * num_tasks
-    tag = 'fastdl_preload_v2'
+    tag = 'apex_dist'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
     training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
