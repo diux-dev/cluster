@@ -20,9 +20,8 @@ from fp16util import network_to_half, set_grad, copy_in_params
 
 from larc import LARC
 import gc
+from fp16_optimizer import FP16_Optimizer
 
-
-from distributed import DDP
 
 # model_names = sorted(name for name in models.__dict__
 #                      if name.islower() and not name.startswith("__")
@@ -247,18 +246,12 @@ def main():
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
-    # if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    if args.distributed: model = DDP(model)
-
-    global param_copy
-    if args.fp16:
-        param_copy = [param.clone().type(torch.cuda.FloatTensor).detach() for param in model.parameters()]
-        for param in param_copy: param.requires_grad = True
-    else: param_copy = list(model.parameters())
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(param_copy, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    if args.fp16: optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale, dynamic_loss_scale=False)
 
     print("Defined loss and optimizer")
 
@@ -391,25 +384,14 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
         top1.update(to_python_float(prec1), input.size(0))
         top5.update(to_python_float(prec5), input.size(0))
 
-        loss = loss*args.loss_scale
         # compute gradient and do SGD step
-
+        optimizer.zero_grad()
         if args.fp16:
-            model.zero_grad()
-            loss.backward()
-            set_grad(param_copy, list(model.parameters()))
-
-            if args.loss_scale != 1:
-                for param in param_copy:
-                    param.grad.data = param.grad.data/args.loss_scale
-
-            optimizer.step()
-            copy_in_params(model, param_copy)
-            torch.cuda.synchronize()
+            optimizer.backward(loss)
         else:
-            optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+        torch.cuda.synchronize()
+        optimizer.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)

@@ -19,7 +19,6 @@ import torchvision.datasets as datasets
 from fp16util import network_to_half, set_grad, copy_in_params
 
 from larc import LARC
-from distributed import DistributedDataParallel as DDP
 import gc
 
 # model_names = sorted(name for name in models.__dict__
@@ -246,7 +245,6 @@ def main():
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    # if args.distributed: model = DDP(model)
 
     global param_copy
     if args.fp16:
