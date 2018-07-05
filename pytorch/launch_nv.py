@@ -131,6 +131,9 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload('training/resnet.py')
   job.upload('training/fp16util.py')
+  job.upload('training/fp16util_apex.py')
+  job.upload('training/fp16_optimizer.py')
+  job.upload('training/loss_scaler.py')
   job.upload('training/train_imagenet_nv.py')
   job.upload('training/distributed.py')
 

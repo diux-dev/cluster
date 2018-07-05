@@ -4,6 +4,7 @@
 
 import os
 import glob
+import threading
 
 import util as u
 
@@ -96,27 +97,34 @@ class Job:
       task.run(cmd, *args, **kwargs)
 
   def run_async_join(self, cmd, *args, **kwargs):
-    import threading
     """Runs command on every task in the job async. Then waits for all to finish"""
     def t_run_cmd(t): t.run(cmd, *args, **kwargs)
-    t_threads = [threading.Thread(name=f't_{i}', target=t_run_cmd, args=[t]) for i,t in enumerate(self.tasks)]
-    for thread in t_threads: thread.start()
-    for thread in t_threads: thread.join()
+    self.async_join(t_run_cmd)
   
   def upload(self, *args, **kwargs):
     """Runs command on every task in the job."""
     
     for task in self.tasks:
       task.upload(*args, **kwargs)
+
+  def upload_async(self, *args, **kwargs):
+    def t_upload(t): t.upload(*args, **kwargs)
+    self.async_join(self, t_upload)
+
+  def async_join(self, task_fn):
+    t_threads = [threading.Thread(name=f't_{i}', target=task_fn, args=[t]) for i,t in enumerate(self.tasks)]
+    for thread in t_threads: thread.start()
+    for thread in t_threads: thread.join()
       
   # todo: rename to initialize
   def wait_until_ready(self):
     """Waits until all tasks in the job are available and initialized."""
-    t_threads = [threading.Thread(name=f't_{i}', target=lambda t: t.wait_until_ready(), args=[t]) for i,t in enumerate(self.tasks)]
-    for thread in t_threads: thread.start()
-    for thread in t_threads: thread.join()
-    # for task in self.tasks:
-    #   task.wait_until_ready()
+    # import threading
+    # t_threads = [threading.Thread(name=f't_{i}', target=lambda t: t.wait_until_ready(), args=[t]) for i,t in enumerate(self.tasks)]
+    # for thread in t_threads: thread.start()
+    # for thread in t_threads: thread.join()
+    for task in self.tasks:
+      task.wait_until_ready()
       # todo: initialization should start async in constructor instead of here
   
   # these methods redirect to the first task
