@@ -112,8 +112,11 @@ class Job:
   # todo: rename to initialize
   def wait_until_ready(self):
     """Waits until all tasks in the job are available and initialized."""
-    for task in self.tasks:
-      task.wait_until_ready()
+    t_threads = [threading.Thread(name=f't_{i}', target=lambda t: t.wait_until_ready(), args=[t]) for i,t in enumerate(self.tasks)]
+    for thread in t_threads: thread.start()
+    for thread in t_threads: thread.join()
+    # for task in self.tasks:
+    #   task.wait_until_ready()
       # todo: initialization should start async in constructor instead of here
   
   # these methods redirect to the first task

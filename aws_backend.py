@@ -155,6 +155,15 @@ class Job(backend.Job):
                   skip_efs_mount=skip_efs_mount)
       self.tasks[task_id] = task
 
+
+  # def run_async_join(self, cmd, *args, **kwargs):
+  #   import threading
+  #   """Runs command on every task in the job async. Then waits for all to finish"""
+  #   def t_run_cmd(t): t.run(cmd, *args, **kwargs)
+  #   t_threads = [threading.Thread(name=f't_{i}', target=t_run_cmd, args=[t]) for i,t in enumerate(self.tasks)]
+  #   for thread in t_threads: thread.start()
+  #   for thread in t_threads: thread.join()
+
   def _initialize(self):
     for task in self.tasks:
       task._initialize()
@@ -274,6 +283,7 @@ ssh -i %s -o StrictHostKeyChecking=no %s@%s
 tmux a
 """.strip() % (self.keypair_fn, self.username, self.public_ip)
     self.log("Initialize complete")
+    self.log(self.connect_instructions)
 
 
   # todo: rename wait_until_ready to wait_until_initialized
