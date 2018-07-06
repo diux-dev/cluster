@@ -14,3 +14,4 @@ __pycache__
 /psbench/macbook-cpu
 .vscode/
 .ipynb_checkpoints/
+diux-aws.ipynb

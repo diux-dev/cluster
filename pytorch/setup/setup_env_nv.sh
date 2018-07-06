@@ -13,6 +13,9 @@ fi
 
 conda install pytorch torchvision cuda90 -c pytorch -y
 
+# setting max speed. Doesn't seem to boost performace for me though
+sudo nvidia-smi -ac 877,1530
+
 cd ~/
 
 DATA_DIR=~/data

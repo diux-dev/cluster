@@ -58,6 +58,8 @@ parser.add_argument('--attach-volume', type=str, default='',
                     help='tag name of ebs volume to attach')
 parser.add_argument('--spot', action='store_true', 
                     help='launch using spot requests')
+parser.add_argument('--mount-efs', action='store_true',
+                    help='Mount efs. For loading imagenet')
 args = parser.parse_args()
 
 
@@ -128,19 +130,16 @@ def create_job(run, job_name, num_tasks):
   job.run_async_join('source activate pytorch_p36')
   # job.run_async_join('source activate pytorch_source', ignore_errors=True)
 
+
   # upload files
-  job.upload('training/resnet.py')
-  job.upload('training/fp16util.py')
-  job.upload('training/fp16util_apex.py')
-  job.upload('training/fp16_optimizer.py')
-  job.upload('training/loss_scaler.py')
-  job.upload('training/train_imagenet_nv.py')
-  job.upload('training/distributed.py')
+  job.upload_async('training/resnet.py')
+  job.upload_async('training/fp16util.py')
+  job.upload_async('training/train_imagenet_nv.py')
 
   # setup machines
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
-    job.upload('setup/setup_env_nv.sh')
+    job.upload_async('setup/setup_env_nv.sh')
     job.run_async_join('chmod +x setup_env_nv.sh')
     job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=60)
 
@@ -220,7 +219,7 @@ def main():
 
   run = aws_backend.make_run(args.name, ami=args.ami,
                              availability_zone=args.zone,
-                             linux_type=args.linux_type)
+                             linux_type=args.linux_type, skip_efs_mount=(not args.mount_efs))
   create_job(run, args.job_name, args.num_tasks)
 
 

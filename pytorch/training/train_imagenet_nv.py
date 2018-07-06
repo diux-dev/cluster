@@ -16,7 +16,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
-from fp16util import network_to_half, set_grad, copy_in_params
+from fp16util_apex import *
 
 from larc import LARC
 import gc
@@ -210,13 +210,13 @@ class DataPrefetcher():
         count = 0
         self.loaditer = iter(self.loader)
         if not self.prefetch: return self.load_iter
-
         self.preload()
         while self.next_input is not None:
             torch.cuda.current_stream().wait_stream(self.stream)
             input = self.next_input
             target = self.next_target
             self.preload()
+            if count == 0: print('Prefetcher first preload complete')
             count += 1
             yield input, target
             if type(self.stop_after) is int and (count > self.stop_after):
@@ -246,15 +246,18 @@ def main():
     if args.fp16: model = network_to_half(model)
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
-    global param_copy
-    if args.fp16:
-        param_copy = [param.clone().type(torch.cuda.FloatTensor).detach() for param in model.parameters()]
-        for param in param_copy: param.requires_grad = True
-    else: param_copy = list(model.parameters())
+    # global param_copy
+    # if args.fp16:
+    #     param_copy = [param.clone().type(torch.cuda.FloatTensor).detach() for param in model.parameters()]
+    #     for param in param_copy: param.requires_grad = True
+    # else: param_copy = list(model.parameters())
+    global model_params, master_params
+    if args.fp16:  model_params, master_params = prep_param_lists(model)
+    else: master_params = list(model.parameters())
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(param_copy, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     print("Defined loss and optimizer")
 
@@ -358,7 +361,10 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
     end = time.time()
 
     i = -1
+    st = time.time()
+    print('Begin training loop:', st)
     for input,target in trn_iter:
+        if i < 0: print('Received input:', time.time()-st)
         i += 1
         if args.prof and (i > 200): break
         # measure data loading time
@@ -389,24 +395,26 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
 
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
+        if i < 1: print('Evaluate and loss:', time.time()-st)
 
         if args.fp16:
             model.zero_grad()
             loss.backward()
-            set_grad(param_copy, list(model.parameters()))
+            model_grads_to_master_grads(model_params, master_params)
 
             if args.loss_scale != 1:
-                for param in param_copy:
+                for param in master_params:
                     param.grad.data = param.grad.data/args.loss_scale
 
             optimizer.step()
-            copy_in_params(model, param_copy)
+            master_params_to_model_params(model_params, master_params)
             torch.cuda.synchronize()
         else:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+        if i < 1: print('Backward step:', time.time()-st)
         # measure elapsed time
         batch_time.update(time.time() - end)
 

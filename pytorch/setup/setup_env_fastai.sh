@@ -19,6 +19,9 @@ if [ ! -d "$FASTAI_DIR" ]; then
     CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 fi
 
+# setting max speed. Doesn't seem to boost performace for me though
+sudo nvidia-smi -ac 877,1530
+
 cd ~/fastai
 git pull
 # conda env update fastai
