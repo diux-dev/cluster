@@ -248,7 +248,7 @@ class Scheduler():
 
     def update_lr(self, epoch, batch_num, batch_tot):
         lr = self.get_lr(epoch, batch_num, batch_tot)
-        if self.current_lr != lr:
+        if (self.current_lr != lr) and ((batch_num == 0) or (batch_num+1 == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
