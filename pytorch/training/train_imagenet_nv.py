@@ -16,9 +16,7 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 # import models
-from fp16util_apex import *
-
-from larc import LARC
+from fp16util import *
 import gc
 
 # model_names = sorted(name for name in models.__dict__
@@ -60,7 +58,6 @@ def get_parser():
                         help='evaluate model on validation set')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
-    parser.add_argument('--larc', action='store_true', help='Run model with larc enabled.')
     parser.add_argument('--sz',       default=224, type=int, help='Size of transformed image.')
     parser.add_argument('--decay-int', default=30, type=int, help='Decay LR by 10 every decay-int epochs')
     parser.add_argument('--loss-scale', type=float, default=1,
@@ -126,51 +123,6 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min
 
     return train_loader,val_loader,train_sampler,val_sampler
 
-class DataManager():
-    def __init__(self):
-        if args.small: self.load_data('-sz/160', args.batch_size, 128)
-        # else: self.load_data('-sz/320', args.batch_size, 224)
-        else: self.load_data('', args.batch_size, 224)
-        
-    def set_epoch(self, epoch):
-        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
-            # self.load_data('-sz/320', args.batch_size, 224)
-            self.load_data('', args.batch_size, 224)
-        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
-            self.load_data('', 128, 288, min_scale=0.5)
-        if epoch==args.epochs+args.warmup-2:
-            self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
-
-        if args.distributed:
-            self.trn_smp.set_epoch(epoch)
-            self.val_smp.set_epoch(epoch)
-
-    def get_trn_iter(self):
-        trn_iter = self.trn_iter
-        self.trn_iter = iter(self.trn_dl)
-        return trn_iter
-
-    def get_val_iter(self):
-        val_iter = self.val_iter
-        self.val_iter = iter(self.val_dl)
-        return val_iter
-        
-    def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
-        traindir = args.data+dir_prefix+'/train'
-        valdir = args.data+dir_prefix+'/validation'
-        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
-        self.trn_dl = DataPrefetcher(self.trn_dl)
-        self.val_dl = DataPrefetcher(self.val_dl)
-
-        self.trn_len = len(self.trn_dl)
-        self.val_len = len(self.val_dl)
-        self.trn_iter = iter(self.trn_dl)
-        self.val_iter = iter(self.val_dl)
-
-        # clear memory
-        gc.collect()
-        torch.cuda.empty_cache()
-        
 # Seems to speed up training by ~2%
 class DataPrefetcher():
     def __init__(self, loader, stop_after=None, prefetch=True):
@@ -222,6 +174,125 @@ class DataPrefetcher():
             if type(self.stop_after) is int and (count > self.stop_after):
                 break
 
+class DataManager():
+    def __init__(self):
+        if args.small: self.load_data('-sz/160', args.batch_size, 128)
+        # else: self.load_data('-sz/320', args.batch_size, 224)
+        else: self.load_data('', args.batch_size, 224)
+        
+    def set_epoch(self, epoch):
+        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+            # self.load_data('-sz/320', args.batch_size, 224)
+            self.load_data('', args.batch_size, 224)
+        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+            self.load_data('', 128, 288, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-2:
+            self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
+
+        if args.distributed:
+            self.trn_smp.set_epoch(epoch)
+            self.val_smp.set_epoch(epoch)
+
+    def get_trn_iter(self):
+        trn_iter = self.trn_iter
+        self.trn_iter = iter(self.trn_dl)
+        return trn_iter
+
+    def get_val_iter(self):
+        val_iter = self.val_iter
+        self.val_iter = iter(self.val_dl)
+        return val_iter
+        
+    def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
+        traindir = args.data+dir_prefix+'/train'
+        valdir = args.data+dir_prefix+'/validation'
+        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
+        self.trn_dl = DataPrefetcher(self.trn_dl)
+        self.val_dl = DataPrefetcher(self.val_dl)
+
+        self.trn_len = len(self.trn_dl)
+        self.val_len = len(self.val_dl)
+        self.trn_iter = iter(self.trn_dl)
+        self.val_iter = iter(self.val_dl)
+
+        # clear memory
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+class Scheduler():
+    def __init__(self, optimizer):
+        self.optimizer = optimizer
+        self.current_lr = None
+        self.current_epoch = 0
+
+    def get_lr(self, epoch, batch_num, batch_tot):
+        """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
+        if epoch<int(args.epochs*0.14)+args.warmup:
+            epoch_tot = int(args.epochs*0.14)+args.warmup
+            starting_lr = args.lr/epoch_tot
+            world_size = dist.get_world_size()
+            if (world_size > 4) and (epoch < 4):
+                # starting_lr = starting_lr/(world_size/2)
+                starting_lr = starting_lr/(4 - epoch)
+            ending_lr = args.lr
+            step_size = (ending_lr - starting_lr)/epoch_tot
+            batch_step_size = step_size/batch_tot
+            lr = step_size*epoch + batch_step_size*batch_num
+
+            # lr = args.lr/(int(args.epochs*0.1)+args.warmup-epoch)
+        elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+        elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+        elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+        else         : lr = args.lr/1000
+        return lr
+
+    def update_lr(self, epoch, batch_num, batch_tot):
+        lr = self.get_lr(epoch, batch_num, batch_tot)
+        if self.current_lr != lr:
+            print(f'Changing LR from {self.current_lr} to {lr}')
+
+        self.current_lr = lr
+        self.current_epoch = epoch
+        self.current_batch = batch_num
+
+        for param_group in self.optimizer.param_groups: param_group['lr'] = lr
+
+        if not args.distributed: return
+        for param_group in self.optimizer.param_groups:
+            lr_old = param_group['lr']
+            param_group['lr'] = lr
+            # Trick 4: apply momentum correction when lr is updated
+            if lr > lr_old:
+                param_group['momentum'] = lr / lr_old * args.momentum
+            else:
+                param_group['momentum'] = args.momentum
+
+def init_dist_weights(model):
+    # Distributed training uses 4 tricks to maintain the accuracy
+    # with much larger batchsize, see
+    # https://arxiv.org/pdf/1706.02677.pdf
+    # for more details
+    from resnet import BasicBlock, Bottleneck
+    from torch.nn.parameter import Parameter
+
+    if args.arch.startswith('resnet'):
+        for m in model.modules():
+            # Trick 1: the last BatchNorm layer in each block need to
+            # be initialized as zero gamma
+            if isinstance(m, BasicBlock):
+                num_features = m.bn2.num_features
+                m.bn2.weight = Parameter(torch.zeros(num_features))
+            if isinstance(m, Bottleneck):
+                num_features = m.bn3.num_features
+                m.bn3.weight = Parameter(torch.zeros(num_features))
+            # Trick 2: linear layers are initialized by
+            # drawing weights from a zero-mean Gaussian with
+            # standard deviation of 0.01. In the paper it was only
+            # fc layer, but in practice we found this better for
+            # accuracy.
+            if isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.01)
+
 def main():
     print("~~epoch\thours\ttop1Accuracy\n")
     start_time = datetime.now()
@@ -244,7 +315,10 @@ def main():
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
-    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.distributed: 
+        # init_dist_weights(model)
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+
 
     # global param_copy
     # if args.fp16:
@@ -258,6 +332,7 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    scheduler = Scheduler(optimizer)
 
     print("Defined loss and optimizer")
 
@@ -277,17 +352,16 @@ def main():
 
     if args.evaluate: return validate(dm.val_dl, model, criterion, epoch, start_time)
 
-
     print("Begin training")
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         estart = time.time()
-        adjust_learning_rate(optimizer, epoch)
+        # adjust_learning_rate(optimizer, epoch)
         dm.set_epoch(epoch)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, epoch)
+            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch)
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
@@ -300,47 +374,6 @@ def main():
                 'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
-# class Scheduler():
-#     def __init__(self, optimizer):
-#         self.optimizer = optimizer
-#         self.current_lr = None
-#         self.current_epoch = 0
-
-#     def get_lr(epoch, batch=None):
-#         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-#         if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
-#         elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-#         elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-#         elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
-#         else         : lr = args.lr/1000
-#         if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/((args.warmup+1)/(epoch+1)) # even smaller lr for warmup
-#         return lr
-
-#     def set_epoch(epoch):
-#         lr = get_lr(epoch)
-
-#         if args.larc and (epoch >= int(args.warmup+args.epochs*0.1)):
-#             self.optimizer = LARC(self.optimizer, trust_coefficient=0.001)
-#             self.current_lr = None
-
-#         if self.current_lr == lr: return
-#         self.current_lr = lr
-#         for param_group in self.optimizer.param_groups: param_group['lr'] = lr
-
-#     def set_batch(batch):
-#         1 - 1/(batch+1)
-
-    
-def adjust_learning_rate(optimizer, epoch):
-    """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-    if   epoch<int(args.epochs*0.1)+args.warmup : lr = args.lr/(int(args.epochs*0.1)-epoch+args.warmup)
-    elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-    elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-    elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
-    else         : lr = args.lr/1000
-    if (epoch < args.warmup) and (args.lr > 3.0): lr = lr/((args.warmup+1)/(epoch+1)) # even smaller lr for warmup
-    for param_group in optimizer.param_groups: param_group['lr'] = lr
-
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
@@ -349,7 +382,7 @@ def to_python_float(t):
     else:
         return t[0]
 
-def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
+def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -360,15 +393,14 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
     model.train()
     end = time.time()
 
-    i = -1
     st = time.time()
     print('Begin training loop:', st)
-    for input,target in trn_iter:
-        if i < 0: print('Received input:', time.time()-st)
-        i += 1
+    for i,(input,target) in enumerate(trn_iter):
+        if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
         # measure data loading time
         data_time.update(time.time() - end)
+        scheduler.update_lr(epoch, i, trn_len)
 
         # input_var = Variable(input)
         # target_var = Variable(target)
@@ -395,7 +427,7 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
 
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
-        if i < 1: print('Evaluate and loss:', time.time()-st)
+        # if i == 0: print('Evaluate and loss:', time.time()-st)
 
         if args.fp16:
             model.zero_grad()
@@ -414,7 +446,7 @@ def train(trn_iter, trn_len, model, criterion, optimizer, epoch):
             loss.backward()
             optimizer.step()
 
-        if i < 1: print('Backward step:', time.time()-st)
+        # if i == 0: print('Backward step:', time.time()-st)
         # measure elapsed time
         batch_time.update(time.time() - end)
 
@@ -444,10 +476,7 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
     model.eval()
     end = time.time()
 
-    i = -1
-    for input,target in val_iter:
-        i += 1
-
+    for i,(input,target) in enumerate(val_iter):
         # target = target.cuda(async=True)
         # input_var = Variable(input)
         # target_var = Variable(target)

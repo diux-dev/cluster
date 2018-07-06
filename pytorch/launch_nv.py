@@ -163,10 +163,10 @@ def create_job(run, job_name, num_tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
     epochs = 65
-    warmup = 2
+    warmup = 0
     batch_size = 192
     lr = 0.4 * num_tasks
-    tag = 'apex_dist'
+    tag = 'longer_warmup'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
     training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
