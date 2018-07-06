@@ -6,6 +6,8 @@
 # numpy00: ami-f9d6dc83
 # numpy01: ami-5b524f21
 
+
+
 # master command:
 # python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c
 
@@ -13,8 +15,10 @@
 # python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_b --zone us-west-2b --placement-group pytorch_cluster_b --ami ami-6583d71d
 
 # spot command:
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
 # you can use default aws provided ami
+
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_c_spot --zone us-west-2c --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
 
 from collections import OrderedDict
 import argparse
@@ -162,10 +166,10 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    epochs = 65
+    epochs = 55
     warmup = 0
-    batch_size = 192
-    lr = 0.4 * num_tasks
+    batch_size = 128
+    lr = 0.3 * num_tasks
     tag = 'longer_warmup'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
