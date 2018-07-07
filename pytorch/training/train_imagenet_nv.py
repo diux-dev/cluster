@@ -21,6 +21,10 @@ from fp16util import *
 import gc
 
 import resnet
+from torch.utils.data.sampler import Sampler
+import torchvision
+import pickle
+from tqdm import tqdm
 # import resnet_sd as resnet
 
 # model_names = sorted(name for name in models.__dict__
@@ -67,6 +71,7 @@ def get_parser():
     parser.add_argument('--loss-scale', type=float, default=1,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
+    parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
 
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--dist-url', default='file://sync.file', type=str,
@@ -106,26 +111,120 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
         ]))
-    val_dataset = datasets.ImageFolder(
-        valdir, transforms.Compose([
-            transforms.Resize(int(sz*1.14)),
-            transforms.CenterCrop(sz),
-        ]))
+    # val_dataset = datasets.ImageFolder(
+    #     valdir, transforms.Compose([
+    #         transforms.Resize(int(sz*1.14)),
+    #         transforms.CenterCrop(sz),
+    #     ]))
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
-    val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
+    # val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
         sampler=train_sampler)
 
+    use_val_ar = args.val_ar and (not use_val_sampler)
+    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_val_sampler=use_val_sampler, use_ar_sampler=use_val_ar)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=val_bs, shuffle=False,
         num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
-        sampler=val_sampler if use_val_sampler else None)
-
+        sampler=val_sampler)
     return train_loader,val_loader,train_sampler,val_sampler
+
+
+import os.path
+def sort_ar(valdir):
+    idx2ar_file = args.data+'/sorted_idxar.p'
+    if os.path.isfile(idx2ar_file): return pickle.load(open(idx2ar_file, 'rb'))
+    print('Creating AR indexes. Please be patient this may take a couple minutes...')
+    val_dataset = datasets.ImageFolder(valdir)
+    sizes = [img[0].size for img in tqdm(val_dataset, total=len(val_dataset))]
+    idx_ar = [(i, round(s[0]/s[1], 5)) for i,s in enumerate(sizes)]
+    sorted_idxar = sorted(idx_ar, key=lambda x: x[1])
+    pickle.dump(sorted_idxar, open(idx2ar_file, 'wb'))
+    print('Done')
+    return sorted_idxar
+
+def chunks(l, n):
+    n = max(1, n)
+    return (l[i:i+n] for i in range(0, len(l), n))
+
+def map_idx2ar(idx_ar_sorted, batch_size):
+    idx2ar_map_file = args.data+'/idxar_map.p'
+    if os.path.isfile(idx2ar_map_file): return pickle.load(open(idx2ar_map_file, 'rb'))
+    ar_chunks = list(chunks(idx_ar_sorted, batch_size))
+    idx2ar = {}
+    for chunk in ar_chunks:
+        idxs, ars = list(zip(*chunk))
+        mean = round(np.mean(ars), 5)
+        for idx in idxs:
+            idx2ar[idx] = mean
+    pickle.dump(idx2ar, open(idx2ar_map_file, 'wb'))
+    return idx2ar
+
+class ValDataset(datasets.ImageFolder):
+    def __init__(self, root, transform=None, target_transform=None):
+        super().__init__(root, transform, target_transform)
+    def __getitem__(self, index):
+        path, target = self.imgs[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            for tfm in self.transform:
+                if isinstance(tfm, CropArTfm): sample = tfm(sample, index)
+                else: sample = tfm(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return sample, target
+
+
+class ValDistSampler(Sampler):
+    def __init__(self, indices):
+        self.indices = indices
+        if args.distributed: 
+            self.num_replicas = dist.get_world_size() 
+            self.rank = dist.get_rank()
+        else: 
+            self.rank = 0
+            self.num_replicas = 1
+        self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
+    def __iter__(self):
+        offset = self.num_samples * self.rank
+        return indices[offset:offset+self.num_samples]
+    def __len__(self): return self.num_samples
+    def set_epoch(self, epoch): return
+        
+class CropArTfm(object):
+    def __init__(self, idx2ar, target_size):
+        self.idx2ar, self.target_size = idx2ar, target_size
+    def __call__(self, img, idx):
+        target_ar = self.idx2ar[idx]
+        if target_ar < 1: 
+            w = int(self.target_size/target_ar)
+            size = (w//8*8, self.target_size)
+        else: 
+            h = int(self.target_size*target_ar)
+            size = (self.target_size, h//8*8)
+        return torchvision.transforms.functional.center_crop(img, size)
+
+def create_validation_set(valdir, batch_size, target_size, use_ar):
+    idx_ar_sorted = sort_ar(valdir)
+    idx_sorted, _ = zip(*idx_ar_sorted)
+    idx2ar = map_idx2ar(idx_ar_sorted, batch_size)
+    
+    if use_ar:
+        ar_tfms = [transforms.Resize(int(target_size*1.14)), CropArTfm(idx2ar, target_size)]
+        val_dataset = ValDataset(valdir, transform=ar_tfms)
+        val_sampler = ValDistSampler(idx_sorted)
+        return val_dataset, val_sampler
+    
+    val_tfms = [transforms.Resize(int(args.sz*1.14)), transforms.CenterCrop(args.sz)]
+    val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
+    val_sampler = ValDistSampler(range(len(val_dataset)))
+    return val_dataset, val_sampler
+
 
 # Seems to speed up training by ~2%
 class DataPrefetcher():
@@ -172,7 +271,7 @@ class DataPrefetcher():
             input = self.next_input
             target = self.next_target
             self.preload()
-            if count == 0: print('Prefetcher first preload complete')
+            # if count == 0: print('Prefetcher first preload complete')
             count += 1
             yield input, target
             if type(self.stop_after) is int and (count > self.stop_after):
@@ -194,8 +293,8 @@ class DataManager():
             self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
 
         if args.distributed:
-            self.trn_smp.set_epoch(epoch)
-            self.val_smp.set_epoch(epoch)
+            if self.trn_smp: self.trn_smp.set_epoch(epoch)
+            if self.val_smp: self.val_smp.set_epoch(epoch)
 
     def get_trn_iter(self):
         # trn_iter = self.trn_iter
@@ -245,15 +344,15 @@ class Scheduler():
 
             # lr = args.lr/(int(args.epochs*0.1)+args.warmup-epoch)
         elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-        elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-        elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+        elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/9
+        elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/85
         else         : lr = args.lr/1000
         return lr
 
     def update_lr(self, epoch, batch_num, batch_tot):
         lr = self.get_lr(epoch, batch_num, batch_tot)
-        if (self.current_lr != lr) and ((batch_num == 0) or (batch_num+1 == batch_tot)): 
-            print(f'Changing LR from {self.current_lr} to {lr}')
+        # if (self.current_lr != lr) and ((batch_num == 0) or (batch_num+1 == batch_tot)): 
+        #     print(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
         self.current_epoch = epoch
@@ -297,6 +396,10 @@ def init_dist_weights(model):
 
 def main():
     print("~~epoch\thours\ttop1Accuracy\n")
+
+    # need to index validation directory before we start counting the time
+    if args.val_ar: sort_ar(args.data+'/validation')
+
     start_time = datetime.now()
 
     if args.distributed:
@@ -354,7 +457,7 @@ def main():
     dm = DataManager()
     print("Created data loaders")
 
-    if args.evaluate: return validate(dm.val_dl, model, criterion, epoch, start_time)
+    if args.evaluate: return validate(dm.val_dl, len(dm.val_dl), model, criterion, epoch, start_time)
 
     print("Begin training")
     estart = time.time()
