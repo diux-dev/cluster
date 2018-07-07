@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import sys
+import math
 
 import torch
 from torch.autograd import Variable
@@ -104,35 +105,6 @@ def fast_collate(batch):
         
     return tensor, targets
 
-def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
-    val_bs = val_bs or bs
-    train_dataset = datasets.ImageFolder(
-        traindir, transforms.Compose([
-            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
-            transforms.RandomHorizontalFlip(),
-        ]))
-    # val_dataset = datasets.ImageFolder(
-    #     valdir, transforms.Compose([
-    #         transforms.Resize(int(sz*1.14)),
-    #         transforms.CenterCrop(sz),
-    #     ]))
-
-    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
-    # val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=bs, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
-        sampler=train_sampler)
-
-    use_val_ar = args.val_ar and (not use_val_sampler)
-    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_val_sampler=use_val_sampler, use_ar_sampler=use_val_ar)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=val_bs, shuffle=False,
-        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
-        sampler=val_sampler)
-    return train_loader,val_loader,train_sampler,val_sampler
-
 
 import os.path
 def sort_ar(valdir):
@@ -152,7 +124,7 @@ def chunks(l, n):
     return (l[i:i+n] for i in range(0, len(l), n))
 
 def map_idx2ar(idx_ar_sorted, batch_size):
-    idx2ar_map_file = args.data+'/idxar_map.p'
+    idx2ar_map_file = args.data+f'/idxar_map_{batch_size}.p'
     if os.path.isfile(idx2ar_map_file): return pickle.load(open(idx2ar_map_file, 'rb'))
     ar_chunks = list(chunks(idx_ar_sorted, batch_size))
     idx2ar = {}
@@ -179,7 +151,6 @@ class ValDataset(datasets.ImageFolder):
 
         return sample, target
 
-
 class ValDistSampler(Sampler):
     def __init__(self, indices):
         self.indices = indices
@@ -189,13 +160,13 @@ class ValDistSampler(Sampler):
         else: 
             self.rank = 0
             self.num_replicas = 1
-        self.num_samples = int(math.ceil(len(self.dataset) * 1.0 / self.num_replicas))
+        self.num_samples = int(math.ceil(len(self.indices) * 1.0 / self.num_replicas))
     def __iter__(self):
         offset = self.num_samples * self.rank
-        return indices[offset:offset+self.num_samples]
+        return iter(self.indices[offset:offset+self.num_samples])
     def __len__(self): return self.num_samples
     def set_epoch(self, epoch): return
-        
+
 class CropArTfm(object):
     def __init__(self, idx2ar, target_size):
         self.idx2ar, self.target_size = idx2ar, target_size
@@ -222,8 +193,30 @@ def create_validation_set(valdir, batch_size, target_size, use_ar):
     
     val_tfms = [transforms.Resize(int(args.sz*1.14)), transforms.CenterCrop(args.sz)]
     val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
-    val_sampler = ValDistSampler(range(len(val_dataset)))
+    val_sampler = ValDistSampler(list(range(len(val_dataset))))
     return val_dataset, val_sampler
+
+def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_val_sampler=True, min_scale=0.08):
+    val_bs = val_bs or bs
+    train_dataset = datasets.ImageFolder(
+        traindir, transforms.Compose([
+            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            transforms.RandomHorizontalFlip(),
+        ]))
+    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=bs, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
+        sampler=train_sampler)
+
+    use_val_ar = args.val_ar and (not use_val_sampler)
+    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_val_ar)
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=val_bs, shuffle=False,
+        num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
+        sampler=val_sampler if use_val_sampler else None)
+    return train_loader,val_loader,train_sampler,val_sampler
 
 
 # Seems to speed up training by ~2%
@@ -289,6 +282,51 @@ class DataManager():
             self.load_data('', args.batch_size, 224)
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
             self.load_data('', 128, 288, min_scale=0.5)
+        if epoch==args.epochs+args.warmup-2:
+            self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
+
+        if args.distributed:
+            if self.trn_smp: self.trn_smp.set_epoch(epoch)
+            if self.val_smp: self.val_smp.set_epoch(epoch)
+
+    def get_trn_iter(self):
+        # trn_iter = self.trn_iter
+        self.trn_iter = iter(self.trn_dl)
+        return self.trn_iter
+
+    def get_val_iter(self):
+        # val_iter = self.val_iter
+        self.val_iter = iter(self.val_dl)
+        return self.val_iter
+        
+    def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
+        traindir = args.data+dir_prefix+'/train'
+        valdir = args.data+dir_prefix+'/validation'
+        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
+        self.trn_dl = DataPrefetcher(self.trn_dl)
+        self.val_dl = DataPrefetcher(self.val_dl)
+
+        self.trn_len = len(self.trn_dl)
+        self.val_len = len(self.val_dl)
+        # self.trn_iter = iter(self.trn_dl)
+        # self.val_iter = iter(self.val_dl)
+
+        # clear memory
+        gc.collect()
+        torch.cuda.empty_cache()
+
+class CheckDataManager():
+    def __init__(self):
+        if args.small: self.load_data('-sz/160', args.batch_size, 128, use_val_sampler=False)
+        # else: self.load_data('-sz/320', args.batch_size, 224)
+        else: self.load_data('', args.batch_size, 224, use_val_sampler=False)
+        
+    def set_epoch(self, epoch):
+        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+            # self.load_data('-sz/320', args.batch_size, 224)
+            self.load_data('', args.batch_size, 224, use_val_sampler=False)
+        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+            self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
         if epoch==args.epochs+args.warmup-2:
             self.load_data('', 128, 288, use_val_sampler=False, min_scale=0.5)
 
@@ -455,6 +493,7 @@ def main():
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
     dm = DataManager()
+    check_dm = CheckDataManager()
     print("Created data loaders")
 
     if args.evaluate: return validate(dm.val_dl, len(dm.val_dl), model, criterion, epoch, start_time)
@@ -465,6 +504,7 @@ def main():
         estart = time.time()
         # adjust_learning_rate(optimizer, epoch)
         dm.set_epoch(epoch)
+        check_dm.set_epoch(epoch)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
@@ -472,6 +512,7 @@ def main():
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
+        prec5 = validate(check_dm.get_val_iter(), len(check_dm.val_dl), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
         if args.local_rank == 0 and is_best:
