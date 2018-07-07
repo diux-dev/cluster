@@ -12,9 +12,10 @@ if ! conda list Pillow-SIMD | grep -q Pillow-SIMD; then
 fi
 
 conda install pytorch torchvision cuda90 -c pytorch -y
+conda install tqdm -y
 
 # setting max speed. Doesn't seem to boost performace for me though
-sudo nvidia-smi -ac 877,1530
+# sudo nvidia-smi -ac 877,1530
 
 cd ~/
 
