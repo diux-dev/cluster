@@ -60,6 +60,8 @@ parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default='',
                     help='tag name of ebs volume to attach')
+parser.add_argument('--volume-offset', type=int, default=0,
+                    help='Offset number for vollume attachment. If running multiple jobs')
 parser.add_argument('--spot', action='store_true', 
                     help='launch using spot requests')
 parser.add_argument('--mount-efs', action='store_true',
@@ -109,7 +111,7 @@ def attach_instance_ebs(aws_instance, tag):
 
 def mount_volume_data(job, tag):
   for i,t in enumerate(job.tasks):
-    attach_instance_ebs(t.instance, f'{tag}_{i+1}')
+    attach_instance_ebs(t.instance, f'{tag}_{i+args.volume_offset}')
   job.run_async_join('sudo mkdir data -p')
   job.run_async_join('sudo mount /dev/xvdf data', ignore_errors=True)
   job.run_async_join('sudo chown `whoami` data')
@@ -137,6 +139,7 @@ def create_job(run, job_name, num_tasks):
 
   # upload files
   job.upload_async('training/resnet.py')
+  job.upload_async('training/resnet_sd.py')
   job.upload_async('training/fp16util.py')
   job.upload_async('training/train_imagenet_nv.py')
 
@@ -145,7 +148,7 @@ def create_job(run, job_name, num_tasks):
   if not all(setup_complete):
     job.upload_async('setup/setup_env_nv.sh')
     job.run_async_join('chmod +x setup_env_nv.sh')
-    job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=60)
+    job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=5)
 
   
   # multi job
@@ -162,15 +165,34 @@ def create_job(run, job_name, num_tasks):
     job.run_async(f'python train_imagenet_nv.py {training_args}')
     return
 
+  # task_cmds = []
+  # for i,t in enumerate(job.tasks):
+  #   # Pytorch distributed
+  #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
+  #   epochs = 55
+  #   warmup = 0
+  #   batch_size = 128
+  #   lr = 0.3 * num_tasks
+  #   tag = 'sdepth'
+  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
+  #   t.run(f'mkdir {save_dir} -p')
+  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
+  #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+  #   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
+  #   nccl_args = f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'
+  #   cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+  #   t.run(f'echo {cmd} > {save_dir}/script.log')
+  #   task_cmds.append(cmd)
+
   task_cmds = []
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    epochs = 55
+    epochs = 50
     warmup = 0
-    batch_size = 128
-    lr = 0.3 * num_tasks
-    tag = 'longer_warmup'
+    batch_size = 192
+    lr = 0.4 * num_tasks
+    tag = 'diff_warmup'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
     training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
@@ -210,12 +232,16 @@ def build_ring_order(machine_order, gpu_order):
 def get_nccl_rings(num_tasks, num_gpus):
     ring = build_ring_order(range(num_tasks), range(num_gpus))
     ring_rev = build_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
-    ring_skip = build_ring_order([1,4,7,2,5,0,3,6], [3,2,1,0,7,6,5,4])
-    ring_skip_rev = build_ring_order(reversed([1,4,7,2,5,0,3,6]), [3,2,1,0,7,6,5,4])
-    rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
-
-    if num_tasks == 8: return ' | '.join(rings_arr)
-    return ' | '.join(rings_arr[:2])
+    if num_tasks == 8:
+      ring_skip = build_ring_order([1,4,7,2,5,0,3,6], [3,2,1,0,7,6,5,4])
+      ring_skip_rev = build_ring_order(reversed([1,4,7,2,5,0,3,6]), [3,2,1,0,7,6,5,4])
+      rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
+    elif num_tasks == 4:
+      ring_skip = build_ring_order([0,2,1,3], [3,2,1,0,7,6,5,4])
+      rings_arr = [ring, ring_rev, ring_skip]
+    else:
+      rings_arr = [ring, ring_rev]
+    return ' | '.join(rings_arr)
 
 
 def main():

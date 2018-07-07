@@ -6,6 +6,7 @@ import sys
 
 import torch
 from torch.autograd import Variable
+from torch.nn.parameter import Parameter
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
@@ -18,6 +19,9 @@ import torchvision.datasets as datasets
 # import models
 from fp16util import *
 import gc
+
+import resnet
+# import resnet_sd as resnet
 
 # model_names = sorted(name for name in models.__dict__
 #                      if name.islower() and not name.startswith("__")
@@ -194,14 +198,14 @@ class DataManager():
             self.val_smp.set_epoch(epoch)
 
     def get_trn_iter(self):
-        trn_iter = self.trn_iter
+        # trn_iter = self.trn_iter
         self.trn_iter = iter(self.trn_dl)
-        return trn_iter
+        return self.trn_iter
 
     def get_val_iter(self):
-        val_iter = self.val_iter
+        # val_iter = self.val_iter
         self.val_iter = iter(self.val_dl)
-        return val_iter
+        return self.val_iter
         
     def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
         traindir = args.data+dir_prefix+'/train'
@@ -212,8 +216,8 @@ class DataManager():
 
         self.trn_len = len(self.trn_dl)
         self.val_len = len(self.val_dl)
-        self.trn_iter = iter(self.trn_dl)
-        self.val_iter = iter(self.val_dl)
+        # self.trn_iter = iter(self.trn_dl)
+        # self.val_iter = iter(self.val_dl)
 
         # clear memory
         gc.collect()
@@ -231,7 +235,7 @@ class Scheduler():
             epoch_tot = int(args.epochs*0.14)+args.warmup
             starting_lr = args.lr/epoch_tot
             world_size = dist.get_world_size()
-            if (world_size > 4) and (epoch < 4):
+            if (world_size > 20) and (epoch < 4):
                 # starting_lr = starting_lr/(world_size/2)
                 starting_lr = starting_lr/(4 - epoch)
             ending_lr = args.lr
@@ -272,17 +276,15 @@ def init_dist_weights(model):
     # with much larger batchsize, see
     # https://arxiv.org/pdf/1706.02677.pdf
     # for more details
-    from resnet import BasicBlock, Bottleneck
-    from torch.nn.parameter import Parameter
 
     if args.arch.startswith('resnet'):
         for m in model.modules():
             # Trick 1: the last BatchNorm layer in each block need to
             # be initialized as zero gamma
-            if isinstance(m, BasicBlock):
+            if isinstance(m, resnet.BasicBlock):
                 num_features = m.bn2.num_features
                 m.bn2.weight = Parameter(torch.zeros(num_features))
-            if isinstance(m, Bottleneck):
+            if isinstance(m, resnet.Bottleneck):
                 num_features = m.bn3.num_features
                 m.bn3.weight = Parameter(torch.zeros(num_features))
             # Trick 2: linear layers are initialized by
@@ -308,8 +310,10 @@ def main():
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else: model = models.__dict__[args.arch]()
     # AS: force use resnet50 for now, until we figure out whether to upload model directory
-    import resnet
+    
     model = resnet.resnet50()
+    # model = resnet.resnet68()
+    base_model_pointer = model
     print("Loaded model")
 
     model = model.cuda()
@@ -361,7 +365,7 @@ def main():
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch)
+            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
@@ -382,7 +386,7 @@ def to_python_float(t):
     else:
         return t[0]
 
-def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
+def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base_model):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -394,10 +398,13 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
     end = time.time()
 
     st = time.time()
-    print('Begin training loop:', st)
+    # print('Begin training loop:', st)
     for i,(input,target) in enumerate(trn_iter):
-        if i == 0: print('Received input:', time.time()-st)
+        # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
+        if hasattr(base_model, 'rseed'):
+            if epoch<int(args.epochs*0.14)+args.warmup: base_model.rseed = -1
+            else: base_model.rseed = 1000*epoch+i
         # measure data loading time
         data_time.update(time.time() - end)
         scheduler.update_lr(epoch, i, trn_len)
