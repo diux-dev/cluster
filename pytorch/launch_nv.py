@@ -191,7 +191,7 @@ def create_job(run, job_name, num_tasks):
     epochs = 50
     warmup = 0
     batch_size = 192
-    lr = 0.35 * num_tasks
+    lr = 0.40 * num_tasks
     tag = 'test_ar'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
