@@ -158,7 +158,7 @@ class ValDistSampler(Sampler):
     def __init__(self, indices, batch_size, distributed_batch=True):
         self.indices = indices
         self.batch_size = batch_size
-        if distributed_batch: 
+        if distributed_batch and args.distributed: 
             self.world_size = dist.get_world_size() 
             self.rank = dist.get_rank()
         else: 
@@ -177,9 +177,7 @@ class ValDistSampler(Sampler):
         sampled_indices = self.indices[offset:offset+self.num_samples]
         for i in range(self.expected_num_batches):
             offset = i*self.batch_size
-            if args.local_rank == 0: yield []
-            else: yield sampled_indices[offset:offset+self.batch_size]
-            # yield sampled_indices[offset:offset+self.batch_size]
+            yield sampled_indices[offset:offset+self.batch_size]
     def __len__(self): return self.expected_num_batches
     def set_epoch(self, epoch): return
     
@@ -239,7 +237,6 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_ar=False, min_scale=0
 class DataPrefetcher():
     def __init__(self, loader, prefetch=True):
         self.loader = loader
-        # self.dataset = loader.dataset
         self.prefetch = prefetch
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
@@ -340,6 +337,8 @@ class Scheduler():
             # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
             lr_step = args.lr / (epoch_tot * batch_tot)
             lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
+
+            # lr /= (world_size/32)
             # I know this is a bug to start at lr to lr*2, but it seems to train much faster for 4 machines
 
             # lr = args.lr
@@ -453,7 +452,7 @@ def main():
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
-            checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.gpu))
+            checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             model.load_state_dict(checkpoint['state_dict'])
@@ -463,7 +462,7 @@ def main():
     dm = DataManager()
     print("Created data loaders")
 
-    if args.evaluate: return validate(dm.val_dl, len(dm.val_dl), model, criterion, epoch, start_time)
+    if args.evaluate: return validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, 0, start_time)
 
     print("Begin training")
     estart = time.time()
@@ -568,15 +567,15 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base
 
         end = time.time()
 
-        if args.local_rank == 0 and i % args.print_freq == 0 and i > 1:
-            
+        should_print = ((i+1) % args.print_freq == 0) or (i+1 == trn_len)
+        if args.local_rank == 0 and should_print:
             output = ('Epoch: [{0}][{1}/{2}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                     + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    epoch, i, trn_len, batch_time=batch_time,
+                    epoch, i+1, trn_len, batch_time=batch_time,
                     data_time=data_time, loss=losses, top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
@@ -592,21 +591,19 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
     model.eval()
     end = time.time()
 
-    print('Begin validation')
     for i,(input,target) in enumerate(val_iter):
-        print('Validating now')
         input_var = input
         target_var = target
         batch_size = input.size(0)
 
-        output = loss = corr1 = corr5 = torch.tensor([0]).cuda()
+        output = loss = corr1 = corr5 = valid_batches = torch.tensor([0]).cuda()
         if batch_size:
             # compute output
             with torch.no_grad():
                 output = model(input_var)
                 loss = criterion(output, target_var)
-            print('Outputed validation')
             # measure accuracy and record loss
+            valid_batches = torch.tensor([1]).cuda()
             corr1, corr5 = correct(output.data, target_var, topk=(1, 5))
         else:
             with torch.no_grad():
@@ -615,26 +612,20 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
                 _ = model(fake_input)
 
         if args.distributed:
-            print('Reducing tensor')
-            print('Corr1:', corr1)
-            print('Corr5:', corr5)
-            print('Loss:', loss)
             batch_tensor = torch.tensor([batch_size]).cuda()
-            print('Batch tensor:', batch_tensor)
             tot_batch = sum_tensor(batch_tensor).item()
-            print('tot batch:', tot_batch)
-            reduced_loss = sum_tensor(loss.data)/tot_batch
-            print('reduced loss:', reduced_loss)
-            prec1 = sum_tensor(corr1)/tot_batch
-            print('corr1:', corr1)
-            prec5 = sum_tensor(corr5)/tot_batch
+            valid_batches = sum_tensor(valid_batches).item()
+            reduced_loss = sum_tensor(loss.data)/valid_batches
+
+            corr1 = sum_tensor(corr1).float()
+            corr5 = sum_tensor(corr5).float()
+            prec1 = corr1*(100.0/tot_batch)
+            prec5 = corr5*(100.0/tot_batch)
         else:
             reduced_loss = loss.data
             tot_batch = batch_size
-            prec1 = corr1/tot_batch
-            prec5 = corr5/tot_batch
-        print('Done reducing tensor')
-            
+            prec1 = corr1*(100.0/tot_batch)
+            prec5 = corr5*(100.0/tot_batch)
 
         losses.update(to_python_float(reduced_loss), tot_batch)
         top1.update(to_python_float(prec1), tot_batch)
@@ -644,13 +635,14 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if args.local_rank == 0 and i % args.print_freq == 0:
+        should_print = ((i+1) % args.print_freq == 0) or (i+1 == val_len)
+        if args.local_rank == 0 and should_print:
             output = ('Test: [{0}/{1}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    i, val_len, batch_time=batch_time, loss=losses,
+                    i+1, val_len, batch_time=batch_time, loss=losses,
                     top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:

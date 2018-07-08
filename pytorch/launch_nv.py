@@ -158,33 +158,15 @@ def create_job(run, job_name, num_tasks):
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
   num_gpus = gpu_count[args.instance_type]
 
-  # task_cmds = []
-  # for i,t in enumerate(job.tasks):
-  #   # Pytorch distributed
-  #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-  #   epochs = 55
-  #   warmup = 0
-  #   batch_size = 128
-  #   lr = 0.3 * num_tasks
-  #   tag = 'sdepth'
-  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
-  #   t.run(f'mkdir {save_dir} -p')
-  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
-  #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-  #   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
-  #   nccl_args = f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'
-  #   cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-  #   t.run(f'echo {cmd} > {save_dir}/script.log')
-  #   task_cmds.append(cmd)
-
+  # Training on 8 gpus
   task_cmds = []
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
     epochs = 40
     warmup = 0
-    batch_size = 192
-    lr = 0.40 * num_tasks
+    batch_size = 128
+    lr = 0.25 * num_tasks
     tag = 'test_ar'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
@@ -196,18 +178,24 @@ def create_job(run, job_name, num_tasks):
     t.run(f'echo {cmd} > {save_dir}/script.log')
     task_cmds.append(cmd)
 
-  # trainig on 4 machines
+  # Training on 4 machines
   # task_cmds = []
   # for i,t in enumerate(job.tasks):
   #   # Pytorch distributed
   #   # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-{i}-lr12-e65-bs256-warmup-2'
+  #   epochs = 38
+  #   warmup = 0
+  #   batch_size = 192
+  #   lr = 0.35 * num_tasks
+  #   tag = 'test_ar'
+  #   save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
   #   t.run(f'mkdir {save_dir} -p')
-  #   lr = 0.4 * num_tasks
-  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr {lr} --epochs 55 --small --dist-url env:// --dist-backend nccl --distributed'
+  #   training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed --val-ar'
   #   dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-  #   cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-  #   t.run(f'echo "{cmd}" > {save_dir}/script.log')
+  #   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
+  #   nccl_args = f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'
+  #   cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+  #   t.run(f'echo {cmd} > {save_dir}/script.log')
   #   task_cmds.append(cmd)
 
   # async calls need to be run last for multiple tasks. Otherwise they don't all run
