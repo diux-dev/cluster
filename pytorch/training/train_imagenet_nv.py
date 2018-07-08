@@ -284,12 +284,25 @@ class DataManager():
         # else: self.load_data('-sz/320', args.batch_size, 224)
         else: self.load_data('', args.batch_size, 224)
         
+    # def set_epoch(self, epoch):
+    #     if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+    #         # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
+    #         print('DataManager changing image size to 244')
+    #         self.load_data('', args.batch_size, 224)
+    #     if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+    #         print('DataManager changing image size to 288')
+    #         # self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
+    #         self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
+    #     if args.distributed:
+    #         if self.trn_smp: self.trn_smp.set_epoch(epoch)
+    #         if self.val_smp: self.val_smp.set_epoch(epoch)
+
     def set_epoch(self, epoch):
-        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+        if epoch==int(args.epochs*0.35+0.5)+args.warmup:
             # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
             self.load_data('', args.batch_size, 224)
-        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+        if epoch==int(args.epochs*0.88+0.5)+args.warmup:
             print('DataManager changing image size to 288')
             # self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
             self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
@@ -337,6 +350,9 @@ class Scheduler():
             # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
             lr_step = args.lr / (epoch_tot * batch_tot)
             lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
+
+            # lr /= (world_size/32)
+            lr /= (world_size/48)
             # I know this is a bug to start at lr to lr*2, but it seems to train much faster for 4 machines
 
             # lr = args.lr
@@ -355,11 +371,18 @@ class Scheduler():
         #     lr = step_size*epoch + batch_step_size*batch_num
 
             # lr = args.lr/(int(args.epochs*0.1)+args.warmup-epoch)
-        elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-        elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-        elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/95
+        elif epoch<int(args.epochs*0.43+0.5)+args.warmup: lr = args.lr/1
+        elif epoch<int(args.epochs*0.73+0.5)+args.warmup: lr = args.lr/10
+        elif epoch<int(args.epochs*0.94+0.5)+args.warmup: lr = args.lr/100
         else         : lr = args.lr/1000
         return lr
+
+
+        # elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
+        # elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
+        # elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/95
+        # else         : lr = args.lr/1000
+        # return lr
 
     def update_lr(self, epoch, batch_num, batch_tot):
         lr = self.get_lr(epoch, batch_num, batch_tot)
@@ -460,7 +483,7 @@ def main():
     dm = DataManager()
     print("Created data loaders")
 
-    if args.evaluate: return validate(dm.val_dl, len(dm.val_dl), model, criterion, 0, start_time)
+    if args.evaluate: return validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, 0, start_time)
 
     print("Begin training")
     estart = time.time()

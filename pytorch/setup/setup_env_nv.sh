@@ -14,8 +14,8 @@ fi
 conda install pytorch torchvision cuda90 -c pytorch -y
 conda install tqdm -y
 
-# setting max speed. Doesn't seem to boost performace for me though
-# sudo nvidia-smi -ac 877,1530
+# setting max speed. Doesn't seem to boost performace though
+sudo nvidia-smi -ac 877,1530
 
 cd ~/
 
