@@ -158,13 +158,6 @@ def create_job(run, job_name, num_tasks):
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
   num_gpus = gpu_count[args.instance_type]
 
-  if num_gpus <= 1:
-    save_dir = f'~/training/nv/{datestr}-{job_name}'
-    job.run(f'mkdir {save_dir} -p')
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b 192 --sz 224 -j 8 --lr 0.40 --epochs 45' # old file sync
-    job.run_async(f'python train_imagenet_nv.py {training_args}')
-    return
-
   # task_cmds = []
   # for i,t in enumerate(job.tasks):
   #   # Pytorch distributed
@@ -188,14 +181,14 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    epochs = 50
+    epochs = 12
     warmup = 0
     batch_size = 192
     lr = 0.40 * num_tasks
     tag = 'test_ar'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed'
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url env:// --dist-backend nccl --distributed --val-ar'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     nccl_rings = get_nccl_rings(num_tasks, num_gpus)
     nccl_args = f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'

@@ -297,8 +297,8 @@ class DataManager():
             self.load_data('', args.batch_size, 224)
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
             print('DataManager changing image size to 288')
-            self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
-            # self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
+            # self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
+            self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
         if args.distributed:
             if self.trn_smp: self.trn_smp.set_epoch(epoch)
             if self.val_smp: self.val_smp.set_epoch(epoch)
@@ -472,12 +472,12 @@ def main():
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         estart = time.time()
-        # dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
-        dm.set_epoch(epoch)
+        dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
+        # dm.set_epoch(epoch)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
+        # with warnings.catch_warnings():
+        #     warnings.simplefilter("ignore", category=UserWarning)
+        #     train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
@@ -613,7 +613,9 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
 
         if args.distributed:
             # print('Reducing tensor')
-            tot_batch = sum_tensor(batch_size)
+            batch_tensor = torch.tensor(batch_size).cuda()
+            if args.fp16: batch_tensor = batch_tensor.half()
+            tot_batch = sum_tensor(batch_tensor)
             reduced_loss = sum_tensor(loss.data)/tot_batch
             corr1 = sum_tensor(corr1)/tot_batch
             corr5 = sum_tensor(corr5)/tot_batch
@@ -700,7 +702,7 @@ def correct(output, target, topk=(1,)):
 
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        correct_k = correct[:k].view(-1).sum(0, keepdim=True)
         res.append(correct_k)
     return res
 
