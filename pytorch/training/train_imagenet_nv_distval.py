@@ -177,7 +177,9 @@ class ValDistSampler(Sampler):
         sampled_indices = self.indices[offset:offset+self.num_samples]
         for i in range(self.expected_num_batches):
             offset = i*self.batch_size
-            yield sampled_indices[offset:offset+self.batch_size]
+            if args.local_rank == 0: yield []
+            else: yield sampled_indices[offset:offset+self.batch_size]
+            # yield sampled_indices[offset:offset+self.batch_size]
     def __len__(self): return self.expected_num_batches
     def set_epoch(self, epoch): return
     
@@ -235,54 +237,49 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_ar=False, min_scale=0
 
 # Seems to speed up training by ~2%
 class DataPrefetcher():
-    def __init__(self, loader, stop_after=None, prefetch=True):
+    def __init__(self, loader, prefetch=True):
         self.loader = loader
         # self.dataset = loader.dataset
         self.prefetch = prefetch
+        self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+        self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+        if args.fp16:
+            self.mean = self.mean.half()
+            self.std = self.std.half()
         if prefetch:
             self.stream = torch.cuda.Stream()
-            self.stop_after = stop_after
             self.next_input = None
             self.next_target = None
-
-            self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
-            self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
-            if args.fp16:
-                self.mean = self.mean.half()
-                self.std = self.std.half()
 
     def __len__(self): return len(self.loader)
 
     def preload(self):
-        try:
-            self.next_input, self.next_target = next(self.loaditer)
-        except StopIteration:
-            self.next_input = None
-            self.next_target = None
-            return
+        self.next_input, self.next_target = next(self.loaditer)
         with torch.cuda.stream(self.stream):
-            self.next_input = self.next_input.cuda(async=True)
+            self.next_input = self.process_input(self.next_input)
             self.next_target = self.next_target.cuda(async=True)
-
-            if args.fp16: self.next_input = self.next_input.half()
-            else: self.next_input = self.next_input.float()
-            self.next_input = self.next_input.sub_(self.mean).div_(self.std)
+    
+    def process_input(self, input, async=True):
+        input = input.cuda(async=async)
+        if args.fp16: input = input.half()
+        else: input = input.float()
+        if len(input.shape) < 3: return input
+        return input.sub_(self.mean).div_(self.std)
             
     def __iter__(self):
         count = 0
         self.loaditer = iter(self.loader)
-        if not self.prefetch: return self.load_iter
+        if not self.prefetch:
+            for input, target in self.loaditer:
+                yield self.process_input(input), target.cuda()
+            return
         self.preload()
-        while self.next_input is not None:
+        while True:
             torch.cuda.current_stream().wait_stream(self.stream)
             input = self.next_input
             target = self.next_target
             self.preload()
-            # if count == 0: print('Prefetcher first preload complete')
-            count += 1
             yield input, target
-            if type(self.stop_after) is int and (count > self.stop_after):
-                break
 
 class DataManager():
     def __init__(self):
@@ -318,7 +315,7 @@ class DataManager():
         valdir = args.data+dir_prefix+'/validation'
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
         self.trn_dl = DataPrefetcher(self.trn_dl)
-        self.val_dl = DataPrefetcher(self.val_dl)
+        self.val_dl = DataPrefetcher(self.val_dl, prefetch=False)
 
         self.trn_len = len(self.trn_dl)
         self.val_len = len(self.val_dl)
@@ -472,12 +469,12 @@ def main():
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         estart = time.time()
-        dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
-        # dm.set_epoch(epoch)
+        # dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
+        dm.set_epoch(epoch)
 
-        # with warnings.catch_warnings():
-        #     warnings.simplefilter("ignore", category=UserWarning)
-        #     train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
@@ -595,40 +592,53 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
     model.eval()
     end = time.time()
 
+    print('Begin validation')
     for i,(input,target) in enumerate(val_iter):
-        # print('Validating now')
+        print('Validating now')
         input_var = input
         target_var = target
-        batch_size = input.shape[0]
+        batch_size = input.size(0)
 
-        output = loss = corr1 = corr5 = 0
+        output = loss = corr1 = corr5 = torch.tensor([0]).cuda()
         if batch_size:
             # compute output
             with torch.no_grad():
                 output = model(input_var)
                 loss = criterion(output, target_var)
-            # print('Outputed validation')
+            print('Outputed validation')
             # measure accuracy and record loss
-            corr1, corr5 = correct(output.data, target, topk=(1, 5))
+            corr1, corr5 = correct(output.data, target_var, topk=(1, 5))
+        else:
+            with torch.no_grad():
+                fake_input = torch.zeros([1,3,64,64]).cuda()
+                if args.fp16: fake_input = fake_input.half()
+                _ = model(fake_input)
 
         if args.distributed:
-            # print('Reducing tensor')
-            batch_tensor = torch.tensor(batch_size).cuda()
-            if args.fp16: batch_tensor = batch_tensor.half()
-            tot_batch = sum_tensor(batch_tensor)
+            print('Reducing tensor')
+            print('Corr1:', corr1)
+            print('Corr5:', corr5)
+            print('Loss:', loss)
+            batch_tensor = torch.tensor([batch_size]).cuda()
+            print('Batch tensor:', batch_tensor)
+            tot_batch = sum_tensor(batch_tensor).item()
+            print('tot batch:', tot_batch)
             reduced_loss = sum_tensor(loss.data)/tot_batch
-            corr1 = sum_tensor(corr1)/tot_batch
-            corr5 = sum_tensor(corr5)/tot_batch
+            print('reduced loss:', reduced_loss)
+            prec1 = sum_tensor(corr1)/tot_batch
+            print('corr1:', corr1)
+            prec5 = sum_tensor(corr5)/tot_batch
         else:
             reduced_loss = loss.data
-            corr1 /= tot_batch
-            corr5 /= tot_batch
-        # print('Done reducing tensor')
+            tot_batch = batch_size
+            prec1 = corr1/tot_batch
+            prec5 = corr5/tot_batch
+        print('Done reducing tensor')
             
 
-        losses.update(to_python_float(reduced_loss), input.size(0))
-        top1.update(to_python_float(prec1), input.size(0))
-        top5.update(to_python_float(prec5), input.size(0))
+        losses.update(to_python_float(reduced_loss), tot_batch)
+        top1.update(to_python_float(prec1), tot_batch)
+        top5.update(to_python_float(prec5), tot_batch)
 
         # measure elapsed time
         batch_time.update(time.time() - end)

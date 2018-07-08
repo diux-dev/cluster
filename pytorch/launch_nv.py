@@ -181,7 +181,7 @@ def create_job(run, job_name, num_tasks):
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
     # save_dir = f'/efs/training/{datestr}-{job_name}-{i}'
-    epochs = 12
+    epochs = 40
     warmup = 0
     batch_size = 192
     lr = 0.40 * num_tasks
