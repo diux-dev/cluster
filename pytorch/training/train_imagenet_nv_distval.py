@@ -89,6 +89,7 @@ if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank
 
 
 def fast_collate(batch):
+    if not batch: return torch.tensor([]), torch.tensor([])
     imgs = [img[0] for img in batch]
     targets = torch.tensor([target[1] for target in batch], dtype=torch.int64)
     w = imgs[0].size[0]
@@ -154,23 +155,32 @@ class ValDataset(datasets.ImageFolder):
 class ValDistSampler(Sampler):
     # min_batch_size - validation by nearest aspect ratio expects the batch size to be constant
     # Otherwise you'll mix different images with different aspect ratio's and tensor will not be constant size
-    def __init__(self, indices, min_batch_size=None, distributed_batch=True):
+    def __init__(self, indices, batch_size, distributed_batch=True):
         self.indices = indices
+        self.batch_size = batch_size
         if distributed_batch: 
             self.world_size = dist.get_world_size() 
             self.rank = dist.get_rank()
         else: 
             self.rank = 0
             self.world_size = 1
-        if min_batch_size:
-            self.num_samples = math.ceil(len(self.indices) / self.world_size / min_batch_size) * min_batch_size
-        else:
-            self.num_samples = int(math.ceil(len(self.indices) * 1.0 / self.world_size))
+            
+        # expected number of batches per sample. Need this so each distributed gpu validates on same number of batches.
+        # even if there isn't enough data to go around
+        self.expected_num_batches = math.ceil(len(self.indices) / self.world_size / self.batch_size)
+        
+        # num_samples = total images / world_size. This is what we distribute to each gpu
+        self.num_samples = self.expected_num_batches * self.batch_size
+        
     def __iter__(self):
         offset = self.num_samples * self.rank
-        return iter(self.indices[offset:offset+self.num_samples])
-    def __len__(self): return self.num_samples
+        sampled_indices = self.indices[offset:offset+self.num_samples]
+        for i in range(self.expected_num_batches):
+            offset = i*self.batch_size
+            yield sampled_indices[offset:offset+self.batch_size]
+    def __len__(self): return self.expected_num_batches
     def set_epoch(self, epoch): return
+    
 
 class CropArTfm(object):
     def __init__(self, idx2ar, target_size):
@@ -193,14 +203,12 @@ def create_validation_set(valdir, batch_size, target_size, use_ar):
     if use_ar:
         ar_tfms = [transforms.Resize(int(target_size*1.14)), CropArTfm(idx2ar, target_size)]
         val_dataset = ValDataset(valdir, transform=ar_tfms)
-        # val_sampler = ValDistSampler(idx_sorted, min_batch_size=batch_size)
-        val_sampler = ValDistSampler(idx_sorted, distributed_batch=False)
-
+        val_sampler = ValDistSampler(idx_sorted, batch_size=batch_size)
         return val_dataset, val_sampler
     
     val_tfms = [transforms.Resize(int(args.sz*1.14)), transforms.CenterCrop(args.sz)]
     val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
-    val_sampler = ValDistSampler(list(range(len(val_dataset))))
+    val_sampler = ValDistSampler(list(range(len(val_dataset))), batch_size=batch_size)
     return val_dataset, val_sampler
 
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_ar=False, min_scale=0.08):
@@ -219,9 +227,9 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_ar=False, min_scale=0
 
     val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_ar)
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=val_bs, shuffle=False,
+        val_dataset,
         num_workers=args.workers, pin_memory=True, collate_fn=fast_collate, 
-        sampler=val_sampler)
+        batch_sampler=val_sampler)
     return train_loader,val_loader,train_sampler,val_sampler
 
 
@@ -284,7 +292,7 @@ class DataManager():
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*0.4+0.5)+args.warmup:
-            # self.load_data('-sz/320', args.batch_size, 224)
+            # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
             self.load_data('', args.batch_size, 224)
         if epoch==int(args.epochs*0.92+0.5)+args.warmup:
@@ -423,7 +431,6 @@ def main():
     # AS: force use resnet50 for now, until we figure out whether to upload model directory
     
     model = resnet.resnet50()
-    # model = resnet.resnet68()
     base_model_pointer = model
     print("Loaded model")
 
@@ -465,7 +472,6 @@ def main():
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         estart = time.time()
-        # adjust_learning_rate(optimizer, epoch)
         # dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
         dm.set_epoch(epoch)
 
@@ -593,23 +599,28 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
         # print('Validating now')
         input_var = input
         target_var = target
+        batch_size = input.shape[0]
 
-        # compute output
-        with torch.no_grad():
-            output = model(input_var)
-            loss = criterion(output, target_var)
-
-        # print('Outputed validation')
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+        output = loss = corr1 = corr5 = 0
+        if batch_size:
+            # compute output
+            with torch.no_grad():
+                output = model(input_var)
+                loss = criterion(output, target_var)
+            # print('Outputed validation')
+            # measure accuracy and record loss
+            corr1, corr5 = correct(output.data, target, topk=(1, 5))
 
         if args.distributed:
             # print('Reducing tensor')
-            reduced_loss = reduce_tensor(loss.data)
-            prec1 = reduce_tensor(prec1)
-            prec5 = reduce_tensor(prec5)
+            tot_batch = sum_tensor(batch_size)
+            reduced_loss = sum_tensor(loss.data)/tot_batch
+            corr1 = sum_tensor(corr1)/tot_batch
+            corr5 = sum_tensor(corr5)/tot_batch
         else:
             reduced_loss = loss.data
+            corr1 /= tot_batch
+            corr5 /= tot_batch
         # print('Done reducing tensor')
             
 
@@ -677,6 +688,27 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+def correct(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        res.append(correct_k)
+    return res
+
+
+def sum_tensor(tensor):
+    rt = tensor.clone()
+    dist.all_reduce(rt, op=dist.reduce_op.SUM)
+    return rt
 
 def reduce_tensor(tensor):
     rt = tensor.clone()
