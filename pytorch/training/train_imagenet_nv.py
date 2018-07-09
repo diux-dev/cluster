@@ -159,7 +159,7 @@ class ValDistSampler(Sampler):
         self.indices = indices
         self.batch_size = batch_size
         if distributed_batch and args.distributed: 
-            self.world_size = dist.get_world_size() 
+            self.world_size = get_world_size() 
             self.rank = dist.get_rank()
         else: 
             self.rank = 0
@@ -346,7 +346,7 @@ class Scheduler():
         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
         if epoch<int(args.epochs*0.14)+args.warmup:
             epoch_tot = int(args.epochs*0.14)+args.warmup
-            world_size = dist.get_world_size()
+            world_size = get_world_size()
             # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
             lr_step = args.lr / (epoch_tot * batch_tot)
             lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
@@ -361,7 +361,7 @@ class Scheduler():
         # if epoch<int(args.epochs*0.14)+args.warmup:
         #     epoch_tot = int(args.epochs*0.14)+args.warmup
         #     starting_lr = args.lr/epoch_tot
-        #     world_size = dist.get_world_size()
+        #     world_size = get_world_size()
         #     if (world_size > 20) and (epoch < 4):
         #         # starting_lr = starting_lr/(world_size/2)
         #         starting_lr = starting_lr/(4 - epoch)
@@ -735,10 +735,14 @@ def sum_tensor(tensor):
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
     return rt
 
+def get_world_size():
+    if args.distributed: return dist.get_world_size()
+    return 1
+
 def reduce_tensor(tensor):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    size = dist.get_world_size()
+    size = get_world_size()
     # rt /= args.world_size
     rt /= size
     return rt
