@@ -66,7 +66,7 @@ Process 1 transferred 100 MB in 83.3 ms (1200.4 MB/sec)
 Similar steps can be used to benchmark all-reduce speed, using bench_allreduce.py script
 
 ```
-python bench_allreduce.py --instance-type=c5.18xlarge --zone=us-east-1c --placement
+python bench_allreduce.py --instance-type=p3.16xlarge --zone=us-east-1c --placement
 
 ...
 
