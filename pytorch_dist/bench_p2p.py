@@ -27,7 +27,7 @@ parser.add_argument('--name', type=str, default='p2p',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='t2.large',
                      help="type of instance to use")
-parser.add_argument('--data-mb', type=int, default=100,
+parser.add_argument('--data-size-mb', type=int, default=100,
                     help='size of data to send')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
@@ -61,7 +61,7 @@ def worker():
   dist.init_process_group(args.backend, rank=args.rank, world_size=args.size)
 
   for i in range(100):
-    tensor = torch.ones(args.data_mb*250*1000)*(args.rank+1)
+    tensor = torch.ones(args.data_size_mb*250*1000)*(args.rank+1)
     # print('before: rank ', args.rank, ' has data ', tensor[0])
 
     start_time = time.perf_counter()
@@ -72,9 +72,9 @@ def worker():
       
     elapsed_time = time.perf_counter() - start_time
     # print('after: rank ', args.rank, ' has data ', tensor[0])
-    rate = args.data_mb/elapsed_time
+    rate = args.data_size_mb/elapsed_time
 
-    print("Process %d transferred %d MB in %.1f ms (%.1f MB/sec)" % (args.rank, args.data_mb, elapsed_time*1000, rate))
+    print("Process %d transferred %d MB in %.1f ms (%.1f MB/sec)" % (args.rank, args.data_size_mb, elapsed_time*1000, rate))
 
 
 def launcher():

@@ -28,11 +28,11 @@ parser.add_argument('--name', type=str, default='allreduce',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='t2.large',
                      help="type of instance to use")
-parser.add_argument('--size-mb', type=int, default=100,
+parser.add_argument('--data-size-mb', type=int, default=100,
                     help='size of parameters to synchronize, in megabytes')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
-parser.add_argument('--world-size', type=int, default=2,
+parser.add_argument('--num-machines', type=int, default=2,
                      help="size of MPI world")
 parser.add_argument('--num-iters', type=int, default=1000,
                      help="how many iterations to run for")
@@ -42,8 +42,6 @@ parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker, internal flag')
 parser.add_argument('--rank', type=int, default=0,
                     help='mpi rank')
-parser.add_argument('--size', type=int, default=0,
-                    help='size of mpi world')
 parser.add_argument('--master-addr', type=str, default='127.0.0.1',
                     help='address of master node')
 parser.add_argument('--master-port', type=int, default=6006,
@@ -64,18 +62,19 @@ def worker():
   print("Initializing distributed pytorch")
   os.environ['MASTER_ADDR'] = str(args.master_addr)
   os.environ['MASTER_PORT'] = str(args.master_port)
-  dist.init_process_group(args.backend, rank=args.rank, world_size=args.size)
-  group = dist.new_group(range(args.world_size))
+  dist.init_process_group(args.backend, rank=args.rank,
+                          world_size=args.num_machines)
+  group = dist.new_group(range(args.num_machines))
 
-  params = torch.zeros(args.size_mb*250*1000)
+  params = torch.zeros(args.data_size_mb*250*1000)
   for i in range(args.num_iters):
-    grads = torch.ones(args.size_mb*250*1000)
+    grads = torch.ones(args.data_size_mb*250*1000)
     start_time = time.perf_counter()
     dist.all_reduce(grads, op=dist.reduce_op.SUM, group=group)
     elapsed_time = time.perf_counter() - start_time
-    rate = args.size_mb/elapsed_time
+    rate = args.data_size_mb/elapsed_time
 
-    print("Process %d transferred %d MB in %.1f ms (%.1f MB/sec)" % (args.rank, args.size_mb, elapsed_time*1000, rate))
+    print("Process %d transferred %d MB in %.1f ms (%.1f MB/sec)" % (args.rank, args.data_size_mb, elapsed_time*1000, rate))
 
     params+=grads
     print('Rank ', args.rank, ' has data ', params[0])
@@ -117,7 +116,7 @@ def launcher():
     run = backend.make_run(args.name, ami=ami, availability_zone=args.zone)
     
   job = run.make_job('worker', instance_type=args.instance_type,
-                     num_tasks=args.world_size,
+                     num_tasks=args.num_machines,
                      placement_group=placement_group)
   job.wait_until_ready()
 
@@ -139,10 +138,9 @@ def launcher():
     job.run('killall python || echo failed')  # kill previous run
     job.run('source activate pytorch_p36')
 
-  # todo -- world_size
   script_name = os.path.basename(__file__)
-  for worker_idx in range(args.world_size):
-    cmd = 'python %s --role=worker --rank=%d --size=%d --master-addr=%s' %(script_name, worker_idx, args.world_size, job.tasks[0].ip)
+  for worker_idx in range(args.num_machines):
+    cmd = 'python %s --role=worker --rank=%d --data-size-mb=%d --num-machines=%d --master-addr=%s' %(script_name, worker_idx, args.data_size_mb, args.num_machines, job.tasks[0].ip)
     job.tasks[worker_idx].run(cmd, sync=False)
 
 
