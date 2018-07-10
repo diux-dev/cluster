@@ -346,18 +346,20 @@ class Scheduler():
 
     def get_lr(self, epoch, batch_num, batch_tot):
         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-        if epoch<int(args.epochs*0.14)+args.warmup:
-            epoch_tot = int(args.epochs*0.14)+args.warmup
-            world_size = get_world_size()
-            # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
-            lr_step = args.lr / (epoch_tot * batch_tot)
-            lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
+        # if epoch<int(args.epochs*0.14)+args.warmup:
+        #     epoch_tot = int(args.epochs*0.14)+args.warmup
+        #     world_size = get_world_size()
+        #     # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
+        #     lr_step = args.lr / (epoch_tot * batch_tot)
+        #     lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
 
-            if world_size == 32: lr /= 1.5
-            if world_size == 64: lr /= 2
+        #     # lr /= (world_size/32)
+        #     lr /= (world_size/48)
+        #     # I know this is a bug to start at lr to lr*2, but it seems to train much faster for 4 machines
+
+        #     # lr = args.lr
 
         # the following works best for 8 machines I think
-        # Works better when
         if epoch<int(args.epochs*0.14)+args.warmup:
             epoch_tot = int(args.epochs*0.14)+args.warmup
             starting_lr = args.lr/epoch_tot
@@ -456,7 +458,7 @@ def main():
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
     if args.distributed:
-        init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
+        # init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
