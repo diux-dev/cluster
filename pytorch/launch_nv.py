@@ -39,14 +39,12 @@ parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='ami-e580c79d',
                      help="name of AMI to use ")
 parser.add_argument('--placement-group', type=str, default='',
-# parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 parser.add_argument('--job-name', type=str, default='distributed',
                      help="name of the jobs to run")
-# parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
-parser.add_argument('--instance-type', type=str, default='t2.large',
+parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -71,26 +69,26 @@ args = parser.parse_args()
 
 ## Setup instance:
 # ebs = None
-# ebs = [{
-#   'DeviceName': '/dev/sda1',
-#   'Ebs': {
-#     'VolumeSize': 1000, 
-#     'DeleteOnTermination': True,
-#     'VolumeType': 'io1',
-#     'Iops': 14000
-#   }
-# }]
-
-# For using external ebs (so we don't hit iops limit)
 ebs = [{
   'DeviceName': '/dev/sda1',
   'Ebs': {
     'VolumeSize': 500, 
     'DeleteOnTermination': True,
-    'VolumeType': 'gp2',
-    # 'Iops': 18000
+    'VolumeType': 'io1',
+    'Iops': 14000
   }
 }]
+
+# For using external ebs (so we don't hit iops limit)
+# ebs = [{
+#   'DeviceName': '/dev/sda1',
+#   'Ebs': {
+#     'VolumeSize': 500, 
+#     'DeleteOnTermination': True,
+#     'VolumeType': 'gp2',
+#     # 'Iops': 18000
+#   }
+# }]
 
 def attach_instance_ebs(aws_instance, tag):
   ec2 = util.create_ec2_resource()
@@ -124,8 +122,6 @@ def create_job(run, job_name, num_tasks):
     with open(args.install_script, 'r') as f:
       install_script = f.read()
   
-
-  # job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group, use_spot=args.spot)
   job.wait_until_ready()
   print(job.connect_instructions)
@@ -152,11 +148,12 @@ def create_job(run, job_name, num_tasks):
 
   
   # multi job
-  world_0_ip = job.tasks[0].instance.private_ip_address
+  instance_0 = job.tasks[0].instance
+  world_0_ip = instance_0.private_ip_address
+  num_gpus = gpu_count[instance_0.instance_type]
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
-  num_gpus = gpu_count[args.instance_type]
 
   # Training on 8 gpus
   # task_cmds = []
@@ -207,10 +204,11 @@ def create_job(run, job_name, num_tasks):
     warmup = 0
     batch_size = 192
     lr = 0.40 * num_tasks
-    tag = 'test_ar'
+    world_size = num_gpus * num_tasks
+    tag = 'dawn'
     save_dir = f'~/data/training/nv/{datestr}-{job_name}-lr{lr*10}e{epochs}bs{batch_size}w{warmup}-{tag}'
     t.run(f'mkdir {save_dir} -p')
-    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url file:///home/ubuntu/data/file.sync --dist-backend nccl --distributed --dist-gpu-count 8'
+    training_args = f'~/data/imagenet --save-dir {save_dir} --loss-scale 512 --fp16 -b {batch_size} --sz 224 -j 8 --lr {lr} --warmup {warmup} --epochs {epochs} --small --dist-url file:///home/ubuntu/data/file.sync --dist-backend nccl --distributed --world-size {world_size}'
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo {cmd} > {save_dir}/script.log')
