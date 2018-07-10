@@ -75,7 +75,7 @@ def get_parser():
     parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
 
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
-    parser.add_argument('--dist-gpu-count', default=None, type=int, 
+    parser.add_argument('--world-size', default=-1, type=int, 
                         help='Number of gpus per machine. Param only needed for single machine training when using (faster) file sync')
     parser.add_argument('--dist-url', default='file://sync.file', type=str,
                         help='url used to set up distributed training')
@@ -346,29 +346,29 @@ class Scheduler():
 
     def get_lr(self, epoch, batch_num, batch_tot):
         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-        if epoch<int(args.epochs*0.14)+args.warmup:
-            epoch_tot = int(args.epochs*0.14)+args.warmup
-            world_size = get_world_size()
-            # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
-            lr_step = args.lr / (epoch_tot * batch_tot)
-            lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
+        # if epoch<int(args.epochs*0.14)+args.warmup:
+        #     epoch_tot = int(args.epochs*0.14)+args.warmup
+        #     world_size = get_world_size()
+        #     # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
+        #     lr_step = args.lr / (epoch_tot * batch_tot)
+        #     lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
 
-            if world_size == 32: lr /= 1.5
-            if world_size == 64: lr /= 2
+        #     if world_size == 32: lr /= 1.5
+        #     if world_size == 64: lr /= 2
 
         # the following works best for 8 machines I think
         # Works better when
-        if epoch<int(args.epochs*0.14)+args.warmup:
-            epoch_tot = int(args.epochs*0.14)+args.warmup
-            starting_lr = args.lr/epoch_tot
-            world_size = get_world_size()
-            if (world_size > 20) and (epoch < 4):
-                # starting_lr = starting_lr/(world_size/2)
-                starting_lr = starting_lr/(4 - epoch)
-            ending_lr = args.lr
-            step_size = (ending_lr - starting_lr)/epoch_tot
-            batch_step_size = step_size/batch_tot
-            lr = step_size*epoch + batch_step_size*batch_num
+        # if epoch<int(args.epochs*0.14)+args.warmup:
+        #     epoch_tot = int(args.epochs*0.14)+args.warmup
+        #     starting_lr = args.lr/epoch_tot
+        #     world_size = get_world_size()
+        #     if (world_size > 20) and (epoch < 4):
+        #         # starting_lr = starting_lr/(world_size/2)
+        #         starting_lr = starting_lr/(4 - epoch)
+        #     ending_lr = args.lr
+        #     step_size = (ending_lr - starting_lr)/epoch_tot
+        #     batch_step_size = step_size/batch_tot
+        #     lr = step_size*epoch + batch_step_size*batch_num
 
             # lr = args.lr/(int(args.epochs*0.1)+args.warmup-epoch)
         # elif epoch<int(args.epochs*0.43+0.5)+args.warmup: lr = args.lr/1
@@ -377,6 +377,13 @@ class Scheduler():
         # else         : lr = args.lr/1000
         # return lr
 
+        if epoch<int(args.epochs*0.1)+args.warmup:
+            epoch_tot = int(args.epochs*0.1)+args.warmup
+            starting_lr = args.lr/epoch_tot
+            ending_lr = args.lr
+            step_size = (ending_lr - starting_lr)/epoch_tot
+            batch_step_size = step_size/batch_tot
+            lr = step_size*epoch + batch_step_size*batch_num
 
         elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
         elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
@@ -436,10 +443,9 @@ def main():
     start_time = datetime.now()
 
     if args.distributed:
+        print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
-        if args.dist_gpu_count: dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.dist_gpu_count)
-        else: dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
-        print('Distributed: init_process_group success')
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
@@ -449,14 +455,13 @@ def main():
     # AS: force use resnet50 for now, until we figure out whether to upload model directory
     
     model = resnet.resnet50()
-    base_model_pointer = model
     print("Loaded model")
 
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
     if args.distributed:
-        init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
+        # init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
@@ -490,7 +495,6 @@ def main():
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs+args.warmup):
         estart = time.time()
-        # dm.set_epoch(int(args.epochs*0.92+0.5)+args.warmup)
         dm.set_epoch(epoch)
 
         with warnings.catch_warnings():
@@ -516,7 +520,7 @@ def to_python_float(t):
     else:
         return t[0]
 
-def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base_model):
+def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -532,21 +536,15 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base
     for i,(input,target) in enumerate(trn_iter):
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
-        if hasattr(base_model, 'rseed'):
-            if epoch<int(args.epochs*0.14)+args.warmup: base_model.rseed = -1
-            else: base_model.rseed = 1000*epoch+i
+
         # measure data loading time
         data_time.update(time.time() - end)
         scheduler.update_lr(epoch, i, trn_len)
 
-        # input_var = Variable(input)
-        # target_var = Variable(target)
-        input_var = input
-        target_var = target
 
         # compute output
-        output = model(input_var)
-        loss = criterion(output, target_var)
+        output = model(input)
+        loss = criterion(output, target)
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
@@ -570,11 +568,8 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base
             model.zero_grad()
             loss.backward()
             model_grads_to_master_grads(model_params, master_params)
-
-            if args.loss_scale != 1:
-                for param in master_params:
-                    param.grad.data = param.grad.data/args.loss_scale
-
+            for param in master_params:
+                param.grad.data = param.grad.data/args.loss_scale
             optimizer.step()
             master_params_to_model_params(model_params, master_params)
             torch.cuda.synchronize()
@@ -602,8 +597,7 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch, base
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
-
-
+    
 def validate(val_iter, val_len, model, criterion, epoch, start_time):
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -614,42 +608,16 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
     end = time.time()
 
     for i,(input,target) in enumerate(val_iter):
-        input_var = input
-        target_var = target
-        batch_size = input.size(0)
-
-        output = loss = corr1 = corr5 = valid_batches = torch.tensor([0]).cuda()
-        if batch_size:
-            # compute output
-            with torch.no_grad():
-                output = model(input_var)
-                loss = criterion(output, target_var)
-            # measure accuracy and record loss
-            valid_batches = torch.tensor([1]).cuda()
-            corr1, corr5 = correct(output.data, target_var, topk=(1, 5))
-        else:
-            with torch.no_grad():
-                fake_input = torch.zeros([1,3,64,64]).cuda()
-                if args.fp16: fake_input = fake_input.half()
-                _ = model(fake_input)
-
         if args.distributed:
-            batch_tensor = torch.tensor([batch_size]).cuda()
-            tot_batch = sum_tensor(batch_tensor).item()
-            valid_batches = sum_tensor(valid_batches).item()
-            reduced_loss = sum_tensor(loss.data)/valid_batches
-
-            corr1 = sum_tensor(corr1).float()
-            corr5 = sum_tensor(corr5).float()
-            prec1 = corr1*(100.0/tot_batch)
-            prec5 = corr5*(100.0/tot_batch)
+            prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
         else:
-            reduced_loss = loss.data
-            tot_batch = batch_size
-            prec1 = corr1*(100.0/tot_batch)
-            prec5 = corr5*(100.0/tot_batch)
-
-        losses.update(to_python_float(reduced_loss), tot_batch)
+            with torch.no_grad():
+                output = model(input)
+                loss = criterion(output, target).data
+            tot_batch = input.size(0)
+            prec1, prec5 = accuracy(output.data, target, topk=(1,5))
+            
+        losses.update(to_python_float(loss), tot_batch)
         top1.update(to_python_float(prec1), tot_batch)
         top5.update(to_python_float(prec5), tot_batch)
 
@@ -676,12 +644,36 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
 
     return top5.avg
 
+def distributed_predict(input, target, model, criterion):
+    batch_size = input.size(0)
+    output = loss = corr1 = corr5 = valid_batches = torch.tensor([0]).cuda()
+    
+    if batch_size:
+        # compute output
+        with torch.no_grad():
+            # using module instead of model because DistributedDataParallel forward function has a sync point.
+            # with distributed validation sampler, we don't always have data for each gpu
+            assert(isinstance(model, nn.parallel.DistributedDataParallel))
+            output = model.module(input)
+            loss = criterion(output, target)
+        # measure accuracy and record loss
+        valid_batches = torch.tensor([1]).cuda()
+        corr1, corr5 = correct(output.data, target, topk=(1, 5))
+    batch_tensor = torch.tensor([batch_size]).cuda()
+    tot_batch = sum_tensor(batch_tensor).item()
+    valid_batches = sum_tensor(valid_batches).item()
+    reduced_loss = sum_tensor(loss.data)/valid_batches
+
+    corr1 = sum_tensor(corr1).float()
+    corr5 = sum_tensor(corr5).float()
+    prec1 = corr1*(100.0/tot_batch)
+    prec5 = corr5*(100.0/tot_batch)
+    return prec1, prec5, reduced_loss, tot_batch
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, f'{args.save_dir}/model_best.pth.tar')
-
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -702,18 +694,8 @@ class AverageMeter(object):
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+    corrrect_ks = correct(output, target, topk)
+    return [correct_k.mul_(100.0 / batch_size) for correct_k in corrrect_ks]
 
 def correct(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
