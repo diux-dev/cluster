@@ -177,6 +177,31 @@ Process 12 transferred 100 MB in 434.1 ms (230.4 MB/sec)
 Process 12 transferred 100 MB in 823.8 ms (121.4 MB/sec)
 Process 12 transferred 100 MB in 461.0 ms (216.9 MB/sec)
 
+# c5 with amazon linux and 4x the data
+python bench_allreduce.py --instance-type=c5.18xlarge --zone=us-east-1c --placement --backend=gloo --linux-type=amazon --name=c5amazon01  --num-machines=16 --data-size-mb=400
+Process 12 transferred 400 MB in 1784.9 ms (224.1 MB/sec)
+Process 12 transferred 400 MB in 1958.0 ms (204.3 MB/sec)
+Process 12 transferred 400 MB in 2592.5 ms (154.3 MB/sec)
+Process 12 transferred 400 MB in 2523.0 ms (158.5 MB/sec)
+Process 12 transferred 400 MB in 1978.9 ms (202.1 MB/sec)
+Process 12 transferred 400 MB in 2128.6 ms (187.9 MB/sec)
+Process 12 transferred 400 MB in 1835.8 ms (217.9 MB/sec)
+Process 12 transferred 400 MB in 2261.2 ms (176.9 MB/sec)
+Process 12 transferred 400 MB in 1884.1 ms (212.3 MB/sec)
+Process 12 transferred 400 MB in 2579.0 ms (155.1 MB/sec)
+Process 12 transferred 400 MB in 1936.2 ms (206.6 MB/sec)
+Process 12 transferred 400 MB in 1786.8 ms (223.9 MB/sec)
+Process 12 transferred 400 MB in 1834.0 ms (218.1 MB/sec)
+Process 12 transferred 400 MB in 2094.9 ms (190.9 MB/sec)
+Process 12 transferred 400 MB in 1840.1 ms (217.4 MB/sec)
+Process 12 transferred 400 MB in 2008.1 ms (199.2 MB/sec)
+Process 12 transferred 400 MB in 1810.1 ms (221.0 MB/sec)
+Process 12 transferred 400 MB in 1960.6 ms (204.0 MB/sec)
+Process 12 transferred 400 MB in 1813.9 ms (220.5 MB/sec)
+Process 12 transferred 400 MB in 1804.1 ms (221.7 MB/sec)
+Process 12 transferred 400 MB in 1963.8 ms (203.7 MB/sec)
+Process 12 transferred 400 MB in 2288.8 ms (174.8 MB/sec)
+
 
 # p3 2-worker allreduce:
 python bench_allreduce.py --instance-type=p3.16xlarge --zone=us-east-1c --placement --backend=gloo --name=gpu
