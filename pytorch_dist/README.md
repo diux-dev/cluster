@@ -125,6 +125,58 @@ Process 0 transferred 100 MB in 551.7 ms (181.3 MB/sec)
 Process 0 transferred 100 MB in 470.2 ms (212.7 MB/sec)
 Process 0 transferred 100 MB in 471.4 ms (212.1 MB/sec)
 
+# c5 with Amazon Linux and 2 machines
+python bench_allreduce.py --instance-type=c5.18xlarge --zone=us-east-1c --placement --backend=gloo --linux-type=amazon --name=c5amazon00
+
+Process 1 transferred 100 MB in 118.6 ms (842.9 MB/sec)
+Process 1 transferred 100 MB in 118.8 ms (841.5 MB/sec)
+Process 1 transferred 100 MB in 120.4 ms (830.5 MB/sec)
+Process 1 transferred 100 MB in 115.9 ms (862.5 MB/sec)
+Process 1 transferred 100 MB in 119.4 ms (837.5 MB/sec)
+Process 1 transferred 100 MB in 119.4 ms (837.4 MB/sec)
+Process 1 transferred 100 MB in 119.3 ms (838.3 MB/sec)
+Process 1 transferred 100 MB in 119.5 ms (837.0 MB/sec)
+Process 1 transferred 100 MB in 119.0 ms (840.5 MB/sec)
+Process 1 transferred 100 MB in 119.5 ms (836.8 MB/sec)
+Process 1 transferred 100 MB in 119.2 ms (839.1 MB/sec)
+Process 1 transferred 100 MB in 119.0 ms (840.2 MB/sec)
+Process 1 transferred 100 MB in 118.8 ms (841.7 MB/sec)
+Process 1 transferred 100 MB in 118.5 ms (843.6 MB/sec)
+Process 1 transferred 100 MB in 120.6 ms (829.2 MB/sec)
+Process 1 transferred 100 MB in 117.4 ms (852.0 MB/sec)
+
+# c5 run with Amazon Linux and  16 machines
+python bench_allreduce.py --instance-type=c5.18xlarge --zone=us-east-1c --placement --backend=gloo --linux-type=amazon --name=c5amazon01  --num-machines=16
+
+Process 12 transferred 100 MB in 440.8 ms (226.8 MB/sec)
+Process 12 transferred 100 MB in 606.5 ms (164.9 MB/sec)
+Process 12 transferred 100 MB in 445.6 ms (224.4 MB/sec)
+Process 12 transferred 100 MB in 453.8 ms (220.4 MB/sec)
+Process 12 transferred 100 MB in 600.0 ms (166.7 MB/sec)
+Process 12 transferred 100 MB in 453.5 ms (220.5 MB/sec)
+Process 12 transferred 100 MB in 629.6 ms (158.8 MB/sec)
+Process 12 transferred 100 MB in 443.5 ms (225.5 MB/sec)
+Process 12 transferred 100 MB in 437.2 ms (228.7 MB/sec)
+Process 12 transferred 100 MB in 448.3 ms (223.1 MB/sec)
+Process 12 transferred 100 MB in 426.6 ms (234.4 MB/sec)
+Process 12 transferred 100 MB in 437.8 ms (228.4 MB/sec)
+Process 12 transferred 100 MB in 440.4 ms (227.1 MB/sec)
+Process 12 transferred 100 MB in 613.9 ms (162.9 MB/sec)
+Process 12 transferred 100 MB in 430.7 ms (232.2 MB/sec)
+Process 12 transferred 100 MB in 429.9 ms (232.6 MB/sec)
+Process 12 transferred 100 MB in 455.1 ms (219.7 MB/sec)
+Process 12 transferred 100 MB in 456.0 ms (219.3 MB/sec)
+Process 12 transferred 100 MB in 425.0 ms (235.3 MB/sec)
+Process 12 transferred 100 MB in 617.9 ms (161.8 MB/sec)
+Process 12 transferred 100 MB in 444.1 ms (225.2 MB/sec)
+Process 12 transferred 100 MB in 434.5 ms (230.2 MB/sec)
+Process 12 transferred 100 MB in 436.4 ms (229.1 MB/sec)
+Process 12 transferred 100 MB in 440.2 ms (227.2 MB/sec)
+Process 12 transferred 100 MB in 428.6 ms (233.3 MB/sec)
+Process 12 transferred 100 MB in 434.1 ms (230.4 MB/sec)
+Process 12 transferred 100 MB in 823.8 ms (121.4 MB/sec)
+Process 12 transferred 100 MB in 461.0 ms (216.9 MB/sec)
+
 
 # p3 2-worker allreduce:
 python bench_allreduce.py --instance-type=p3.16xlarge --zone=us-east-1c --placement --backend=gloo --name=gpu
@@ -150,4 +202,6 @@ Process 1 transferred 100 MB in 87.5 ms (1143.0 MB/sec)
 Process 1 transferred 100 MB in 88.5 ms (1130.1 MB/sec)
 Process 1 transferred 100 MB in 89.0 ms (1123.7 MB/sec)
 Process 1 transferred 100 MB in 89.2 ms (1120.5 MB/sec)
+
+
 ```

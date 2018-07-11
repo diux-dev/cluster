@@ -2,6 +2,12 @@
 #
 # Launching simple MPI job on AWS cluster or locally
 
+# Amazon Linux product page:
+# https://aws.amazon.com/marketplace/fulfillment?productId=f3afce45-648d-47d7-9f6c-1ec273f7df70&ref_=dtl_psb_continue
+# Ubuntu page:
+# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
+
+
 
 import os
 import sys
@@ -36,6 +42,8 @@ parser.add_argument('--num-machines', type=int, default=2,
                      help="size of MPI world")
 parser.add_argument('--num-iters', type=int, default=1000,
                      help="how many iterations to run for")
+parser.add_argument('--linux-type', type=str, default='ubuntu',
+                     help="either 'ubuntu' or 'amazon' for linux type")
 
 # mpi flags
 parser.add_argument('--role', type=str, default='launcher',
@@ -54,7 +62,18 @@ ami_dict_ubuntu = {
   "us-east-2": "ami-23c4fb46",
   "us-west-2": "ami-e580c79d",
 }
-ami_dict = ami_dict_ubuntu
+ami_dict_amazon = {
+  "us-east-1": "ami-ca4464b5",
+  "us-east-2": "ami-16f8c073",
+  "us-west-2": "ami-f275218a",
+}
+
+if args.linux_type == 'ubuntu':
+  ami_dict = ami_dict_ubuntu
+elif args.linux_type == 'amazon':
+  ami_dict = ami_dict_amazon
+else:
+  assert False, 'unknown linux type '+args.linux_type
 
 def worker():
   """Main body for each worker in MPI world."""
@@ -77,7 +96,7 @@ def worker():
     print("Process %d transferred %d MB in %.1f ms (%.1f MB/sec)" % (args.rank, args.data_size_mb, elapsed_time*1000, rate))
 
     params+=grads
-    print('Rank ', args.rank, ' has data ', params[0])
+    #    print('Rank ', args.rank, ' has data ', params[0])
 
 
 def launcher():
@@ -113,7 +132,8 @@ def launcher():
     create_resources_lib.create_resources()
     region = u.get_region()
     backend = aws_backend  
-    run = backend.make_run(args.name, ami=ami, availability_zone=args.zone)
+    run = backend.make_run(args.name, ami=ami, availability_zone=args.zone,
+                           linux_type=args.linux_type)
     
   job = run.make_job('worker', instance_type=args.instance_type,
                      num_tasks=args.num_machines,
