@@ -28,27 +28,15 @@ import pickle
 from tqdm import tqdm
 # import resnet_sd as resnet
 
-# model_names = sorted(name for name in models.__dict__
-#                      if name.islower() and not name.startswith("__")
-#                      and callable(models.__dict__[name]))
-#print(model_names)
-
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
-    parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50')
-    # parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
-    #                     choices=model_names,
-    #                     help='model architecture: ' +
-    #                     ' | '.join(model_names) +
-    #                     ' (default: resnet18)')
-    parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
+    parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
+    parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=90, type=int, metavar='N',
+    parser.add_argument('--epochs', default=45, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--warmup', default=0, type=int, metavar='N',
-                        help='number of additional epochs to warmup')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
@@ -58,26 +46,27 @@ def get_parser():
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
+    parser.add_argument('--resize-sched', default='0.4,0.92', type=str,
+                        help='Scheduler to resize from 128 -> 224 -> 288')
+    parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
+                        help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
+    parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
-    parser.add_argument('--small', action='store_true', help='start with smaller images')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
-    parser.add_argument('--sz',       default=224, type=int, help='Size of transformed image.')
-    parser.add_argument('--decay-int', default=30, type=int, help='Decay LR by 10 every decay-int epochs')
     parser.add_argument('--loss-scale', type=float, default=1,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
     parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
-
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--world-size', default=-1, type=int, 
                         help='Number of gpus per machine. Param only needed for single machine training when using (faster) file sync')
-    parser.add_argument('--dist-url', default='file://sync.file', type=str,
+    parser.add_argument('--dist-url', default='env://', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
     parser.add_argument('--local_rank', default=0, type=int,
@@ -161,10 +150,10 @@ class ValDistSampler(Sampler):
         self.indices = indices
         self.batch_size = batch_size
         if distributed_batch and args.distributed: 
-            self.world_size = get_world_size() 
-            self.rank = dist.get_rank()
+            self.world_size = args.world_size
+            self.global_rank = dist.get_rank()
         else: 
-            self.rank = 0
+            self.global_rank = 0
             self.world_size = 1
             
         # expected number of batches per sample. Need this so each distributed gpu validates on same number of batches.
@@ -175,7 +164,7 @@ class ValDistSampler(Sampler):
         self.num_samples = self.expected_num_batches * self.batch_size
         
     def __iter__(self):
-        offset = self.num_samples * self.rank
+        offset = self.num_samples * self.global_rank
         sampled_indices = self.indices[offset:offset+self.num_samples]
         for i in range(self.expected_num_batches):
             offset = i*self.batch_size
@@ -198,17 +187,17 @@ class CropArTfm(object):
         return torchvision.transforms.functional.center_crop(img, size)
 
 def create_validation_set(valdir, batch_size, target_size, use_ar):
-    idx_ar_sorted = sort_ar(valdir)
-    idx_sorted, _ = zip(*idx_ar_sorted)
-    idx2ar = map_idx2ar(idx_ar_sorted, batch_size)
-    
     if use_ar:
+        idx_ar_sorted = sort_ar(valdir)
+        idx_sorted, _ = zip(*idx_ar_sorted)
+        idx2ar = map_idx2ar(idx_ar_sorted, batch_size)
+
         ar_tfms = [transforms.Resize(int(target_size*1.14)), CropArTfm(idx2ar, target_size)]
         val_dataset = ValDataset(valdir, transform=ar_tfms)
         val_sampler = ValDistSampler(idx_sorted, batch_size=batch_size)
         return val_dataset, val_sampler
     
-    val_tfms = [transforms.Resize(int(args.sz*1.14)), transforms.CenterCrop(args.sz)]
+    val_tfms = [transforms.Resize(int(target_size*1.14)), transforms.CenterCrop(target_size)]
     val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
     val_sampler = ValDistSampler(list(range(len(val_dataset))), batch_size=batch_size)
     return val_dataset, val_sampler
@@ -281,44 +270,29 @@ class DataPrefetcher():
             yield input, target
 
 class DataManager():
-    def __init__(self):
-        if args.small: self.load_data('-sz/160', args.batch_size, 128)
-        # else: self.load_data('-sz/320', args.batch_size, 224)
-        else: self.load_data('', args.batch_size, 224)
+    def __init__(self, resize_sched=[0.4, 0.92]):
+        self.resize_sched = resize_sched
+        self.load_data('-sz/160', args.batch_size, 128)
         
     def set_epoch(self, epoch):
-        if epoch==int(args.epochs*0.4+0.5)+args.warmup:
+        if epoch==int(args.epochs*self.resize_sched[0]+0.5):
             # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
             self.load_data('', args.batch_size, 224)
-        if epoch==int(args.epochs*0.92+0.5)+args.warmup:
+        if epoch==int(args.epochs*self.resize_sched[1]+0.5):
             print('DataManager changing image size to 288')
-            # self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
             self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
-        if args.distributed:
-            if self.trn_smp: self.trn_smp.set_epoch(epoch)
-            if self.val_smp: self.val_smp.set_epoch(epoch)
 
-    # def set_epoch(self, epoch):
-    #     if epoch==int(args.epochs*0.35+0.5)+args.warmup:
-    #         # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
-    #         print('DataManager changing image size to 244')
-    #         self.load_data('', args.batch_size, 224)
-    #     if epoch==int(args.epochs*0.88+0.5)+args.warmup:
-    #         print('DataManager changing image size to 288')
-    #         # self.load_data('', 128, 288, val_bs=64, min_scale=0.5, use_ar=args.val_ar)
-    #         self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
-    #     if args.distributed:
-    #         if self.trn_smp: self.trn_smp.set_epoch(epoch)
-    #         if self.val_smp: self.val_smp.set_epoch(epoch)
+        if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
+        if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
+    
+    # For val_ar faster scheduler - [0.35,0.88]
 
     def get_trn_iter(self):
-        # trn_iter = self.trn_iter
         self.trn_iter = iter(self.trn_dl)
         return self.trn_iter
 
     def get_val_iter(self):
-        # val_iter = self.val_iter
         self.val_iter = iter(self.val_dl)
         return self.val_iter
         
@@ -328,66 +302,50 @@ class DataManager():
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, **kwargs)
         self.trn_dl = DataPrefetcher(self.trn_dl)
         self.val_dl = DataPrefetcher(self.val_dl, prefetch=False)
-
         self.trn_len = len(self.trn_dl)
         self.val_len = len(self.val_dl)
-        # self.trn_iter = iter(self.trn_dl)
-        # self.val_iter = iter(self.val_dl)
-
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
 
 class Scheduler():
-    def __init__(self, optimizer):
+    def __init__(self, optimizer, lr_sched=[0.1, 0.47, 0.78, 0.95]):
         self.optimizer = optimizer
         self.current_lr = None
         self.current_epoch = 0
+        self.lr_sched = lr_sched
+
+    def bn0_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
+        world_size = args.world_size
+        lr_step = args.lr / (epoch_tot * batch_tot)
+        lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
+        
+        if world_size == 32: lr /= 1.5
+        if world_size == 64: lr /= 2
+        return lr
+
+    def linear_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
+        starting_lr = args.lr/epoch_tot
+        ending_lr = args.lr
+        step_size = (ending_lr - starting_lr)/epoch_tot
+        batch_step_size = step_size/batch_tot
+        lr = step_size*(epoch+1) + batch_step_size*batch_num
+
+        if (args.world_size >= 32) and (epoch < epoch_tot):
+            starting_lr = starting_lr/(4 - epoch)
+        return lr
 
     def get_lr(self, epoch, batch_num, batch_tot):
         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-        # if epoch<int(args.epochs*0.14)+args.warmup:
-        #     epoch_tot = int(args.epochs*0.14)+args.warmup
-        #     world_size = get_world_size()
-        #     # lr_step = (world_size/4 - 1) * args.lr / (epoch_tot * batch_tot)
-        #     lr_step = args.lr / (epoch_tot * batch_tot)
-        #     lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
-
-        #     if world_size == 32: lr /= 1.5
-        #     if world_size == 64: lr /= 2
-
-        # the following works best for 8 machines I think
-        # Works better when
-        # if epoch<int(args.epochs*0.14)+args.warmup:
-        #     epoch_tot = int(args.epochs*0.14)+args.warmup
-        #     starting_lr = args.lr/epoch_tot
-        #     world_size = get_world_size()
-        #     if (world_size > 20) and (epoch < 4):
-        #         # starting_lr = starting_lr/(world_size/2)
-        #         starting_lr = starting_lr/(4 - epoch)
-        #     ending_lr = args.lr
-        #     step_size = (ending_lr - starting_lr)/epoch_tot
-        #     batch_step_size = step_size/batch_tot
-        #     lr = step_size*epoch + batch_step_size*batch_num
-
-            # lr = args.lr/(int(args.epochs*0.1)+args.warmup-epoch)
-        # elif epoch<int(args.epochs*0.43+0.5)+args.warmup: lr = args.lr/1
-        # elif epoch<int(args.epochs*0.73+0.5)+args.warmup: lr = args.lr/10
-        # elif epoch<int(args.epochs*0.94+0.5)+args.warmup: lr = args.lr/100
-        # else         : lr = args.lr/1000
-        # return lr
-
-        if epoch<int(args.epochs*0.1)+args.warmup:
-            epoch_tot = int(args.epochs*0.1)+args.warmup
-            starting_lr = args.lr/epoch_tot
-            ending_lr = args.lr
-            step_size = (ending_lr - starting_lr)/epoch_tot
-            batch_step_size = step_size/batch_tot
-            lr = step_size*epoch + batch_step_size*batch_num
-
-        elif epoch<int(args.epochs*0.47+0.5)+args.warmup: lr = args.lr/1
-        elif epoch<int(args.epochs*0.78+0.5)+args.warmup: lr = args.lr/10
-        elif epoch<int(args.epochs*0.95+0.5)+args.warmup: lr = args.lr/100
+        # faster lr schedule [0.14, 0.43, 0.73, 0.94]
+        # original lr schedule [0.1, 0.47, 0.78, 0.95]
+        if epoch<int(args.epochs*self.lr_sched[0]+0.5):
+            epoch_tot = args.epochs*self.lr_sched[0]+0.5
+            if args.init_bn0: lr = self.bn0_lr_warmup(epoch, epoch_tot, batch_num, batch_tot)
+            else: lr = self.linear_lr_warmup(epoch, epoch_tot, batch_num, batch_tot)
+        elif epoch<int(args.epochs*self.lr_sched[1]+0.5): return args.lr/1
+        elif epoch<int(args.epochs*self.lr_sched[2]+0.5): return args.lr/10
+        elif epoch<int(args.epochs*self.lr_sched[3]+0.5): return args.lr/100
         else         : lr = args.lr/1000
         return lr
 
@@ -400,41 +358,30 @@ class Scheduler():
         self.current_epoch = epoch
         self.current_batch = batch_num
 
-        for param_group in self.optimizer.param_groups: param_group['lr'] = lr
-
-        if not args.distributed: return
         for param_group in self.optimizer.param_groups:
-            lr_old = param_group['lr']
+            lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
+
             # Trick 4: apply momentum correction when lr is updated
-            if lr > lr_old:
-                param_group['momentum'] = lr / lr_old * args.momentum
-            else:
-                param_group['momentum'] = args.momentum
+            # https://github.com/pytorch/examples/pull/262
+            if lr > lr_old: param_group['momentum'] = lr / lr_old * args.momentum
+            else: param_group['momentum'] = args.momentum
+
 
 def init_dist_weights(model):
-    # Distributed training uses 4 tricks to maintain the accuracy
-    # with much larger batchsize, see
     # https://arxiv.org/pdf/1706.02677.pdf
-    # for more details
-
+    # https://github.com/pytorch/examples/pull/262
     if args.arch.startswith('resnet'):
         for m in model.modules():
-            # Trick 1: the last BatchNorm layer in each block need to
-            # be initialized as zero gamma
             if isinstance(m, resnet.BasicBlock):
                 m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
             if isinstance(m, resnet.Bottleneck):
                 m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
-            # Trick 2: linear layers are initialized by
-            # drawing weights from a zero-mean Gaussian with
-            # standard deviation of 0.01. In the paper it was only
-            # fc layer, but in practice we found this better for
-            # accuracy.
             if isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
 
 def main():
+    print(args)
     print("~~epoch\thours\ttop1Accuracy\n")
 
     # need to index validation directory before we start counting the time
@@ -446,22 +393,18 @@ def main():
         print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
+        assert(args.world_size == dist.get_world_size())
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
-    # create model
-    # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
-    # else: model = models.__dict__[args.arch]()
-    # AS: force use resnet50 for now, until we figure out whether to upload model directory
-    
-    model = resnet.resnet50()
+    model = resnet.resnet50(pretrained=args.pretrained)
     print("Loaded model")
 
     model = model.cuda()
     n_dev = torch.cuda.device_count()
     if args.fp16: model = network_to_half(model)
     if args.distributed:
-        # init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
+        if args.init_bn0: init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
         model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
@@ -471,7 +414,7 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = Scheduler(optimizer)
+    scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
 
     print("Defined loss and optimizer")
 
@@ -486,20 +429,20 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
-    dm = DataManager()
+    dm = DataManager(str_to_num_array(args.resize_sched))
     print("Created data loaders")
 
     if args.evaluate: return validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, 0, start_time)
 
     print("Begin training")
     estart = time.time()
-    for epoch in range(args.start_epoch, args.epochs+args.warmup):
+    for epoch in range(args.start_epoch, args.epochs):
         estart = time.time()
         dm.set_epoch(epoch)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch, base_model_pointer)
+            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch)
 
         if args.prof: break
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
@@ -512,6 +455,8 @@ def main():
                 'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
+def str_to_num_array(argstr):
+    return [float(s) for s in argstr.split(',')]
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
@@ -695,12 +640,12 @@ class AverageMeter(object):
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     corrrect_ks = correct(output, target, topk)
-    return [correct_k.mul_(100.0 / batch_size) for correct_k in corrrect_ks]
+    batch_size = target.size(0)
+    return [correct_k.float().mul_(100.0 / batch_size) for correct_k in corrrect_ks]
 
 def correct(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
-    batch_size = target.size(0)
 
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
@@ -718,16 +663,10 @@ def sum_tensor(tensor):
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
     return rt
 
-def get_world_size():
-    if args.distributed: return dist.get_world_size()
-    return 1
-
 def reduce_tensor(tensor):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    size = get_world_size()
-    # rt /= args.world_size
-    rt /= size
+    rt /= args.world_size
     return rt
 
 if __name__ == '__main__': main()
