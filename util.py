@@ -797,3 +797,13 @@ def chunks(l, n):
   """Yield successive n-sized chunks from l."""
   for i in range(0, len(l), n):
     yield l[i:i + n]
+
+def lookup_ami_id(wildcard):
+  """Returns ami matching given wildcard
+  # lookup_ami('pytorch*').name => ami-29fa"""
+  ec2 = u.create_ec2_resource()
+  filter = {'Name': 'name', 'Values' : [wildcard]}
+  images = list(ec2.images.filter(Filters = [filter], Owners=['self']))
+  assert len(images)<=1, "Multiple images match "+str(wildcard)
+  assert len(images)>=0, "No images match "+str(wildcard)
+  return images[0]
