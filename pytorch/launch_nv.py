@@ -19,6 +19,10 @@
 
 # python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_c_spot --zone us-west-2c --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
 
+# virginia 8 machine run
+# export AWS_DEFAULT_REGION=us-east-1
+# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name yaro8 --zone us-east-1c --placement-group yaro_test --params=x8ar_args
+
 from collections import OrderedDict
 import argparse
 import os
@@ -38,8 +42,11 @@ from launch_utils import *
 util.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--ami', type=str, default='ami-e580c79d',
-                     help="name of AMI to use ")
+parser.add_argument('--ami', type=str, default='',
+                     help="id of AMI to use")
+parser.add_argument('--ami_name', type=str,
+                    default='pytorch.imagenet.source.v2',
+                    help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
@@ -120,8 +127,11 @@ x8ar_args = [
 ]
 
 def main():
-  run = aws_backend.make_run(args.name, ami=args.ami, availability_zone=args.zone,
-                            linux_type=args.linux_type, skip_efs_mount=(not args.mount_efs))
+  run = aws_backend.make_run(args.name, ami=args.ami,
+                             ami_name=args.ami_name,
+                             availability_zone=args.zone,
+                             linux_type=args.linux_type,
+                             skip_efs_mount=(not args.mount_efs))
   job = create_job(run, args.job_name, args.num_tasks)
 
   # Define custom params for training or use a preset above

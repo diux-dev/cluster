@@ -19,6 +19,7 @@ LOGDIR_PREFIX='/efs/runs'
 
 # TODO: use separate session for each task, for parity with AWS job launcher
 
+# todo: tmux session names are backwards from AWS job names (runname-jobname)
 # TODO: add kwargs so that tmux backend can be drop-in replacement
 def make_run(name, install_script='', **kwargs):
   if kwargs:

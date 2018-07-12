@@ -1,5 +1,6 @@
 # AWS implementation of backend.py
 
+# TODO: automatically get region from zone name?
 # TODO: fix remote_fn must be absolute for uploading with check_with_existing
 import glob
 import os
@@ -46,7 +47,8 @@ class Run(backend.Run):
     job_name = u.format_job_name(role_name, self.name)
     instances = u.lookup_aws_instances(job_name)
     kwargs = u.merge_kwargs(kwargs, self.kwargs)
-    ami = kwargs['ami']
+    ami = kwargs.get('ami', '')
+    ami_name = kwargs.get('ami_name', '')
     instance_type = kwargs['instance_type']
     availability_zone = kwargs['availability_zone']
     placement_group = kwargs.get('placement_group', '')
@@ -72,6 +74,9 @@ class Run(backend.Run):
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 
+      assert not (ami and ami_name), "Must have only one of ami and ami_name, got "+ami+", "+ami_name
+      if ami_name:
+        ami = u.lookup_ami_id(ami_name).id
       security_group = u.get_security_group_dict()[u.get_resource_name()]
       keypair = u.get_keypair_dict()[u.get_keypair_name()]
       vpc = u.get_vpc_dict()[u.get_resource_name()]
