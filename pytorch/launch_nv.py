@@ -126,6 +126,17 @@ x8ar_args = [
   '--val-ar'
 ]
 
+# Current benchmark for 8x p3's - with Aspect Ratio Validatoin
+x8ar_args_forever = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--resize-sched', '0.35,0.88',
+  '--epochs', 400,
+  '--lr', 0.25 * 8,
+  '--init-bn0',
+  '--batch-size', 192,
+  '--val-ar'
+]
+
 def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              ami_name=args.ami_name,
