@@ -153,6 +153,10 @@ def create_job(run, job_name, num_tasks):
   job.upload_async('training/train_imagenet_nv.py')
 
   # setup machines
+  # TODO: file_exists check below complains...need to make sure ssh sessions
+  # are alive.
+  #  paramiko.ssh_exception.SSHException: SSH session not active
+
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
     job.upload_async('setup/setup_env_nv.sh')
