@@ -1,5 +1,6 @@
 # AWS implementation of backend.py
 
+# todo: move EFS mounting into userdata for things to happen in parallel
 # TODO: fix remote_fn must be absolute for uploading with check_with_existing
 import glob
 import os
