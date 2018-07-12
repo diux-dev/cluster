@@ -66,6 +66,8 @@ parser.add_argument('--spot', action='store_true',
                     help='launch using spot requests')
 parser.add_argument('--mount-efs', action='store_true',
                     help='Mount efs. For loading imagenet')
+parser.add_argument('--params', type=str, default="x4ar_args",
+                    help='args to use, see "params = " line')
 args = parser.parse_args()
 
 
@@ -123,7 +125,7 @@ def main():
   job = create_job(run, args.job_name, args.num_tasks)
 
   # Define custom params for training or use a preset above
-  params = x4ar_args
+  params = eval(args.params)
   start_training(job, params, save_tag='testing_refactor',)
 
 
