@@ -21,6 +21,8 @@ import os
 # set to '' to remove this restriction
 #LIMIT_TO_KEY = os.environ.get("LIMIT_TO_KEY", "dontkillanything")
 LIMIT_TO_KEY=getpass.getuser()
+
+# todo: make this into an overridable flag for when you need to kill TB
 SKIP_TENSORBOARD=True  # true to avoid killing tensorboard jobs
 SKIP_STOPPED=True  # don't terminate stopped jobs
 
