@@ -26,12 +26,12 @@ fi
 
 if [ ! -d "$DATA_DIR/imagenet" ]; then
     cd $DATA_DIR
-    rsync --progress /efs/imagenet-data-sorted.tar $DATA_DIR
+    rsync --progress /efs/data/imagenet-data-sorted.tar $DATA_DIR
     tar -xvf $DATA_DIR/imagenet-data-sorted.tar
     rm $DATA_DIR/imagenet-data-sorted.tar
     mv $DATA_DIR/raw-data $DATA_DIR/imagenet
 
-    rsync --progress /efs/imagenet-sz.tar $DATA_DIR
+    rsync --progress /efs/data/imagenet-sz.tar $DATA_DIR
     tar -xvf $DATA_DIR/imagenet-sz.tar
     rm $DATA_DIR/imagenet-sz.tar
     
