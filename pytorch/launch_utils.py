@@ -48,7 +48,7 @@ def attach_instance_ebs(aws_instance, tag):
 
 def get_ebs_settings(use_iops):
   ebs = {
-    'VolumeSize': 1000, 
+    'VolumeSize': 500, 
     'DeleteOnTermination': True,
     'VolumeType': 'gp2'
   }
