@@ -16,6 +16,9 @@ import getpass
 import sys
 import os
 
+import util as u
+
+
 # By default only touch instances launched with LIMIT_TO_KEY
 # this is to prevent accidentally wiping all jobs on the account
 # set to '' to remove this restriction
@@ -54,21 +57,23 @@ def main():
       instance_list.append((get_name(instance_response),
                             instance_response))
 
+  region = u.get_region()
+
   instances_to_kill = []
   for (name, instance_response) in instance_list:
     if not fragment in name:
       continue
     if SKIP_TENSORBOARD and '.tb.' in name:
-      print("Not killing tensorboard job", name)
+      #      print("Not killing tensorboard job", name)
       continue
     if SKIP_STOPPED and instance_response['State']['Name'] == 'stopped':
-      print("Not killing stopped job", name)
+      #      print("Not killing stopped job", name)
       continue
     
     key = instance_response.get('KeyName', '')
     if LIMIT_TO_KEY and not (LIMIT_TO_KEY in key):
-      print("instance %s matches but key %s doesn't match desired key %s, "
-            "skipping" %(name, key, LIMIT_TO_KEY))
+      #      print("instance %s matches but key %s doesn't match desired key %s, "
+      #            "skipping" %(name, key, LIMIT_TO_KEY))
       continue
     state = instance_response['State']['Name']
     if state == 'terminated':
@@ -91,7 +96,7 @@ def main():
           (fragment, LIMIT_TO_KEY))
     return
   
-  answer = input("%d instances found, terminate? (Y/n) " % (len(instances_to_kill),))
+  answer = input("%d instances found, terminate in %s? (Y/n) " % (len(instances_to_kill),region))
   if not answer:
     answer = "y"
   if answer.lower() == "y":
