@@ -122,7 +122,7 @@ x8ar_args = [
   '--epochs', 40,
   '--lr', 0.25 * 8,
   '--init-bn0',
-  '--batch-size', 192,
+  '--batch-size', 128,
   '--val-ar'
 ]
 

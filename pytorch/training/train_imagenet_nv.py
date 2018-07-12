@@ -327,7 +327,7 @@ class Scheduler():
     def linear_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
         starting_lr = args.lr/epoch_tot
         ending_lr = args.lr
-        step_size = (ending_lr - starting_lr)/epoch_tot
+        step_size = (ending_lr - starting_lr)/(epoch_tot-1)
         batch_step_size = step_size/batch_tot
         lr = step_size*(epoch+1) + batch_step_size*batch_num
 
