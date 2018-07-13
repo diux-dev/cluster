@@ -55,7 +55,7 @@ def get_ebs_settings(use_iops):
   # Use higher io ebs if we are using default instance storage
   if use_iops: 
     ebs['VolumeType'] = 'io1'
-    ebs['Iops'] = 14000
+    ebs['Iops'] = 11500  # lowered from 14k to allow 17 instances
 
   return [{
     'DeviceName': '/dev/sda1',

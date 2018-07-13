@@ -1,12 +1,4 @@
 #!/usr/bin/env python
-# numpy01 image, see environment-numpy.org for construction
-# (DL AMI v 3.0 based)
-#
-# us-east-1 AMIs
-# numpy00: ami-f9d6dc83
-# numpy01: ami-5b524f21
-
-
 # master command:
 # python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c
 
@@ -21,7 +13,7 @@
 
 # virginia 8 machine run
 # export AWS_DEFAULT_REGION=us-east-1
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name yaro8 --zone us-east-1c --placement-group yaro_test --params=x8ar_args
+# python launch_nv.py --name yaro-friday-8 --num-tasks 8 --zone us-east-1c --params x8_args
 
 from collections import OrderedDict
 import argparse
@@ -44,16 +36,23 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use")
-parser.add_argument('--ami_name', type=str,
+parser.add_argument('--ami-name', type=str,
                     default='pytorch.imagenet.source.v2',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
-                     help="name of the current run")
+                     help=("name of placement group to use (depecated, name "
+                           "is automatically picked"))
+parser.add_argument('--use-placement-group', type=int, default=1,
+                     help="whether to use placement group")
+parser.add_argument('--spot', action='store_true', 
+                    help='launch using spot requests')
 parser.add_argument('--name', type=str, default='pytorch',
-                     help="name of the current run")
+                     help=("name of the current run, this determines placement "
+                           "group name, instance names and EFS logging "
+                           "directory."))
 parser.add_argument('--job-name', type=str, default='distributed',
-                     help="name of the jobs to run")
-parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
+                     help="name of the worker job (deprecated)")
+parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -61,6 +60,8 @@ parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
+# todo: rename to "num-machines", num-tasks is confusing since multiple pytorch
+# per machine
 parser.add_argument('--num-tasks', type=int, default=1,
                     help='number of instances to create')
 parser.add_argument('--install-script', type=str, default='',
@@ -69,8 +70,6 @@ parser.add_argument('--attach-volume', type=str, default=None,
                     help='tag name of ebs volume to attach')
 parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
-parser.add_argument('--spot', action='store_true', 
-                    help='launch using spot requests')
 parser.add_argument('--mount-efs', action='store_true',
                     help='Mount efs. For loading imagenet')
 parser.add_argument('--params', type=str, default="x4_args",
@@ -89,6 +88,15 @@ x_args = [
   '--init-bn0',
   '--batch-size', 192
 ]
+x_args_128 = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 45,
+  '--lr', 0.4,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--init-bn0',
+  '--batch-size', 128
+]
+
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
 x4_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -133,7 +141,7 @@ x8ar_args_forever = [
   '--epochs', 400,
   '--lr', 0.25 * 8,
   '--init-bn0',
-  '--batch-size', 192,
+  '--batch-size', 128,
   '--val-ar'
 ]
 
@@ -143,9 +151,10 @@ def main():
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=(not args.mount_efs))
-  job = create_job(run, args.job_name, args.num_tasks)
+  job = create_job(run, "worker", args.num_tasks)
 
   # Define custom params for training or use a preset above
+  # TODO: move "save_tag" into command-line parameter
   params = eval(args.params)
   start_training(job, params, save_tag='testing_refactor',)
 
@@ -157,7 +166,15 @@ def create_job(run, job_name, num_tasks):
       install_script = f.read()
   
   ebs = get_ebs_settings(use_iops=(args.attach_volume is None))
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group, use_spot=args.spot)
+  if args.placement_group:
+    print("Warning, placement_group is deprecated, use --use_placement_group 1 for automatically picked placement group (same as run name).")
+    placement_group_name = args.placement_group
+  if args.use_placement_group:
+    placement_group_name = args.name
+  else:
+    placement_group_name = ''
+    
+  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=placement_group_name, use_spot=args.spot)
   job.wait_until_ready()
   print(job.connect_instructions)
 
