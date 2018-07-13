@@ -243,8 +243,8 @@ def main():
     if args.prof: args.epochs = 1
     if args.use_clr: args.use_clr = tuple(map(float, args.use_clr.split(',')))
     data0 = torch_loader(f'{args.data}-sz/160', size=128, bs=256)
-    data2 = torch_loader(args.data, size=288, bs=160, min_scale=0.5)
-    data3 = torch_loader(args.data, size=288, bs=160, min_scale=0.5, use_val_sampler=False)
+    data2 = torch_loader(args.data, size=288, bs=128, min_scale=0.5)
+    data3 = torch_loader(args.data, size=288, bs=128, min_scale=0.5, use_val_sampler=False)
 
     update_model_dir(learner, args.save_dir)
     sargs = save_args('first_run', args.save_dir)
