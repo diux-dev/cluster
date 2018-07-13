@@ -73,7 +73,7 @@ parser.add_argument('--spot', action='store_true',
                     help='launch using spot requests')
 parser.add_argument('--mount-efs', action='store_true',
                     help='Mount efs. For loading imagenet')
-parser.add_argument('--params', type=str, default="x4ar_args",
+parser.add_argument('--params', type=str, default="x4_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
 
