@@ -41,6 +41,9 @@ class AdamW(torch.optim.Optimizer):
                 amsgrad = group['amsgrad']
 
                 state = self.state[p]
+                
+                if group['weight_decay'] != 0:
+                    p.data.add_(-group['weight_decay'] * group['lr'], p.data)
 
                 # State initialization
                 if len(state) == 0:
@@ -79,9 +82,6 @@ class AdamW(torch.optim.Optimizer):
                 step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
 
                 p.data.addcdiv_(-step_size, exp_avg, denom)
-                
-                if group['weight_decay'] != 0:
-                    p.data.add_(-group['weight_decay'], p.data)
                 
 
         return loss
