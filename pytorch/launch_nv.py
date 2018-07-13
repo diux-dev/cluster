@@ -201,7 +201,7 @@ def start_training(job, params, save_tag):
   base_save_dir = '~/data/training/nv'
   datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
   # base_save_dir = f'/efs/training/nv' # TODO: save to efs instead
-  save_dir = f'base_save_dir/{datestr}-{save_tag}-w{world_size}'
+  save_dir = f'{base_save_dir}/{datestr}-{save_tag}-w{world_size}'
   job.run_async_join(f'mkdir {save_dir} -p')
 
   # Training script args
