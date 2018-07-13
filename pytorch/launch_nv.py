@@ -188,6 +188,7 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload_async('training/resnet.py')
   job.upload_async('training/fp16util.py')
+  job.upload_async('training/autoaugment.py')
   job.upload_async('training/train_imagenet_nv.py')
 
   # setup machines

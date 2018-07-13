@@ -26,6 +26,7 @@ from datetime import datetime
 #                      and callable(models.__dict__[name]))
 # print(model_names)
 
+
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
