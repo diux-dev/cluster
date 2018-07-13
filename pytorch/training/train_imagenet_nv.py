@@ -28,6 +28,8 @@ import pickle
 from tqdm import tqdm
 # import resnet_sd as resnet
 
+from autoaugment import ImageNetPolicy
+
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
@@ -207,7 +209,7 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, use_ar=False, min_scale=0
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
-            transforms.RandomHorizontalFlip(),
+            transforms.RandomHorizontalFlip(), ImageNetPolicy()
         ]))
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
 
@@ -327,7 +329,7 @@ class Scheduler():
     def linear_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
         starting_lr = args.lr/epoch_tot
         ending_lr = args.lr
-        step_size = (ending_lr - starting_lr)/(epoch_tot-1)
+        step_size = (ending_lr - starting_lr)/epoch_tot
         batch_step_size = step_size/batch_tot
         lr = step_size*(epoch+1) + batch_step_size*batch_num
 

@@ -118,7 +118,6 @@ class ValDistSampler(Sampler):
     def __len__(self): return self.expected_num_batches
     def set_epoch(self, epoch): return
     
-
 class CropArTfm(object):
     def __init__(self, idx2ar, target_size):
         self.idx2ar, self.target_size = idx2ar, target_size
@@ -131,3 +130,4 @@ class CropArTfm(object):
             h = int(self.target_size*target_ar)
             size = (self.target_size, h//8*8)
         return torchvision.transforms.functional.center_crop(img, size)
+
