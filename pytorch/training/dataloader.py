@@ -1,32 +1,109 @@
 import argparse, os, shutil, time, warnings
-from datetime import datetime
 from pathlib import Path
 import numpy as np
 import sys
 import math
 
 import torch
-from torch.autograd import Variable
-from torch.nn.parameter import Parameter
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.distributed as dist
-import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-# import models
-from fp16util import *
-import gc
 
-import resnet
 from torch.utils.data.sampler import Sampler
 import torchvision
 import pickle
 from tqdm import tqdm
-# import resnet_sd as resnet
+
+# from autoaugment import ImageNetPolicy
+
+def get_loaders(datadir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False):
+    traindir = datadir+'/train'
+    valdir = datadir+'/validation'
+    val_bs = val_bs or bs
+    train_dataset = datasets.ImageFolder(
+        traindir, transforms.Compose([
+            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            # transforms.RandomHorizontalFlip(), ImageNetPolicy()
+        ]))
+    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if distributed else None)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=bs, shuffle=(train_sampler is None),
+        num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
+        sampler=train_sampler)
+
+    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_ar, distributed=distributed)
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
+        batch_sampler=val_sampler)
+    return train_loader,val_loader,train_sampler,val_sampler
+
+
+def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
+    if use_ar:
+        idx_ar_sorted = sort_ar(valdir)
+        idx_sorted, _ = zip(*idx_ar_sorted)
+        idx2ar = map_idx2ar(idx_ar_sorted, batch_size)
+
+        ar_tfms = [transforms.Resize(int(target_size*1.14)), CropArTfm(idx2ar, target_size)]
+        val_dataset = ValDataset(valdir, transform=ar_tfms)
+        val_sampler = DistValSampler(idx_sorted, batch_size=batch_size, distributed=distributed)
+        return val_dataset, val_sampler
+    
+    val_tfms = [transforms.Resize(int(target_size*1.14)), transforms.CenterCrop(target_size)]
+    val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
+    val_sampler = DistValSampler(list(range(len(val_dataset))), batch_size=batch_size, distributed=distributed)
+    return val_dataset, val_sampler
+
+# Seems to speed up training by ~2%
+class DataPrefetcher():
+    def __init__(self, loader, prefetch=True, fp16=False):
+        self.loader = loader
+        self.prefetch = prefetch
+        self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+        self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+        self.fp16 = fp16
+        if self.fp16:
+            self.mean = self.mean.half()
+            self.std = self.std.half()
+        if self.prefetch:
+            self.stream = torch.cuda.Stream()
+            self.next_input = None
+            self.next_target = None
+
+    def __len__(self): return len(self.loader)
+
+    def preload(self):
+        self.next_input, self.next_target = next(self.loaditer)
+        with torch.cuda.stream(self.stream):
+            self.next_input = self.process_input(self.next_input)
+            self.next_target = self.next_target.cuda(async=True)
+    
+    def process_input(self, input, async=True):
+        input = input.cuda(async=async)
+        if self.fp16: input = input.half()
+        else: input = input.float()
+        if len(input.shape) < 3: return input
+        return input.sub_(self.mean).div_(self.std)
+            
+    def __iter__(self):
+        count = 0
+        self.loaditer = iter(self.loader)
+        if not self.prefetch:
+            for input, target in self.loaditer:
+                yield self.process_input(input), target.cuda()
+            return
+        self.preload()
+        while True:
+            torch.cuda.current_stream().wait_stream(self.stream)
+            input = self.next_input
+            target = self.next_target
+            self.preload()
+            yield input, target
+
 
 def fast_collate(batch):
     if not batch: return torch.tensor([]), torch.tensor([])
@@ -46,10 +123,9 @@ def fast_collate(batch):
         
     return tensor, targets
 
-
 import os.path
 def sort_ar(valdir):
-    idx2ar_file = args.data+'/sorted_idxar.p'
+    idx2ar_file = valdir+'/../sorted_idxar.p'
     if os.path.isfile(idx2ar_file): return pickle.load(open(idx2ar_file, 'rb'))
     print('Creating AR indexes. Please be patient this may take a couple minutes...')
     val_dataset = datasets.ImageFolder(valdir)
@@ -89,14 +165,15 @@ class ValDataset(datasets.ImageFolder):
 
         return sample, target
 
-class ValDistSampler(Sampler):
-    # min_batch_size - validation by nearest aspect ratio expects the batch size to be constant
-    # Otherwise you'll mix different images with different aspect ratio's and tensor will not be constant size
-    def __init__(self, indices, batch_size, distributed_batch=True):
+class DistValSampler(Sampler):
+    # DistValSampler distrbutes batches equally (based on batch size) to every gpu (even if there aren't enough images). 
+    # Some baches will contain an empty array to signify there aren't enough images
+    # Distributed=False - same validation happens on every single gpu
+    def __init__(self, indices, batch_size, distributed=True):
         self.indices = indices
         self.batch_size = batch_size
-        if distributed_batch and args.distributed: 
-            self.world_size = args.world_size
+        if distributed:
+            self.world_size = dist.get_world_size()
             self.global_rank = dist.get_rank()
         else: 
             self.global_rank = 0
