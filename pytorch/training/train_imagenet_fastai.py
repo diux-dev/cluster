@@ -61,6 +61,8 @@ def get_parser():
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
 
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
+    parser.add_argument('--world-size', default=-1, type=int, 
+                        help='Number of gpus per machine. Param only needed for single machine training when using (faster) file sync')
     parser.add_argument('--dist-url', default='file://sync.file', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
@@ -213,13 +215,14 @@ def top5(output, target): return top_k(output, target, 5)
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
-print('Running script with args:', args)
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+print('Running script with args:', args)
 
 def main():
     if args.distributed:
         torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
+        assert(args.world_size == dist.get_world_size())
     
     # if args.pretrained: model = models.__dict__[args.arch](pretrained=True)
     # else:               model = models.__dict__[args.arch]()
