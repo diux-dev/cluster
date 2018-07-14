@@ -1,15 +1,11 @@
 #!/usr/bin/env python
 # master command:
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c
+# python launch_nv.py --name 4gpu_distributed --instance-type p3.16xlarge --num-tasks 4 --zone us-west-2c --use-placement-group 1 --spot --attach-volume imagenet_high_perf --params x4_args --ami-name="Deep Learning AMI (Ubuntu) Version 11.0"
 
 # 8 gpu training
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_b --zone us-west-2b --placement-group pytorch_cluster_b --ami ami-6583d71d
-
-# spot command:
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c_spot --zone us-west-2c --ami ami-6583d71d --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
-# you can use default aws provided ami
-
-# python launch_nv.py --instance-type p3.16xlarge --num-tasks 8 --job-name cluster_8_region_c_spot --zone us-west-2c --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
+# python launch_nv.py --name 8gpu_zoneb --instance-type p3.16xlarge --num-tasks 8 --zone us-west-2b --placement-group pytorch_cluster_b --ami-name pytorch.imagenet.source.v2
+# spot command (attaching ebs volume and using default amazon ami):
+# python launch_nv.py --name 8gpu_distributed --instance-type p3.16xlarge --num-tasks 8 --zone us-west-2c --use-placement-group 1 --spot --attach-volume imagenet_high_perf --params x8_args --ami-name="Deep Learning AMI (Ubuntu) Version 11.0"
 
 # virginia 8 machine run
 # export AWS_DEFAULT_REGION=us-east-1
@@ -125,7 +121,7 @@ x8_args = [
 ]
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x8ar_args = [
-  '--lr-sched', '0.14,0.43,0.73,0.94',
+  '--lr-sched', '0.14,0.47,0.78,0.95',
   '--resize-sched', '0.35,0.88',
   '--epochs', 40,
   '--lr', 0.25 * 8,
@@ -179,7 +175,7 @@ def main():
   # Define custom params for training or use a preset above
   # TODO: move "save_tag" into command-line parameter
   params = eval(args.params)
-  start_training(job, params, save_tag='testing_refactor',)
+  start_training(job, params, save_tag=args.name)
 
 
 def create_job(run, job_name, num_tasks):
@@ -190,7 +186,7 @@ def create_job(run, job_name, num_tasks):
   
   ebs = get_ebs_settings(use_iops=(args.attach_volume is None))
   if args.placement_group:
-    print("Warning, placement_group is deprecated, use --use_placement_group 1 for automatically picked placement group (same as run name).")
+    print("Warning, placement_group is deprecated, use --use-placement-group 1 for automatically picked placement group (same as run name).")
     placement_group_name = args.placement_group
   if args.use_placement_group:
     placement_group_name = args.name

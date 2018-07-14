@@ -6,13 +6,18 @@
   
 echo 'Starting script'
 
+# Change nccl to 9-1
+sed -i -e 's/cuda-9.0/cuda-9.1/g' ~/.bashrc
+source ~/.bashrc
+
+conda install pytorch torchvision cuda91 -c pytorch -y
+conda install tqdm -y
+
 if ! conda list Pillow-SIMD | grep -q Pillow-SIMD; then
     pip uninstall pillow --yes
     CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 fi
 
-conda install pytorch torchvision cuda90 -c pytorch -y
-conda install tqdm -y
 
 
 # install nvidia DALI

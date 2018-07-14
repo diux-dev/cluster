@@ -126,9 +126,7 @@ class Scheduler():
         world_size = args.world_size
         lr_step = args.lr / (epoch_tot * batch_tot)
         lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
-        
-        if world_size == 32: lr /= 1.5
-        if world_size == 64: lr /= 2
+        if world_size == 64: lr *= .75
         return lr
 
     def linear_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):

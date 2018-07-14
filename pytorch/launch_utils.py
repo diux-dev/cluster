@@ -65,7 +65,7 @@ def get_ebs_settings(use_iops):
 
 # NCCL Rings
 def get_nccl_args(num_tasks, num_gpus):
-  if num_tasks <= 1: return ''
+  if num_tasks <= 1: return 'NCCL_DEBUG=VERSION'
   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
   return f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'
 
