@@ -25,7 +25,8 @@ def get_loaders(datadir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
-            # transforms.RandomHorizontalFlip(), ImageNetPolicy()
+            transforms.RandomHorizontalFlip(), 
+            # ImageNetPolicy()
         ]))
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if distributed else None)
 

@@ -107,7 +107,7 @@ x4_args = [
 ]
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '0.14,0.43,0.73,0.94',
   '--resize-sched', '0.35,0.88',
   '--epochs', 40,
   '--lr', 0.35 * 4,
@@ -125,7 +125,7 @@ x8_args = [
 ]
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x8ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '0.14,0.43,0.73,0.94',
   '--resize-sched', '0.35,0.88',
   '--epochs', 40,
   '--lr', 0.25 * 8,
@@ -136,7 +136,7 @@ x8ar_args = [
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin and more epochs
 x8ar_args_forever = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '0.14,0.43,0.73,0.94',
   '--resize-sched', '0.35,0.88',
   '--epochs', 400,
   '--lr', 0.25 * 8,
@@ -213,6 +213,7 @@ def create_job(run, job_name, num_tasks):
   job.upload_async('training/fp16util.py')
   job.upload_async('training/autoaugment.py')
   job.upload_async('training/dataloader.py')
+  job.upload_async('training/dataloader_performance.py')
   job.upload_async('training/train_imagenet_nv.py')
 
   # Sometimes get SSH session not active or "connection reset by peer"
