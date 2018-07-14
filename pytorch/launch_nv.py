@@ -51,7 +51,7 @@ parser.add_argument('--name', type=str, default='pytorch',
                            "group name, instance names and EFS logging "
                            "directory."))
 parser.add_argument('--job-name', type=str, default='distributed',
-                     help="name of the worker job (deprecated)")
+                     help="name of the worker job (deprecated, use --name)")
 parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
@@ -174,7 +174,7 @@ def main():
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=(not args.mount_efs))
-  job = create_job(run, args.job_name, args.num_tasks)
+  job = create_job(run, 'worker', args.num_tasks)
 
   # Define custom params for training or use a preset above
   # TODO: move "save_tag" into command-line parameter
