@@ -134,7 +134,7 @@ x8ar_args = [
   '--val-ar'
 ]
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validatoin
+# Current benchmark for 8x p3's - with Aspect Ratio Validatoin and more epochs
 x8ar_args_forever = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
   '--resize-sched', '0.35,0.88',
@@ -143,6 +143,29 @@ x8ar_args_forever = [
   '--init-bn0',
   '--batch-size', 128,
   '--val-ar'
+]
+
+# Current benchmark for 16x p3's - with Aspect Ratio Validatoin
+# python launch_nv.py --name yaro-friday-16 --num-tasks 16 --zone us-east-1c --params x16ar_args
+
+x16ar_args = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--resize-sched', '0.35,0.88',
+  '--epochs', 100,
+  '--lr', 0.25 * 8,
+  '--init-bn0',
+  '--batch-size', 64,
+  '--val-ar'
+]
+
+# changing set for testing
+yaro = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 45,
+  '--lr', 0.4,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--init-bn0',
+  '--batch-size', 64
 ]
 
 def main():
@@ -192,10 +215,8 @@ def create_job(run, job_name, num_tasks):
   job.upload_async('training/dataloader.py')
   job.upload_async('training/train_imagenet_nv.py')
 
-  # setup machines
-  # TODO: file_exists check below complains...need to make sure ssh sessions
-  # are alive.
-  #  paramiko.ssh_exception.SSHException: SSH session not active
+  # Sometimes get SSH session not active or "connection reset by peer"
+  # bad internet?
 
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
