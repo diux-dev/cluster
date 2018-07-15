@@ -88,11 +88,11 @@ def main():
 
 
   if not instances_to_kill:
-    valid_names = sorted(list(set(name for (name, instance_response) in instance_list)))
+    valid_names = sorted(list(set("%s,%s"%(name,instance_response['State']['Name']) for (name, instance_response) in instance_list)))
     from pprint import pprint as pp
     print("Current instances:")
     pp(valid_names)
-    print("No match found: Fragment '%s', key '%s'"%
+    print("No running instances found for: Fragment '%s', key '%s'"%
           (fragment, LIMIT_TO_KEY))
     return
   
