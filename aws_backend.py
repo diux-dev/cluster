@@ -45,7 +45,6 @@ class Run(backend.Run):
     # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
     import re
     assert len(name)<30
-    import pdb; pdb.set_trace()
     assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
     
     self.kwargs = kwargs
