@@ -36,6 +36,18 @@ class Run(backend.Run):
   
   def __init__(self, name, **kwargs):
     self.name = name
+
+    # run name is used in tmux session name and instance name, so must restrict
+    # run name to also be valid part of tmux/instance names
+    # -Maximum number of tags per resource—50
+    # -Maximum key length—127 Unicode characters in UTF-8
+    # -Maximum value length—255 Unicode characters in UTF-8
+    # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
+    import re
+    assert len(name)<30
+    import pdb; pdb.set_trace()
+    assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
+    
     self.kwargs = kwargs
     self.jobs = []
 
@@ -228,8 +240,9 @@ class Task(backend.Task):
       return False
 
   def _setup_tmux(self):
-    self._run_ssh('tmux kill-session -t tmux')
-    self._run_ssh('tmux new-session -s tmux -n 0 -d')
+    self._tmux_session_name = self.job._run.name
+    self._run_ssh('tmux kill-session -t '+self._tmux_session_name)
+    self._run_ssh('tmux new-session -s %s -n 0 -d'%(self._tmux_session_name,))
     self._run_command_available = True
 
   def _mount_efs(self):
@@ -439,7 +452,7 @@ tmux a
     cmd = _strip_comment(cmd)
     assert not '&' in cmd, "cmd '%s' contains &, that breaks things"%(cmd,)
     modified_cmd = '%s; echo $? > %s'%(cmd, cmd_fn_out)
-    tmux_window = 'tmux:0'
+    tmux_window = self._tmux_session_name+':0'
     tmux_cmd = "tmux send-keys -t {} {} Enter".format(tmux_window,
                                                         shlex.quote(modified_cmd))
     self._run_ssh(tmux_cmd)
