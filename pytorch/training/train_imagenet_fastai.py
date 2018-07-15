@@ -40,12 +40,14 @@ def get_parser():
     #                     ' (default: resnet18)')
     parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=90, type=int, metavar='N',
+    parser.add_argument('--epochs', default=45, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('-b', '--batch-size', default=256, type=int,
+    parser.add_argument('-b', '--batch-size', default=192, type=int,
                         metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                         metavar='LR', help='initial learning rate')
+    parser.add_argument('--schedule', default='0,0.1,0.4,0.47,0.78,0.92,0.95,1', type=str,
+                        help='Learning rate scheduler warmup -> lr -> upsize -> lr/10 -> upsize -> lr/100 -> lr/1000')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
@@ -53,7 +55,7 @@ def get_parser():
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
-    parser.add_argument('--sz',       default=224, type=int, help='Size of transformed image.')
+    parser.add_argument('--sz', default=224, type=int, help='Size of transformed image.')
     # parser.add_argument('--decay-int', default=30, type=int, help='Decay LR by 10 every decay-int epochs')
     parser.add_argument('--use-clr', type=str,
                         help='div,pct,max_mom,min_mom. Pass in a string delimited by commas. Ex: "20,2,0.95,0.85"')
@@ -217,6 +219,7 @@ def top5(output, target): return top_k(output, target, 5)
 cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+if isinstance(args.schedule, str): args.schedule = [float(i) for i in args.schedule.split(',')]
 print('Running script with args:', args)
 
 def main():
@@ -249,10 +252,15 @@ def main():
 
     update_model_dir(learner, args.save_dir)
     sargs = save_args('first_run', args.save_dir)
-
-    def_phase = {'opt_fn':optim.SGD, 'wds':args.weight_decay}
+    # opt_fn = partial(optim.Adam, betas=(0.95,0.99))
+    # def_phase = {'opt_fn':opt_fn, 'wds':args.weight_decay}
+    # def_phase = {'opt_fn':opt_fn, 'wds':args.weight_decay}
+    opt_fn = partial(optim.SGD, momentum=args.momentum)
+    def_phase = {'opt_fn':opt_fn, 'wds':args.weight_decay}
     lr = args.lr
-    epoch_sched = [int(args.epochs*o+0.5) for o in (0, 0.1, 0.4, 0.47, 0.78, 0.92, 0.95, 1)]
+    # epoch_sched = [int(args.epochs*o+0.5) for o in (0, 0.1, 0.4, 0.47, 0.78, 0.92, 0.95, 1)]
+    epoch_sched = [int(args.epochs*o+0.5) for o in args.schedule]
+    # epoch_sched = [int(args.epochs*o+0.5) for o in (0, 0.3, 0.45, 0.52, 0.82, 0.92, 0.95, 1)]
     num_epochs = [epoch_sched[n]-epoch_sched[n-1] for n in range(1,len(epoch_sched))]
     if args.warmonly:
         data = [data0,data1]
@@ -262,7 +270,7 @@ def main():
     else:
         data = [data0,data0,data1,data1,data1,data2,data3]
         phases = [
-            TrainingPhase(**def_phase, epochs=num_epochs[0], lr=(lr/100,lr), lr_decay=DecayType.LINEAR),
+            TrainingPhase(**def_phase, epochs=num_epochs[0], lr=(lr/20,lr), lr_decay=DecayType.LINEAR),
             TrainingPhase(**def_phase, epochs=num_epochs[1], lr=lr),
             TrainingPhase(**def_phase, epochs=num_epochs[2], lr=lr),
             TrainingPhase(**def_phase, epochs=num_epochs[3],   lr=lr/10),

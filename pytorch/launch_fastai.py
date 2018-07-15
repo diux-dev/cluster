@@ -10,6 +10,9 @@
 # master command:
 # python launch_fastai.py --instance-type p3.16xlarge --num-tasks 4 --job-name cluster_4_region_c --zone us-west-2c --ami ami-53c8822b --placement-group pytorch_cluster_c --spot --attach-volume imagenet_high_perf
 
+
+# python launch_fastai.py --name fastai_adam --instance-type p3.16xlarge --num-tasks 1 --zone us-west-2c --use-placement-group 1 --spot --attach-volume imagenet_high_perf --volume-offset 8 --params adam_x_args --ami-name pytorch.imagenet.source.v2
+
 from collections import OrderedDict
 import argparse
 import os
@@ -31,11 +34,14 @@ util.install_pdb_handler()
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use")
-parser.add_argument('--ami_name', type=str,
+parser.add_argument('--ami-name', type=str,
                     default='pytorch.imagenet.source.v2',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
-                     help="name of the current run")
+                     help=("name of placement group to use (depecated, name "
+                           "is automatically picked"))
+parser.add_argument('--use-placement-group', type=int, default=1,
+                     help="whether to use placement group")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 parser.add_argument('--job-name', type=str, default='distributed',
@@ -76,6 +82,16 @@ x_args = [
   '--batch-size', 192
 ]
 
+adam_x_args = [
+  # '--lr-sched', '0.9,0.47,0.78,0.95',
+  '--epochs', 45,
+  '--lr', 1e-2,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--batch-size', 192,
+  '--weight-decay', 0.001,
+  '--schedule', '0,0.23,0.47,0.53,0.80,0.92,0.95,1'
+]
+
 def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
                              ami_name=args.ami_name,
@@ -96,7 +112,14 @@ def create_job(run, job_name, num_tasks):
       install_script = f.read()
   
   ebs = get_ebs_settings(use_iops=(args.attach_volume is None))
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group, use_spot=args.spot)
+  if args.placement_group:
+    print("Warning, placement_group is deprecated, use --use-placement-group 1 for automatically picked placement group (same as run name).")
+    placement_group_name = args.placement_group
+  if args.use_placement_group:
+    placement_group_name = args.name
+  else:
+    placement_group_name = ''
+  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=placement_group_name, use_spot=args.spot)
   job.wait_until_ready()
   print(job.connect_instructions)
 
@@ -108,6 +131,7 @@ def create_job(run, job_name, num_tasks):
   # upload files
   job.upload_async('training/resnet.py')
   job.upload_async('training/train_imagenet_fastai.py')
+  job.upload_async('training/adamw.py')
 
   # setup machines
   # TODO: file_exists check below complains...need to make sure ssh sessions

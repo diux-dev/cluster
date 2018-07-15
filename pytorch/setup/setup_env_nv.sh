@@ -32,6 +32,7 @@ fi
 # sudo apt-get remove libjpeg8
 # sudo apt-get install libjpeg-turbo8
 
+# https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
 conda uninstall --force pillow -y 
 # install libjpeg-turbo to $HOME/turbojpeg 
 git clone https://github.com/libjpeg-turbo/libjpeg-turbo 
