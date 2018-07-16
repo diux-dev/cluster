@@ -19,6 +19,10 @@ if ! conda list Pillow-SIMD | grep -q Pillow-SIMD; then
 fi
 
 
+pushd ~/data/imagenet 
+wget https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
+popd ~/data/imagenet 
+
 
 # install nvidia DALI
 # pip install --extra-index-url https://developer.download.nvidia.com/compute/redist nvidia-dali
