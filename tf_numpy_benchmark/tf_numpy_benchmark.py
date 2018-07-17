@@ -138,6 +138,9 @@ except:  # older version doesn't have object_store_memory
   print("Falling back on older Ray init")
   ray.init(num_workers=0)
 
+if args.ray_threads:
+  ray.worker.global_worker.memcopy_threads = args.ray_threads
+
 
 
 global_timeit_dict = OrderedDict()
