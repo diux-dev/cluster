@@ -77,7 +77,7 @@ class Run(backend.Run):
 
     # TODO: also make sure instance type is the same
     if instances:
-      assert len(instances) == num_tasks, ("Found job with same name, but number of tasks %d doesn't match requested %d, kill job manually." % (len(instances), num_tasks))
+      assert len(instances) == num_tasks, ("Found job with same name %s(%s), but number of tasks %d doesn't match requested %d, kill job manually." % (job_name, instances[0].state, len(instances), num_tasks))
       print("Found existing job "+job_name)
       for i in instances:
             if i.state['Name'] == 'stopped': i.start()

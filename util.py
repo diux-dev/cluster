@@ -51,14 +51,19 @@ def get_resource_name(default='nexus'):
     validate_resource_name(name)
   return name
                            
-def get_name(tags):
-  """Helper utility to extract name out of tags dictionary.
+def get_name(tags_or_instance):
+  """Helper utility to extract name out of tags dictionary or intance.
       [{'Key': 'Name', 'Value': 'nexus'}] -> 'nexus'
  
      Assert fails if there's more than one name.
      Returns '' if there's less than one name.
   """
 
+  if hasattr(tags_or_instance, 'tags'):
+    tags = tags_or_instance.tags
+  else:
+    tags = tags_or_instance
+    
   if not tags:
     return ''
   names = [entry['Value'] for entry in tags if entry['Key']=='Name']
@@ -68,6 +73,9 @@ def get_name(tags):
     assert False, "have more than one name: "+str(names)
   return names[0]
 
+def get_state(instance):
+  """Return state name like 'terminated' or 'running'"""
+  return instance.state['Name']
 
 def parse_job_name(name):
   """Parses job name of the form "taskid.job.run" and returns components
