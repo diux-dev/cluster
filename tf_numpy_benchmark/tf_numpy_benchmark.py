@@ -645,6 +645,37 @@ def tf_add0_to_numpy():
     with timeit():
       sess.run(result.op, feed_dict = {params: params0})
 
+def tf_add0_to_ray():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  ray_obj = ray.put(params0)
+  params0 = ray.get(ray_obj)
+  
+  with tf.device('/cpu:0'):
+    params = tf.placeholder(tf.float32)
+    result = params + 0
+
+    
+  for i in range(args.num_iters):
+    with timeit():
+      sess.run(result.op, feed_dict = {params: params0})
+
+def tf_add0_to_ray_fast():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  ray_obj = ray.put(params0)
+  params0 = ray.get(ray_obj)
+  params0.flags['WRITEABLE'] = True
+
+  
+  with tf.device('/cpu:0'):
+    params = tf.placeholder(tf.float32)
+    result = params + 0
+
+    
+  for i in range(args.num_iters):
+    with timeit():
+      sess.run(result.op, feed_dict = {params: params0})
+
+
 def numpy_add0():
   params0 = np.ones((args_dim,), dtype=np.float32)
 
@@ -664,6 +695,12 @@ def tf_sessrun():
 
 def ray_put():
   params0 = np.ones((args_dim,), dtype=np.float32)
+  for i in range(args.num_iters):
+    with timeit():
+      ray.put(params0)
+      
+def ray_put_tiny():
+  params0 = np.ones((1,), dtype=np.float32)
   for i in range(args.num_iters):
     with timeit():
       ray.put(params0)
