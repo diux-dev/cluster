@@ -5,7 +5,25 @@
 # tfgpu: 64-byte aligned numpy array in pinned memory
 # ray: numpy array returned from ray
 
+
+# c5 results
+# https://docs.google.com/document/d/15gLYUyYW0yi_yKxux4cX_VtLfA6MnoBDyIaJRAIXc64/edit
+# try with hugepages
+# python tf_numpy_benchmark.py --benchmark=ray_put --num-iters=200 --hugepages=1
+# ray_put                       :   1.7 GB/sec, min: 59.20, median: 59.85, mean: 59.88
+
+# for hugepages
+# sudo mkdir -p /mnt/hugepages
+# gid=`id -g`
+# uid=`id -u`
+# sudo mount -t hugetlbfs -o uid=$uid -o gid=$gid none /mnt/hugepages
+# sudo bash -c "echo $gid > /proc/sys/vm/hugetlb_shm_group"
+# sudo bash -c "echo 20000 > /proc/sys/vm/nr_hugepages"
+
+
 """
+
+
 # p3.16xlarge, Deep Learning AMI v3.0
 # Numpy: MKL 2018.0.1 Product Build 20171007
 # TensorFlow 1.7.0-dev20180221 (d100729)
@@ -89,13 +107,6 @@ import time
 
 from collections import OrderedDict
 
-import ray
-try:
-  ray.init(object_store_memory=(10 ** 9), num_workers=0)
-except:  # older version doesn't have object_store_memory
-  print("Falling back on older Ray init")
-  ray.init(num_workers=0)
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--size-mb", default=100, type=int,
                     help="size of data in MBs")
@@ -107,8 +118,21 @@ parser.add_argument("--num-iters", default=21, type=int,
 parser.add_argument("--profile", default=0, type=int,
                     help="dump stepstats/timelines into 'data' directory")
 parser.add_argument('--benchmark', default='all', type=str)
+parser.add_argument('--hugepages', type=int, default=0,
+                    help='enable hugepages for Ray')
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
+
+import ray
+try:
+  if args.hugepages:
+    ray.init(huge_pages=True, plasma_directory="/mnt/hugepages", num_workers=0)
+  else:
+    ray.init(object_store_memory=(10 ** 9), num_workers=0)
+except:  # older version doesn't have object_store_memory
+  print("Falling back on older Ray init")
+  ray.init(num_workers=0)
+
 
 
 global_timeit_dict = OrderedDict()
@@ -366,6 +390,16 @@ def fetch_cpu_variable():
     with timeit('fetch_cpu_variable'):
       sess.run(params)
 
+
+def fetch_cpu_variable_plus0():
+  with tf.device('/cpu:0'):
+    params = tf.Variable(initial_value=data)+0
+
+  sess.run(tf.global_variables_initializer())
+  for i in range(args.num_iters):
+    with timeit():
+      sess.run(params)
+
 def fetch_cpu_resource_variable():
   with tf.device('/cpu:0'):
     params = tf.get_variable("var", initializer=data, use_resource=True)
@@ -442,6 +476,16 @@ def fetch_cpu_tensor():
   sess.run(tf.global_variables_initializer())
   for i in range(args.num_iters):
     with timeit('fetch_cpu_tensor'):
+      result = sess.run(params)
+
+def fetch_cpu_constant():
+  data = np.ones((args_dim,), dtype=np.float32)
+  with tf.device('/cpu:0'):
+    params = tf.constant(data)
+
+  sess.run(tf.global_variables_initializer())
+  for i in range(args.num_iters):
+    with timeit():
       result = sess.run(params)
 
 def feed_cpu_variable():
@@ -705,6 +749,15 @@ def ray_put_tiny():
     with timeit():
       ray.put(params0)
       
+def ray_get():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  ray_obj = ray.put(params0)
+
+  for i in range(args.num_iters):
+    with timeit():
+      fetched = ray.get(ray_obj)
+
+
 if __name__ == '__main__':
 
   # remove garbage colleciton, automatic optimizations and tuning
