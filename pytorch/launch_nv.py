@@ -11,6 +11,10 @@
 # export AWS_DEFAULT_REGION=us-east-1
 # python launch_nv.py --name yaro-friday-8 --num-tasks 8 --zone us-east-1c --params x8_args
 
+# virginia 16 machine run
+# export AWS_DEFAULT_REGION=us-east-1
+# ./launch_nv.py --name yaro16 --num-tasks 16 --zone us-east-1c --params x16ar_args
+
 from collections import OrderedDict
 import argparse
 import os
