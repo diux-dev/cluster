@@ -120,6 +120,9 @@ parser.add_argument("--profile", default=0, type=int,
 parser.add_argument('--benchmark', default='all', type=str)
 parser.add_argument('--hugepages', type=int, default=0,
                     help='enable hugepages for Ray')
+parser.add_argument('--ray_threads', type=int, default=0,
+                    help='how many threads to use for memcpy')
+
 args = parser.parse_args()
 args_dim = args.size_mb * 250*1000
 
@@ -127,7 +130,8 @@ import ray
 try:
   if args.hugepages:
     print("Running with huge pages")
-    ray.init(huge_pages=True, plasma_directory="/mnt/hugepages", num_workers=0)
+    ray.init(huge_pages=True, plasma_directory="/mnt/hugepages", num_workers=0,
+    object_store_memory=(10 ** 10))
   else:
     ray.init(object_store_memory=(10 ** 9), num_workers=0)
 except:  # older version doesn't have object_store_memory
