@@ -16,12 +16,13 @@ import time
 
 import boto3
 
-# Deep learning AMI v10
+# Deep learning AMI v11
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
+
 ami_dict_ubuntu = {
-  "us-east-1": "ami-6d720012",
-  "us-east-2": "ami-23c4fb46",
-  "us-west-2": "ami-e580c79d",
+  "us-east-1": "ami-6356761c",
+  "us-east-2": "ami-a2ecd4c7",
+  "us-west-2": "ami-c47c28bc",
 }
 
 parser = argparse.ArgumentParser(description='launch')
