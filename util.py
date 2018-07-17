@@ -11,6 +11,7 @@ import os
 
 from collections import OrderedDict
 from collections import defaultdict
+from operator import itemgetter
 
 
 import tensorflow as tf
@@ -815,3 +816,50 @@ def lookup_ami_id(wildcard):
   assert len(images)<=1, "Multiple images match "+str(wildcard)
   assert len(images)>=0, "No images match "+str(wildcard)
   return images[0]
+
+
+def toseconds(dt):
+  """Converts datetime object to seconds."""
+  return time.mktime(dt.utctimetuple())
+
+def get_instances(fragment, verbose=True, filter_by_key=True):
+  """Returns ec2.Instance object whose name contains fragment, in reverse order of launching (ie, most recent intance first). Optionally filters by key, only including instances launched with key_name matching current username.
+
+  args:
+    verbose: print information about all matching instances found
+
+    filter_by_key  if True, ignore instances that are not launched with current
+        user's default key
+  """
+
+  from tzlocal import get_localzone # $ pip install tzlocal
+
+
+  def vprint(*args):
+    if verbose: print(*args)
+    
+  region = u.get_region()
+  client = u.create_ec2_client()
+  ec2 =u.create_ec2_resource()
+  response = client.describe_instances()
+    
+  instance_list = []
+  for instance in ec2.instances.all():
+    if instance.state['Name'] != 'running':
+      continue
+    
+    name = u.get_name(instance.tags)
+    if (fragment in name or fragment in instance.public_ip_address or
+        fragment in instance.id or fragment in instance.private_ip_address):
+      instance_list.append((toseconds(instance.launch_time), instance))
+
+  sorted_instance_list = reversed(sorted(instance_list, key=itemgetter(0)))
+  cmd = ''
+  filtered_instance_list = []  # filter by key
+  vprint("Using region ", region)
+  for (ts, instance) in sorted_instance_list:
+    if filter_by_key and instance.key_name != u.get_keypair_name():
+      vprint("Got key %s, expected %s, skipping"%(instance.key_name, u.get_keypair_name()))
+      continue
+    filtered_instance_list.append(instance)
+  return filtered_instance_list

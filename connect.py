@@ -39,14 +39,6 @@ parser.add_argument('--fragment', type=str, default='',
 args = parser.parse_args()
 
 
-def toseconds(dt):
-  # to invert:
-  # import pytz
-  # utc = pytz.UTC
-  # utc.localize(datetime.fromtimestamp(seconds))
-  return time.mktime(dt.utctimetuple())
-
-
 def make_cmd(keypair_fn, username, public_ip_address):
   if args.skip_tmux:
     cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username,public_ip_address)
@@ -78,28 +70,21 @@ def main():
     name = u.get_name(instance.tags)
     if (fragment in name or fragment in instance.public_ip_address or
         fragment in instance.id or fragment in instance.private_ip_address):
-      instance_list.append((toseconds(instance.launch_time), instance))
+      instance_list.append((u.toseconds(instance.launch_time), instance))
       
-  import pytz
   from tzlocal import get_localzone # $ pip install tzlocal
 
-  sorted_instance_list = reversed(sorted(instance_list, key=itemgetter(0)))
-  cmd = ''
-  print("Using region ", region)
-  for (ts, instance) in sorted_instance_list:
-    localtime = instance.launch_time.astimezone(get_localzone())
-    assert instance.key_name == u.get_keypair_name(), "Got key %s, expected %s"%(instance.key_name, u.get_keypair_name())
-    keypair_fn = u.get_keypair_fn(instance.key_name)
-
-    print("Found to %s in %s launched at %s with key %s" % (u.get_name(instance.tags), region, localtime, instance.key_name))
-
-    cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
-    break
-  
-  if not cmd:
+  filtered_instance_list = u.get_instances(fragment)
+  if not filtered_instance_list:
     print("no instance id contains fragment '%s'"%(fragment,))
     return
-  
+
+  instance = filtered_instance_list[0]
+  print("Found instance ", u.get_name(instance),
+        " launched ", instance.launch_time.astimezone(get_localzone()))
+  cmd = ''
+  keypair_fn = u.get_keypair_fn(instance.key_name)
+  cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
 
   print(cmd)
   result = os.system(cmd)
