@@ -87,7 +87,7 @@ class DataManager():
             print('DataManager changing image size to 244')
             self.load_data('', args.batch_size, 224)
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
-            self.load_data('', 128, 288, min_scale=0.5, use_ar=args.val_ar)
+            self.load_data('', 64, 288, min_scale=0.5, use_ar=args.val_ar)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
