@@ -534,11 +534,23 @@ def create_spot_instances(launch_specs, spot_price=None):
     return instances
 
 
-def get_keypair_fn(keypair_name):
+def get_keypair_fn(keypair_name_or_instance):
   """Generate canonical location for .pem file for given keypair and
   default region."""
+  if hasattr(keypair_name_or_instance, "key_name"):
+    keypair_name = keypair_name_or_instance.key_name
+  else:
+    keypair_name = keypair_name_or_instance
   return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
                            get_region(),)
+
+def make_ssh_command(instance):
+  keypair_fn = u.get_keypair_fn(instance)
+  username = u.get_username(instance)
+  ip = instance.public_ip_address
+  cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username,
+                                                         ip)
+  
 
 class SshClient:
   def __init__(self,
@@ -863,3 +875,11 @@ def get_instances(fragment, verbose=True, filter_by_key=True):
       continue
     filtered_instance_list.append(instance)
   return filtered_instance_list
+
+def get_username(instance):
+  """Gets username needed to connect to given instance."""
+
+  # TODO: extract from tags?
+  # for now use ubuntu by default, with env override if needed
+  username = os.environ.get("USERNAME", "ubuntu")
+  return username
