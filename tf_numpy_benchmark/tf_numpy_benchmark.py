@@ -5,7 +5,6 @@
 # tfgpu: 64-byte aligned numpy array in pinned memory
 # ray: numpy array returned from ray
 
-
 """
 # p3.16xlarge, Deep Learning AMI v3.0
 # Numpy: MKL 2018.0.1 Product Build 20171007
@@ -78,14 +77,24 @@ feed_gpu_tensor               :   1.3 GB/sec, min: 76.19, median: 83.05, mean: 8
 
 
 import argparse
+import inspect
 import numpy as np
 import os
 import sys
 import tensorflow as tf
+IS_GPU_AVAILABLE = tf.test.is_gpu_available()
+
 import threading
 import time
 
 from collections import OrderedDict
+
+import ray
+try:
+  ray.init(object_store_memory=(10 ** 9), num_workers=0)
+except:  # older version doesn't have object_store_memory
+  print("Falling back on older Ray init")
+  ray.init(num_workers=0)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--size-mb", default=100, type=int,
@@ -109,6 +118,9 @@ class timeit:
   
   def __init__(self, tag=""):
     self.tag = tag
+    if not tag:
+      parent_name = inspect.stack()[1][3]  # name of function one level up
+      self.tag = parent_name
     
   def __enter__(self):
     self.start = time.perf_counter()
@@ -188,9 +200,19 @@ def align_numpy_tf(unaligned):
   np.copyto(aligned, unaligned)
   return aligned
 
+def _should_skip_gpu():
+  if not IS_GPU_AVAILABLE:
+    parent_name = inspect.stack()[1][3]  # name of function one level up
+    print(parent_name + " requires GPU support, skipping")
+    return True
+  else:
+    return False
 
 def align_numpy_tfgpu(unaligned):
   sess = tf.get_default_session()
+  if _should_skip_gpu():
+    return
+
   with tf.device('/gpu:0'):
     tensor = tf.zeros(unaligned.shape, dtype=unaligned.dtype)
   aligned = sess.run(tensor)
@@ -199,16 +221,6 @@ def align_numpy_tfgpu(unaligned):
 
 
 def align_numpy_ray(unaligned):
-  if 'ray' not in sys.modules:  # avoid calling ray.init twice which crashes
-    import ray
-    try:
-      ray.init(object_store_memory=(10 ** 9), num_workers=0)
-    except:  # older version doesn't have object_store_memory
-      print("Falling back on older Ray init")
-      ray.init(num_workers=0)
-      
-
-  import ray
   @ray.remote
   def f():
     return unaligned
@@ -385,8 +397,20 @@ def fetch_cpu_tensor():
     with timeit('fetch_cpu_tensor'):
       sess.run(params)
 
+def fill_cpu_tensor():
+  with tf.device('/cpu:0'):
+    params = tf.fill((args_dim,), 2.0)
+    
+  sess.run(tf.global_variables_initializer())
+  for i in range(args.num_iters):
+    with timeit('fetch_cpu_tensor'):
+      sess.run(params.op)
+
 
 def fetch_gpu_variable():
+  if _should_skip_gpu():
+    return
+  
   with tf.device('/gpu:0'):
     params = tf.Variable(initial_value=data)
 
@@ -397,6 +421,9 @@ def fetch_gpu_variable():
 
 
 def fetch_gpu_variable_add():
+  if _should_skip_gpu():
+    return
+
   with tf.device('/gpu:0'):
     params = tf.Variable(initial_value=data)
     params = params+0.1
@@ -407,14 +434,14 @@ def fetch_gpu_variable_add():
       sess.run(params)
 
 
-def fetch_gpu_tensor():
+def fetch_cpu_tensor():
   data = np.ones((args_dim,), dtype=np.float32)
   with tf.device('/cpu:0'):
     params = tf.fill((args_dim,), 2.0)    
 
   sess.run(tf.global_variables_initializer())
   for i in range(args.num_iters):
-    with timeit('fetch_gpu_tensor'):
+    with timeit('fetch_cpu_tensor'):
       result = sess.run(params)
 
 def feed_cpu_variable():
@@ -428,6 +455,9 @@ def feed_cpu_variable():
       params.load(params0)
 
 def feed_gpu_variable():
+  if _should_skip_gpu():
+    return
+  
   params0 = create_array()
 
   with tf.device('/gpu:0'):
@@ -466,6 +496,9 @@ def feed_cpu_tensor_with_copy():
       sess.run(result.op, feed_dict = {params: params0})
 
 def feed_gpu_tensor():
+  if _should_skip_gpu():
+    return
+  
   params0 = create_array()
   with tf.device('/gpu:0'):
     params = tf.placeholder(tf.float32)
@@ -475,6 +508,9 @@ def feed_gpu_tensor():
       sess.run(result.op, feed_dict = {params: params0})
 
 def feed_gpu_tensor_fast():
+  if _should_skip_gpu():
+    return
+
   import torch
 
   # allocate page-locked memory and turn it into PyTorch tensor
@@ -583,7 +619,55 @@ def allreduce():
       
   print('on task',rank,'after Allreduce:    data = ',recvdata[0])
       
+def tf_fill0():
+  with tf.device('/cpu:0'):
+    params = tf.fill((args_dim,), 0.)    
 
+  for i in range(args.num_iters):
+    with timeit('tf_fill0'):
+      result = sess.run(params)
+
+def tf_fill2():
+  with tf.device('/cpu:0'):
+    params = tf.fill((args_dim,), 2.0)    
+
+  for i in range(args.num_iters):
+    with timeit('tf_fill2'):
+      result = sess.run(params)
+
+def tf_add0_to_numpy():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  with tf.device('/cpu:0'):
+    params = tf.placeholder(tf.float32)
+    result = params + 0
+
+  for i in range(args.num_iters):
+    with timeit():
+      sess.run(result.op, feed_dict = {params: params0})
+
+def numpy_add0():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+
+  for i in range(args.num_iters):
+    with timeit():
+      params0 + 0
+
+def tf_sessrun():
+  """Benchmark sessrun overhead"""
+# tf_sessrun                    : 439.8 GB/sec, min:  0.23, median:  0.23, mean:  0.24
+  with tf.device('/cpu:0'):
+    params = tf.constant(0)
+
+  for i in range(args.num_iters):
+    with timeit():
+      result = sess.run(params)
+
+def ray_put():
+  params0 = np.ones((args_dim,), dtype=np.float32)
+  for i in range(args.num_iters):
+    with timeit():
+      ray.put(params0)
+      
 if __name__ == '__main__':
 
   # remove garbage colleciton, automatic optimizations and tuning
@@ -614,7 +698,6 @@ if __name__ == '__main__':
 
     fetch_gpu_variable()
     fetch_gpu_variable_add()
-    fetch_gpu_tensor()
 
     feed_cpu_variable()
     feed_gpu_variable()
@@ -627,4 +710,5 @@ if __name__ == '__main__':
     
   for key, times in global_timeit_dict.items():
     summarize_time(key, times)
-  #main()
+
+# test

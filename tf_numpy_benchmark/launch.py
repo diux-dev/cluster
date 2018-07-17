@@ -3,7 +3,7 @@
 # Launch a single GPU instance with Amazon Deep Learning AMI
 # ./launch.py --instance-type=g3.4xlarge --zone=us-east-1f
 #
-# Default AMI used:
+#   Default AMI used:
 #
 # https://aws.amazon.com/blogs/ai/new-aws-deep-learning-amis-for-machine-learning-practitioners/
 # 
@@ -28,11 +28,11 @@ ami_dict_ubuntu = {
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
-parser.add_argument('--name', type=str, default='box00',
+parser.add_argument('--name', type=str, default='tf_numpy_benchmark',
                      help="name of the current run")
-parser.add_argument('--instance', type=str, default='p2.xlarge',
+parser.add_argument('--instance', type=str, default='c5.18xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='us-west-2a',
+parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
 parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
@@ -97,7 +97,7 @@ def launcher():
   run = aws_backend.make_run(args.name, install_script=install_script,
                              ami=ami, availability_zone=args.zone,
                              linux_type=args.linux_type)
-  job = run.make_job('gpubox', instance_type=args.instance)
+  job = run.make_job('worker',instance_type=args.instance)
   
   job.wait_until_ready()
 
@@ -110,15 +110,17 @@ def launcher():
   print()
   print()
   
-  job.run('source activate mxnet_p36')
-  # as of Jan 26, official version gives incompatible numpy error, so pin to nightly
-  # job.run('pip install tensorflow-gpu')
-  #  job.run('pip install -U https://ci.tensorflow.org/view/tf-nightly/job/tf-nightly-linux/TF_BUILD_IS_OPT=OPT,TF_BUILD_IS_PIP=PIP,TF_BUILD_PYTHON_VERSION=PYTHON3.6,label=gpu-linux/lastSuccessfulBuild/artifact/pip_test/whl/tf_nightly_gpu-1.6.0.dev20180126-cp36-cp36m-manylinux1_x86_64.whl')
-  #  job.run('pip install --default-timeout=100 -U http://ci.tensorflow.org/view/tf-nightly/job/tf-nightly-linux/TF_BUILD_IS_OPT=OPT,TF_BUILD_IS_PIP=PIP,TF_BUILD_PYTHON_VERSION=PYTHON3.6,label=gpu-linux/lastSuccessfulBuild/artifact/pip_test/whl/tf_nightly_gpu-1.head-cp36-cp36m-linux_x86_64.whl')
-  
+  job.run('source activate tensorflow_p36')
+  job.run('pip install cython')
+  job.run('pip install ray')
+
+  job.run('yes | sudo apt-get install google-perftools')
+  job.run('export LD_PRELOAD="/usr/lib/libtcmalloc.so.4"')
+
   job.upload(__file__)
+  job.upload('tf_numpy_benchmark.py')
   job.run('killall python || echo failed')  # kill previous run
-  job.run_async('python launch.py --role=worker')
+  job.run('python tf_numpy_benchmark.py')
 
 def worker():
   """Worker script that runs on AWS machine. Adds vectors of ones forever,
@@ -145,7 +147,7 @@ def worker():
   sess = tf.Session(config=session_config())
   sess.run(params.initializer)
   
-  while True:
+  for i in range(10):
     start_time = time.perf_counter()
     for i in range(iters_per_step):
       sess.run(update.op)
@@ -156,3 +158,4 @@ def worker():
 
 if __name__=='__main__':
   main()
+# testing things
