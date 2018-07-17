@@ -126,6 +126,7 @@ args_dim = args.size_mb * 250*1000
 import ray
 try:
   if args.hugepages:
+    print("Running with huge pages")
     ray.init(huge_pages=True, plasma_directory="/mnt/hugepages", num_workers=0)
   else:
     ray.init(object_store_memory=(10 ** 9), num_workers=0)

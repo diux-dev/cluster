@@ -113,6 +113,7 @@ def launcher():
   job.run('source activate tensorflow_p36')
   job.run('pip install cython')
   job.run('pip install ray')
+  job.run('yes | sudo apt install htop')
 
   job.run('yes | sudo apt-get install google-perftools')
   job.run('export LD_PRELOAD="/usr/lib/libtcmalloc.so.4"')
