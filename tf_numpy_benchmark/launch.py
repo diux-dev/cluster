@@ -30,7 +30,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='tf_numpy_benchmark',
                      help="name of the current run")
-parser.add_argument('--instance', type=str, default='c5.18xlarge',
+parser.add_argument('--instance-type', type=str, default='c5.18xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-east-1c',
                     help='which availability zone to use')
@@ -97,7 +97,7 @@ def launcher():
   run = aws_backend.make_run(args.name, install_script=install_script,
                              ami=ami, availability_zone=args.zone,
                              linux_type=args.linux_type)
-  job = run.make_job('worker',instance_type=args.instance)
+  job = run.make_job('worker',instance_type=args.instance_type)
   
   job.wait_until_ready()
 
