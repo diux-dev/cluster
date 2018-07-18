@@ -12,16 +12,17 @@
 # python tf_numpy_benchmark.py --benchmark=ray_put --num-iters=200 --hugepages=1
 # ray_put                       :   1.7 GB/sec, min: 59.20, median: 59.85, mean: 59.88
 
-# for hugepages
-# sudo mkdir -p /mnt/hugepages
-# gid=`id -g`
-# uid=`id -u`
-# sudo mount -t hugetlbfs -o uid=$uid -o gid=$gid none /mnt/hugepages
-# sudo bash -c "echo $gid > /proc/sys/vm/hugetlb_shm_group"
-# sudo bash -c "echo 20000 > /proc/sys/vm/nr_hugepages"
-
 
 """
+
+
+# for hugepages
+sudo mkdir -p /mnt/hugepages
+gid=`id -g`
+uid=`id -u`
+sudo mount -t hugetlbfs -o uid=$uid -o gid=$gid none /mnt/hugepages
+sudo bash -c "echo $gid > /proc/sys/vm/hugetlb_shm_group"
+sudo bash -c "echo 20000 > /proc/sys/vm/nr_hugepages"
 
 
 # p3.16xlarge, Deep Learning AMI v3.0
