@@ -113,6 +113,8 @@ def launcher():
   job.run('source activate tensorflow_p36')
   job.run('pip install cython')
   job.run('pip install ray')
+  # below can fail on
+  # E: Could not get lock /var/lib/dpkg/lock - open (11: Resource temporarily unavailable)
   job.run('sudo apt install htop')
 
   job.run('yes | sudo apt-get install google-perftools')
