@@ -82,13 +82,15 @@ class DataManager():
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        self.load_data('-sz/160', self.batch_sched[0], 128)
+        # self.load_data('-sz/160', self.batch_sched[0], 128)
+        self.load_data('/resize/160', self.batch_sched[0], 128)
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
             # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
             self.load_data('', self.batch_sched[1], 224)
+            self.load_data('/resize/320', self.batch_sched[1], 224, min_scale=0.091) # lower validation accuracy when enabled for some reason
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
             self.load_data('', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
@@ -205,8 +207,8 @@ def main():
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
-    # model = resnet.resnet50(pretrained=args.pretrained)
-    model = resnet.resnet50_scale()
+    model = resnet.resnet50(pretrained=args.pretrained)
+    # model = resnet.resnet50_scale()
     print("Loaded model")
 
     model = model.cuda()

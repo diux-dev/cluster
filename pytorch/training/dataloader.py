@@ -24,7 +24,8 @@ def get_loaders(datadir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale
     val_bs = val_bs or bs
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose([
-            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            AdaptiveRandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            # transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip(), 
             # ImageNetPolicy()
         ]))
@@ -209,3 +210,14 @@ class CropArTfm(object):
             size = (self.target_size, h//8*8)
         return torchvision.transforms.functional.center_crop(img, size)
 
+class AdaptiveRandomResizedCrop(transforms.RandomResizedCrop):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.target_scale = self.scale
+
+    def __call__(self, img):
+        w,h = img.size
+        # print('Size:', self.size[0])
+        # print('W, h', w, h)
+        self.scale = (self.target_scale[0] * self.size[0]/min(w,h), self.target_scale[1])
+        return super().__call__(img)
