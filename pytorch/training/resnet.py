@@ -183,7 +183,7 @@ class BottleneckZero(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, scale=None):
         super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = bn(planes)
@@ -195,6 +195,7 @@ class Bottleneck(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
+        self.scale = scale
 
     def forward(self, x):
         residual = x
@@ -209,6 +210,7 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         out = self.conv3(out)
+        if self.scale: out = out * self.scale
         out = self.bn3(out)
 
         out += residual
@@ -330,3 +332,11 @@ def vgg_resnet34(): return ResNet(BasicBlock, [3, 4, 6, 3], vgg_head=True)
 def preresnet34(): return ResNet(PreBasicBlock, [3, 4, 6, 3])
 def vgg_preresnet34(): return ResNet(PreBasicBlock, [3, 4, 6, 3], vgg_head=True)
 
+
+from functools import partial
+bottleneck_scale = partial(Bottleneck, scale=0.2)
+def w125_resnet50_scale(): return ResNet(bottleneck_scale, [3, 4, 4, 3], k=1.25)
+
+
+bottleneck_scale = partial(Bottleneck, scale=0.2)
+def resnet50_scale(): return ResNet(bottleneck_scale, [3, 4, 6, 3])

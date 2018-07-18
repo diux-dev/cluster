@@ -205,7 +205,8 @@ def main():
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
-    model = resnet.resnet50(pretrained=args.pretrained)
+    # model = resnet.resnet50(pretrained=args.pretrained)
+    model = resnet.resnet50_scale()
     print("Loaded model")
 
     model = model.cuda()
