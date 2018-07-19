@@ -86,7 +86,7 @@ x_args = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-size', 192
+  '--batch-sched', '192,192,128'
 ]
 x_args_128 = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -94,7 +94,7 @@ x_args_128 = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-size', 128
+  '--batch-sched', 128
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -103,7 +103,7 @@ x4_args = [
   '--epochs', 50,
   '--lr', 0.4 * 4,
   '--init-bn0',
-  '--batch-size', 192
+  '--batch-sched', '192,192,128'
 ]
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
@@ -112,7 +112,7 @@ x4ar_args = [
   '--epochs', 40,
   '--lr', 0.35 * 4,
   '--init-bn0',
-  '--batch-size', 192,
+  '--batch-sched', '192,192,128',
   '--val-ar'
 ]
 # Current benchmark for 8x p3's - without Aspect Ratio Validatoin
@@ -121,7 +121,7 @@ x8_args = [
   '--epochs', 55,
   '--lr', 0.3 * 8,
   '--init-bn0',
-  '--batch-size', 128
+  '--batch-sched', 128
 ]
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x8ar_args = [
@@ -130,7 +130,7 @@ x8ar_args = [
   '--epochs', 40,
   '--lr', 0.25 * 8,
   '--init-bn0',
-  '--batch-size', 128,
+  '--batch-sched', 128,
   '--val-ar'
 ]
 
@@ -144,7 +144,7 @@ x16ar_args = [
   '--epochs', 40,
   '--lr', 0.25 * 8,
   '--init-bn0',
-  '--batch-size', 64,
+  '--batch-sched', 64,
   '--val-ar'
 ]
 
@@ -155,7 +155,7 @@ yaro = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-size', 64
+  '--batch-sched', 64
 ]
 
 def main():

@@ -36,7 +36,7 @@ def get_parser():
                         help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
-    parser.add_argument('-b', '--batch-size', default=192, type=int,
+    parser.add_argument('-b', '--batch-sched', default='192,192,128', type=str,
                         metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                         metavar='LR', help='initial learning rate')
@@ -77,17 +77,20 @@ if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank
 
 
 class DataManager():
-    def __init__(self, resize_sched=[0.4, 0.92]):
+    def __init__(self, resize_sched=[0.4, 0.92], batch_sched=[192,192,128]):
         self.resize_sched = resize_sched
-        self.load_data('-sz/160', args.batch_size, 128)
+        self.batch_sched = batch_sched
+        if len(batch_sched) == 1: self.batch_sched * 3
+
+        self.load_data('-sz/160', self.batch_sched[0], 128)
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
-            # self.load_data('-sz/320', args.batch_size, 224) # lower validation accuracy when enabled for some reason
+            # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
-            self.load_data('', args.batch_size, 224)
+            self.load_data('', self.batch_sched[1], 224)
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
-            self.load_data('', 64, 288, min_scale=0.5, use_ar=args.val_ar)
+            self.load_data('', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
@@ -234,7 +237,7 @@ def main():
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
 
-    dm = DataManager(str_to_num_array(args.resize_sched))
+    dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
     print("Created data loaders")
 
     if args.evaluate: return validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, 0, start_time)
@@ -260,8 +263,8 @@ def main():
                 'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
-def str_to_num_array(argstr):
-    return [float(s) for s in argstr.split(',')]
+def str_to_num_array(argstr, num_type=float):
+    return [num_type(s) for s in argstr.split(',')]
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
@@ -347,6 +350,9 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
+
+    # save script so we can reproduce from logs
+    shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
     
 def validate(val_iter, val_len, model, criterion, epoch, start_time):
     batch_time = AverageMeter()
