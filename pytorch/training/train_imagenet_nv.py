@@ -80,7 +80,7 @@ class DataManager():
     def __init__(self, resize_sched=[0.4, 0.92], batch_sched=[192,192,128]):
         self.resize_sched = resize_sched
         self.batch_sched = batch_sched
-        if len(batch_sched) == 1: self.batch_sched * 3
+        if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
         self.load_data('-sz/160', self.batch_sched[0], 128)
         
