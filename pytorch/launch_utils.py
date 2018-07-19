@@ -74,7 +74,8 @@ def get_nccl_rings(num_tasks, num_gpus):
   ring_rev = build_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
   rotated_gpu_order = [3,2,1,0,7,6,5,4]
   if (num_tasks >= 8) and (num_tasks % 8 != 0):
-    skip_step = num_tasks//2-1
+    skip_step = 5 if num_tasks == 16 else 3
+    # step size of 3 yields - [0,3,6,1,4,7,2,5]
     skip_machine_order = [(i*skip_step)%num_tasks for i in range(num_tasks)]
     ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
     ring_skip_rev = build_ring_order(reversed(skip_machine_order), rotated_gpu_order)
