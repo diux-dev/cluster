@@ -20,13 +20,15 @@ import util as u
 
 import argparse
 parser = argparse.ArgumentParser(description='terminate')
-parser.add_argument('--limit_to_key', type=int, default=1,
+parser.add_argument('--limit-to-key', type=int, default=1,
                     help=("ignores any jobs not launched by current user "
                           "(determined by examining instance private_key name"))
-parser.add_argument('--skip_stopped', type=int, default=1,
+parser.add_argument('--skip-stopped', type=int, default=1,
                      help="don't terminate any instances that are stopped")
-parser.add_argument('--skip_tensorboard', type=int, default=1,
+parser.add_argument('--skip-tensorboard', type=int, default=1,
                      help="don't terminate tensorboard jobs")
+parser.add_argument('--soft', type=int, default=0,
+                     help="use 'soft terminate', ie stop")
 # todo: add -n version
 parser.add_argument('--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
@@ -38,6 +40,8 @@ if not args.limit_to_key:
   print("Warning: killing jobs not launched by this user!")
   print("*"*80)
 
+# TODO: not list stopped instances when doing stopped termination (its no-op in
+# that case)
 def main():
   ec2 = u.create_ec2_resource()         # ec2 resource
   ec2_client = u.create_ec2_client()    # ec2 client
@@ -72,14 +76,19 @@ def main():
     print("No running instances found for: Name '%s', key '%s'"%
           (args.name, USER_KEY_NAME))
     return
-  
-  answer = input("%d instances found, terminate in %s? (Y/n) " % (len(instances_to_kill),region))
+
+  action = 'soft terminate' if args.soft else 'terminate'
+  answer = input("%d instances found, %s in %s? (Y/n) " % (len(instances_to_kill), action, region))
   if not answer:
     answer = "y"
   if answer.lower() == "y":
     instance_ids = [i.id for i in instances_to_kill]
-    response = ec2_client.terminate_instances(InstanceIds=instance_ids)
-    print("Terminating, got response: %s", response)
+    if args.soft:
+      response = ec2_client.stop_instances(InstanceIds=instance_ids)
+      print("soft terminating, got response: %s", response)
+    else:
+      response = ec2_client.terminate_instances(InstanceIds=instance_ids)
+      print("terminating, got response: %s", response)
   else:
     print("Didn't get y, doing nothing")
   
