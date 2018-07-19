@@ -83,14 +83,14 @@ class DataManager():
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
         # self.load_data('-sz/160', self.batch_sched[0], 128)
-        self.load_data('/resize/160', self.batch_sched[0], 128)
+        self.load_data('/resize/160', self.batch_sched[0], 128, min_scale=0.1)
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
             # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 244')
-            self.load_data('', self.batch_sched[1], 224)
-            self.load_data('/resize/320', self.batch_sched[1], 224, min_scale=0.091) # lower validation accuracy when enabled for some reason
+            # self.load_data('', self.batch_sched[1], 224)
+            self.load_data('/resize/320', self.batch_sched[1], 224, min_scale=0.13) # lower validation accuracy when enabled for some reason
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
             self.load_data('', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
@@ -235,7 +235,7 @@ def main():
         if os.path.isfile(args.resume):
             checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
             args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
+            best_prec5 = checkpoint['best_prec5']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
         else: print("=> no checkpoint found at '{}'".format(args.resume))
@@ -266,6 +266,17 @@ def main():
                 'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
             }, is_best)
 
+        if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
+            save_checkpoint({
+                'epoch': epoch, 'state_dict': model.state_dict(),
+                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+            }, is_best=False, 'sz128_checkpoint.path.tar')
+        elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
+            save_checkpoint({
+                'epoch': epoch, 'state_dict': model.state_dict(),
+                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+            }, is_best=False, 'sz244_checkpoint.path.tar')
+    
 def str_to_num_array(argstr, num_type=float):
     return [num_type(s) for s in argstr.split(',')]
 
