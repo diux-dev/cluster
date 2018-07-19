@@ -72,12 +72,15 @@ def get_nccl_args(num_tasks, num_gpus):
 def get_nccl_rings(num_tasks, num_gpus):
   ring = build_ring_order(range(num_tasks), range(num_gpus))
   ring_rev = build_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
-  if num_tasks == 8:
-    ring_skip = build_ring_order([1,4,7,2,5,0,3,6], [3,2,1,0,7,6,5,4])
-    ring_skip_rev = build_ring_order(reversed([1,4,7,2,5,0,3,6]), [3,2,1,0,7,6,5,4])
+  rotated_gpu_order = [3,2,1,0,7,6,5,4]
+  if (num_tasks >= 8) and (num_tasks % 8 != 0):
+    skip_step = num_tasks//2-1
+    skip_machine_order = [(i*skip_step)%num_tasks for i in range(num_tasks)]
+    ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
+    ring_skip_rev = build_ring_order(reversed(skip_machine_order), rotated_gpu_order)
     rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
   elif num_tasks == 4:
-    ring_skip = build_ring_order([0,2,1,3], [3,2,1,0,7,6,5,4])
+    ring_skip = build_ring_order([0,2,1,3], rotated_gpu_order)
     rings_arr = [ring, ring_rev, ring_skip]
   else:
     rings_arr = [ring, ring_rev]
