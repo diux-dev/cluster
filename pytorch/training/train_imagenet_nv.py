@@ -82,15 +82,16 @@ class DataManager():
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        # self.load_data('-sz/160', self.batch_sched[0], 128)
-        self.load_data('/resize/128', '/resize/160', self.batch_sched[0], 128, min_scale=0.11, autoaugment=True)
+        self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
+        # self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_size=0.1)
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
             # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
             print('DataManager changing image size to 224')
             # self.load_data('', '', self.batch_sched[1], 224)
-            self.load_data('/resize/224', '/resize/288', self.batch_sched[1], 224, min_scale=0.115, autoaugment=True) # lower validation accuracy when enabled for some reason
+            # self.load_data('/resize/352', '/resize/288', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
+            self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.088) # lower validation accuracy when enabled for some reason
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
             self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
@@ -143,7 +144,7 @@ class Scheduler():
         lr = step_size*(epoch+1) + batch_step_size*batch_num
 
         if (args.world_size >= 32) and (epoch < epoch_tot):
-            starting_lr = starting_lr/(4 - epoch)
+            starting_lr = starting_lr/(epoch_tot - epoch)
         return lr
 
     def get_lr(self, epoch, batch_num, batch_tot):
@@ -214,10 +215,18 @@ def main():
 
     model = model.cuda()
     n_dev = torch.cuda.device_count()
+    if args.init_bn0: init_dist_weights(model) # Sets batchnorm std to 0
     if args.fp16: model = network_to_half(model)
-    if args.distributed:
-        if args.init_bn0: init_dist_weights(model) # (AS) Performs pretty poorly for first 10 epochs when enabled
-        model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+
+    
+    # Load model from checkpoint. This must happen before we copy over gradients 
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
+        model.load_state_dict(checkpoint['state_dict'])
+        args.start_epoch = checkpoint['epoch']
+        best_prec5 = checkpoint['best_prec5']
+        if args.distributed: model = nn.parallel.DistributedDataParallel(model.module, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
     if args.fp16:  model_params, master_params = prep_param_lists(model)
@@ -231,15 +240,10 @@ def main():
     print("Defined loss and optimizer")
 
     best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
-    # optionally resume from a checkpoint
-    if args.resume:
-        if os.path.isfile(args.resume):
-            checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
-            args.start_epoch = checkpoint['epoch']
-            best_prec5 = checkpoint['best_prec5']
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-        else: print("=> no checkpoint found at '{}'".format(args.resume))
+
+    if args.resume: # we must load optimizer params separately
+        checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
+        optimizer.load_state_dict(checkpoint['optimizer'])
 
     dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
     print("Created data loaders")

@@ -21,8 +21,8 @@ from autoaugment import ImageNetPolicy
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False, autoaugment=False):
     val_bs = val_bs or bs
     train_tfms = [
-            AdaptiveRandomResizedCrop(sz, scale=(min_scale, 1.0)),
-            # transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            # AdaptiveRandomResizedCrop(sz, scale=(min_scale, 1.0)),
+            transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip()
         ]
     if autoaugment: train_tfms.append(ImageNetPolicy())
