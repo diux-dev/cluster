@@ -12,10 +12,11 @@ def resize_img(fname, targ, path, new_path):
     if os.path.exists(dest): return
     im = Image.open(os.path.join(path, fname)).convert('RGB')
     r,c = im.size
+    os.makedirs(os.path.split(dest)[0], exist_ok=True)
+    if min(r,c) < targ: return im.save(dest)
     ratio = targ/min(r,c)
     sz = (scale_to(r, ratio, targ), scale_to(c, ratio, targ))
-    os.makedirs(os.path.split(dest)[0], exist_ok=True)
-    im.resize(sz, Image.LINEAR).save(dest)
+    im.resize(sz, Image.BILINEAR).save(dest)
 
 def resize_imgs(fnames, targ, path, new_path):
     if not os.path.exists(os.path.join(path,new_path,str(targ),fnames[0])):

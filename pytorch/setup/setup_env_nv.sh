@@ -20,8 +20,8 @@ fi
 
 
 pushd ~/data/imagenet 
-wget https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
-popd ~/data/imagenet 
+wget --no-clobber https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
+popd
 
 
 # install nvidia DALI
