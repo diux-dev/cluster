@@ -65,6 +65,7 @@ class Run(backend.Run):
     if instances:
       assert len(instances) == num_tasks, ("Found job with same name, but number of tasks %d doesn't match requested %d, kill job manually." % (len(instances), num_tasks))
       print("Found existing job "+job_name)
+      for i in instances: if i.state['Name'] == 'stopped': i.start()
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 

@@ -580,8 +580,8 @@ def _StreamOutputToStdout(fd):  # todo: pep convention
   
   return t
 
-def lookup_aws_instances(job_name):
-  """Returns all AWS instances for given AWS job name, like
+def lookup_aws_instances(job_name, states=['running', 'stopped']):
+  """Returns all AWS instances for given AWS job name that match state values, like
    simple.worker"""
 
   #  print("looking up", job_name)
@@ -591,7 +591,7 @@ def lookup_aws_instances(job_name):
 
   # TODO: add waiting so that instances in state "initializing" are supported
   instances = ec2.instances.filter(
-    Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
+    Filters=[{'Name': 'instance-state-name', 'Values': states}])
 
   result = []
   for i in instances.all():
