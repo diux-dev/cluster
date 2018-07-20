@@ -83,16 +83,16 @@ class DataManager():
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
         # self.load_data('-sz/160', self.batch_sched[0], 128)
-        self.load_data('/resize/160', self.batch_sched[0], 128, min_scale=0.1)
+        self.load_data('/resize/128', '/resize/160', self.batch_sched[0], 128, min_scale=0.11, autoaugment=True)
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
             # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
-            print('DataManager changing image size to 244')
-            # self.load_data('', self.batch_sched[1], 224)
-            self.load_data('/resize/320', self.batch_sched[1], 224, min_scale=0.13) # lower validation accuracy when enabled for some reason
+            print('DataManager changing image size to 224')
+            # self.load_data('', '', self.batch_sched[1], 224)
+            self.load_data('/resize/224', '/resize/288', self.batch_sched[1], 224, min_scale=0.115, autoaugment=True) # lower validation accuracy when enabled for some reason
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
-            self.load_data('', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
+            self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
@@ -107,10 +107,11 @@ class DataManager():
         self.val_iter = iter(self.val_dl)
         return self.val_iter
         
-    def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
-        datadir = args.data+dir_prefix
-        print(f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nDirectory: {datadir}')
-        loaders = get_loaders(datadir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs)
+    def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
+        traindir = args.data+dir_prefix+'/train'
+        valdir = args.data+valdir_prefix+'/validation'
+        print(f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nTrain Directory: {traindir}\nValidation Directory: {valdir}')
+        loaders = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs)
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
         self.trn_dl = DataPrefetcher(self.trn_dl)
         self.val_dl = DataPrefetcher(self.val_dl, prefetch=False)
@@ -259,23 +260,24 @@ def main():
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
-        if args.local_rank == 0 and is_best:
-            best_prec5 = max(prec5, best_prec5)
-            save_checkpoint({
-                'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
-                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-            }, is_best)
+        if args.local_rank == 0:
+            if is_best:
+                best_prec5 = max(prec5, best_prec5)
+                save_checkpoint({
+                    'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
+                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+                }, is_best=True, filename='model_best.pth.tar')
 
-        if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
-            save_checkpoint({
-                'epoch': epoch, 'state_dict': model.state_dict(),
-                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-            }, is_best=False, 'sz128_checkpoint.path.tar')
-        elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
-            save_checkpoint({
-                'epoch': epoch, 'state_dict': model.state_dict(),
-                'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-            }, is_best=False, 'sz244_checkpoint.path.tar')
+            if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
+                save_checkpoint({
+                    'epoch': epoch+1, 'state_dict': model.state_dict(),
+                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+                }, is_best=False, filename='sz128_checkpoint.path.tar')
+            elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
+                save_checkpoint({
+                    'epoch': epoch+1, 'state_dict': model.state_dict(),
+                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+                }, is_best=False, filename='sz244_checkpoint.path.tar')
     
 def str_to_num_array(argstr, num_type=float):
     return [num_type(s) for s in argstr.split(',')]
@@ -443,7 +445,7 @@ def distributed_predict(input, target, model, criterion):
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, f'{args.save_dir}/model_best.pth.tar')
+        shutil.copyfile(filename, f'{args.save_dir}/{filename}')
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
