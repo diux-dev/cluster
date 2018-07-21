@@ -82,10 +82,10 @@ class DataManager():
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        # self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_size=0.1)
-        self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
-        # self.data1 = self.load_data('', '', self.batch_sched[1], 224)
-        self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
+        self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_scale=0.1)
+        # self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
+        if args.world_size == 32: self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
+        else: self.data1 = self.load_data('', '', self.batch_sched[1], 224) # worse accuracy for 8 machines right now
         self.data2 = self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
         
     def set_epoch(self, epoch):
@@ -162,7 +162,7 @@ class Scheduler():
 
     def update_lr(self, epoch, batch_num, batch_tot):
         lr = self.get_lr(epoch, batch_num, batch_tot)
-        if (self.current_lr != lr) and ((batch_num == 0) or (batch_num+1 == batch_tot)): 
+        if (self.current_lr != lr) and ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
@@ -293,15 +293,16 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     st = time.time()
     trn_len = len(trn_loader)
-    print(trn_len)
+
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
+        batch_num = i+2
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
 
         # measure data loading time
         data_time.update(time.time() - end)
-        scheduler.update_lr(epoch, i, trn_len)
+        scheduler.update_lr(epoch, i+1, trn_len)
 
 
         # compute output
@@ -345,7 +346,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         end = time.time()
 
-        should_print = ((i+1) % args.print_freq == 0) or ((i+1) == trn_len)
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
         if args.local_rank == 0 and should_print:
             output = ('Epoch: [{0}][{1}/{2}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
@@ -353,7 +354,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    epoch, i+1, trn_len, batch_time=batch_time,
+                    epoch, batch_num, trn_len, batch_time=batch_time,
                     data_time=data_time, loss=losses, top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
@@ -373,6 +374,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
     val_len = len(val_loader)
 
     for i,(input,target) in enumerate(iter(val_loader)):
+        batch_num = i+2
         if args.distributed:
             prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
         else:
@@ -390,14 +392,14 @@ def validate(val_loader, model, criterion, epoch, start_time):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        should_print = ((i+1) % args.print_freq == 0) or ((i+1) == val_len)
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==val_len)
         if args.local_rank == 0 and should_print:
             output = ('Test: [{0}/{1}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
                     + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
                     + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
                     + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    i+1, val_len, batch_time=batch_time, loss=losses,
+                    batch_num, val_len, batch_time=batch_time, loss=losses,
                     top1=top1, top5=top5)
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:

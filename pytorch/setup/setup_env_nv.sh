@@ -6,6 +6,9 @@
   
 echo 'Starting script'
 
+sudo apt-get update
+sudo apt-get upgrade -y
+
 # Change nccl to 9-1
 sed -i -e 's/cuda-9.0/cuda-9.1/g' ~/.bashrc
 source ~/.bashrc
@@ -13,28 +16,9 @@ source ~/.bashrc
 conda install pytorch torchvision cuda91 -c pytorch -y
 conda install tqdm -y
 
-if ! conda list Pillow-SIMD | grep -q Pillow-SIMD; then
-    pip uninstall pillow --yes
-    CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
-fi
-
-
 pushd ~/data/imagenet 
 wget --no-clobber https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
 popd
-
-
-# install nvidia DALI
-# pip install --extra-index-url https://developer.download.nvidia.com/compute/redist nvidia-dali
-# wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cuda-linux64-nvjpeg-9.0.tar.gz
-# tar xzvf cuda-linux64-nvjpeg-9.0.tar.gz
-# pip install protobuf -y
-# pip install opencv-contrib-python
-
-
-# Installing libjpeg-turbo
-# sudo apt-get remove libjpeg8
-# sudo apt-get install libjpeg-turbo8
 
 # https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
 conda uninstall --force pillow -y 
