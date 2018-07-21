@@ -116,7 +116,7 @@ x4ar_args = [
   '--val-ar',
   # '--weight-decay', 5e-5
   # '--resume', 'sz128_checkpoint.path.tar'
-  '--resume', 'sz244_checkpoint.path.tar'
+  # '--resume', 'sz244_checkpoint.path.tar'
 ]
 # Current benchmark for 8x p3's - without Aspect Ratio Validatoin
 x8_args = [

@@ -670,7 +670,7 @@ def lookup_aws_instances(job_name, states=['running', 'stopped']):
   result = []
   for i in instances.all():
     task_id, current_job_name = u.get_parsed_job_name(i.tags)
-    #    print("Obtained job name", current_job_name, "task", task_id)
+    # print("Obtained job name", current_job_name, "task", task_id)
 
     if current_job_name == job_name:
       result.append(i)

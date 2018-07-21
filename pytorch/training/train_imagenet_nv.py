@@ -87,11 +87,8 @@ class DataManager():
         
     def set_epoch(self, epoch):
         if epoch==int(args.epochs*self.resize_sched[0]+0.5):
-            # self.load_data('-sz/320', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
-            print('DataManager changing image size to 224')
             # self.load_data('', '', self.batch_sched[1], 224)
-            # self.load_data('/resize/352', '/resize/288', self.batch_sched[1], 224) # lower validation accuracy when enabled for some reason
-            self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.088) # lower validation accuracy when enabled for some reason
+            self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.084) # slightly faster image loading than using full size
         if epoch==int(args.epochs*self.resize_sched[1]+0.5):
             self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
 
@@ -217,16 +214,17 @@ def main():
     n_dev = torch.cuda.device_count()
     if args.init_bn0: init_dist_weights(model) # Sets batchnorm std to 0
     if args.fp16: model = network_to_half(model)
-    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
 
-    
-    # Load model from checkpoint. This must happen before we copy over gradients 
+    # Load model from checkpoint. This must happen distributed as model is saved without it
     if args.resume:
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
         model.load_state_dict(checkpoint['state_dict'])
         args.start_epoch = checkpoint['epoch']
         best_prec5 = checkpoint['best_prec5']
-        if args.distributed: model = nn.parallel.DistributedDataParallel(model.module, device_ids=[args.local_rank], output_device=args.local_rank)
+
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+
 
     global model_params, master_params
     if args.fp16:  model_params, master_params = prep_param_lists(model)
@@ -236,10 +234,7 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
-
     print("Defined loss and optimizer")
-
-    best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
 
     if args.resume: # we must load optimizer params separately
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
@@ -264,24 +259,14 @@ def main():
         prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
+        best_prec5 = max(prec5, best_prec5)
         if args.local_rank == 0:
-            if is_best:
-                best_prec5 = max(prec5, best_prec5)
-                save_checkpoint({
-                    'epoch': epoch + 1, 'arch': args.arch, 'state_dict': model.state_dict(),
-                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-                }, is_best=True, filename='model_best.pth.tar')
+            if is_best: save_checkpoint(epoch, model, best_prec5, optimizer, is_best=True, filename='model_best.pth.tar')
 
             if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
-                save_checkpoint({
-                    'epoch': epoch+1, 'state_dict': model.state_dict(),
-                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-                }, is_best=False, filename='sz128_checkpoint.path.tar')
+                save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz128_checkpoint.path.tar')
             elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
-                save_checkpoint({
-                    'epoch': epoch+1, 'state_dict': model.state_dict(),
-                    'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
-                }, is_best=False, filename='sz244_checkpoint.path.tar')
+                save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz244_checkpoint.path.tar')
     
 def str_to_num_array(argstr, num_type=float):
     return [num_type(s) for s in argstr.split(',')]
@@ -446,7 +431,13 @@ def distributed_predict(input, target, model, criterion):
     prec5 = corr5*(100.0/tot_batch)
     return prec1, prec5, reduced_loss, tot_batch
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+
+def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
+    if isinstance(model, nn.parallel.DistributedDataParallel): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
+    state = {
+        'epoch': epoch+1, 'state_dict': model.state_dict(),
+        'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+    }
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, f'{args.save_dir}/{filename}')
