@@ -183,7 +183,44 @@ class BottleneckZero(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, scale=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super().__init__()
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = bn(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False)
+        self.bn2 = bn(planes)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = bn(planes * 4)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+        if self.downsample is not None: residual = self.downsample(x)
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+
+class BottleneckScale(nn.Module):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, scale=0.2):
         super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = bn(planes)
@@ -217,7 +254,6 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
-
 
 class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, k=1, vgg_head=False):
@@ -332,11 +368,5 @@ def vgg_resnet34(): return ResNet(BasicBlock, [3, 4, 6, 3], vgg_head=True)
 def preresnet34(): return ResNet(PreBasicBlock, [3, 4, 6, 3])
 def vgg_preresnet34(): return ResNet(PreBasicBlock, [3, 4, 6, 3], vgg_head=True)
 
-
-from functools import partial
-bottleneck_scale = partial(Bottleneck, scale=0.2)
-def w125_resnet50_scale(): return ResNet(bottleneck_scale, [3, 4, 4, 3], k=1.25)
-
-
-bottleneck_scale = partial(Bottleneck, scale=0.2)
-def resnet50_scale(): return ResNet(bottleneck_scale, [3, 4, 6, 3])
+def w125_resnet50_scale(): return ResNet(BottleneckScale, [3, 4, 4, 3], k=1.25)
+def resnet50_scale(): return ResNet(BottleneckScale, [3, 4, 6, 3])

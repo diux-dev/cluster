@@ -75,17 +75,17 @@ cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
-
 class DataManager():
     def __init__(self, resize_sched=[0.4, 0.92], batch_sched=[192,192,128]):
         self.resize_sched = resize_sched
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_scale=0.1)
-        # self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
-        if args.world_size == 32: self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
-        else: self.data1 = self.load_data('', '', self.batch_sched[1], 224) # worse accuracy for 8 machines right now
+        # self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_scale=0.1)
+        self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
+        # if args.world_size == 32: self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
+        # else: self.data1 = self.load_data('', '', self.batch_sched[1], 224) # worse accuracy for 8 machines right now
+        self.data1 = self.load_data('', '', self.batch_sched[1], 224)
         self.data2 = self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
         
     def set_epoch(self, epoch):
@@ -96,20 +96,13 @@ class DataManager():
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
     
-    # For val_ar faster scheduler - [0.35,0.88]
-
-    def get_trn_loader(self):
-        return DataPrefetcher(self.trn_dl)
-
-    def get_val_loader(self):
-        return DataPrefetcher(self.val_dl)
+    def get_trn_loader(self): return DataPrefetcher(self.trn_dl)
+    def get_val_loader(self): return DataPrefetcher(self.val_dl)
 
     def set_data(self, data):
         loaders, datainfo = data
-        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
-        # self.trn_dl = DataPrefetcher(self.trn_dl)
-        # self.val_dl = DataPrefetcher(self.val_dl)
         print(datainfo)
+        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
@@ -206,9 +199,8 @@ def main():
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
+    print("Loading model")
     model = resnet.resnet50(pretrained=args.pretrained)
-    # model = resnet.resnet50_scale()
-    print("Loaded model")
 
     model = model.cuda()
     n_dev = torch.cuda.device_count()
@@ -234,29 +226,23 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
-    print("Defined loss and optimizer")
 
     if args.resume: # we must load optimizer params separately
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
         optimizer.load_state_dict(checkpoint['optimizer'])
 
+    print("Creating data loaders")
     dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
-    print("Created data loaders")
 
     start_time = datetime.now() # Loading start to after everything is loaded
-
     if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
-
     print("Begin training")
     estart = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         estart = time.time()
         dm.set_epoch(epoch)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
-
+        train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
         prec5 = validate(dm.get_val_loader(), model, criterion, epoch, start_time)
 
@@ -264,7 +250,6 @@ def main():
         best_prec5 = max(prec5, best_prec5)
         if args.local_rank == 0:
             if is_best: save_checkpoint(epoch, model, best_prec5, optimizer, is_best=True, filename='model_best.pth.tar')
-
             if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
                 save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz128_checkpoint.path.tar')
             elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
@@ -495,5 +480,8 @@ def reduce_tensor(tensor):
     rt /= args.world_size
     return rt
 
-if __name__ == '__main__': main()
+if __name__ == '__main__': 
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=UserWarning)
+        main()
 

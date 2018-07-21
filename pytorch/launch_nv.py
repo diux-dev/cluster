@@ -124,31 +124,15 @@ x8_args = [
   '--init-bn0',
   '--batch-sched', 128
 ]
-# Current benchmark for 8x p3's - with Aspect Ratio Validatoin
-x8ar_args = [
-  '--lr-sched', '0.14,0.43,0.75,0.94',
-  '--resize-sched', '0.35,0.88',
-  '--epochs', 40,
-  '--lr', 0.25 * 8,
-  '--init-bn0',
-  '--batch-sched', 128,
-  '--val-ar',
-  # '--resume', 'sz128_checkpoint.path.tar'
-  # '--resume', 'sz244_checkpoint.path.tar'
-]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
-x8ar_args_2 = [
+x8ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  # '--lr-sched', '0.14,0.43,0.75,0.94',
-  # '--resize-sched', '0.35,0.88',
   '--epochs', 40,
   '--lr', 0.23 * 8,
   '--init-bn0',
   '--batch-sched', 128,
   '--val-ar',
-  # '--resume', 'sz128_checkpoint.path.tar'
-  # '--resume', 'sz244_checkpoint.path.tar'
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
