@@ -82,42 +82,44 @@ class DataManager():
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
-        # self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_size=0.1)
+        # self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_size=0.1)
+        self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
+        # self.data1 = self.load_data('', '', self.batch_sched[1], 224)
+        self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
+        self.data2 = self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
         
     def set_epoch(self, epoch):
-        if epoch==int(args.epochs*self.resize_sched[0]+0.5):
-            # self.load_data('', '', self.batch_sched[1], 224)
-            self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.084) # slightly faster image loading than using full size
-        if epoch==int(args.epochs*self.resize_sched[1]+0.5):
-            self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
+        if epoch == 0: self.set_data(self.data0)
+        if epoch==int(args.epochs*self.resize_sched[0]+0.5): self.set_data(self.data1)
+        if epoch==int(args.epochs*self.resize_sched[1]+0.5): self.set_data(self.data2)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
     
     # For val_ar faster scheduler - [0.35,0.88]
 
-    def get_trn_iter(self):
-        self.trn_iter = iter(self.trn_dl)
-        return self.trn_iter
+    def get_trn_loader(self):
+        return DataPrefetcher(self.trn_dl)
 
-    def get_val_iter(self):
-        self.val_iter = iter(self.val_dl)
-        return self.val_iter
-        
-    def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
-        traindir = args.data+dir_prefix+'/train'
-        valdir = args.data+valdir_prefix+'/validation'
-        print(f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nTrain Directory: {traindir}\nValidation Directory: {valdir}')
-        loaders = get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs)
+    def get_val_loader(self):
+        return DataPrefetcher(self.val_dl)
+
+    def set_data(self, data):
+        loaders, datainfo = data
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
-        self.trn_dl = DataPrefetcher(self.trn_dl)
-        self.val_dl = DataPrefetcher(self.val_dl, prefetch=False)
-        self.trn_len = len(self.trn_dl)
-        self.val_len = len(self.val_dl)
+        # self.trn_dl = DataPrefetcher(self.trn_dl)
+        # self.val_dl = DataPrefetcher(self.val_dl)
+        print(datainfo)
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
+        
+
+    def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
+        traindir = args.data+dir_prefix+'/train'
+        valdir = args.data+valdir_prefix+'/validation'
+        datainfo = f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nTrain Directory: {traindir}\nValidation Directory: {valdir}'
+        return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), datainfo
 
 class Scheduler():
     def __init__(self, optimizer, lr_sched=[0.1, 0.47, 0.78, 0.95]):
@@ -196,8 +198,6 @@ def main():
     # need to index validation directory before we start counting the time
     if args.val_ar: sort_ar(args.data+'/validation')
 
-    start_time = datetime.now()
-
     if args.distributed:
         print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
@@ -243,7 +243,9 @@ def main():
     dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
     print("Created data loaders")
 
-    if args.evaluate: return validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, 0, start_time)
+    start_time = datetime.now() # Loading start to after everything is loaded
+
+    if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
 
     print("Begin training")
     estart = time.time()
@@ -253,10 +255,10 @@ def main():
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            train(dm.get_trn_iter(), len(dm.trn_dl), model, criterion, optimizer, scheduler, epoch)
+            train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
 
         if args.prof: break
-        prec5 = validate(dm.get_val_iter(), len(dm.val_dl), model, criterion, epoch, start_time)
+        prec5 = validate(dm.get_val_loader(), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
         best_prec5 = max(prec5, best_prec5)
@@ -278,7 +280,7 @@ def to_python_float(t):
     else:
         return t[0]
 
-def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
+def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -290,8 +292,10 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
     end = time.time()
 
     st = time.time()
+    trn_len = len(trn_loader)
+    print(trn_len)
     # print('Begin training loop:', st)
-    for i,(input,target) in enumerate(trn_iter):
+    for i,(input,target) in enumerate(iter(trn_loader)):
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
 
@@ -308,9 +312,8 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
 
         if args.distributed:
-            reduced_loss = reduce_tensor(loss.data)
-            prec1 = reduce_tensor(prec1)
-            prec5 = reduce_tensor(prec5)
+            metrics = torch.tensor([loss.data,prec1,prec5]).float().cuda()
+            reduced_loss, prec1, prec5 = reduce_tensor(metrics)
         else:
             reduced_loss = loss.data
 
@@ -342,7 +345,7 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
 
         end = time.time()
 
-        should_print = ((i+1) % args.print_freq == 0) or (i+1 == trn_len)
+        should_print = ((i+1) % args.print_freq == 0) or ((i+1) == trn_len)
         if args.local_rank == 0 and should_print:
             output = ('Epoch: [{0}][{1}/{2}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
@@ -359,7 +362,7 @@ def train(trn_iter, trn_len, model, criterion, optimizer, scheduler, epoch):
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
     
-def validate(val_iter, val_len, model, criterion, epoch, start_time):
+def validate(val_loader, model, criterion, epoch, start_time):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -367,8 +370,9 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
 
     model.eval()
     end = time.time()
+    val_len = len(val_loader)
 
-    for i,(input,target) in enumerate(val_iter):
+    for i,(input,target) in enumerate(iter(val_loader)):
         if args.distributed:
             prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
         else:
@@ -386,7 +390,7 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        should_print = ((i+1) % args.print_freq == 0) or (i+1 == val_len)
+        should_print = ((i+1) % args.print_freq == 0) or ((i+1) == val_len)
         if args.local_rank == 0 and should_print:
             output = ('Test: [{0}/{1}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
@@ -407,7 +411,7 @@ def validate(val_iter, val_len, model, criterion, epoch, start_time):
 
 def distributed_predict(input, target, model, criterion):
     batch_size = input.size(0)
-    output = loss = corr1 = corr5 = valid_batches = torch.tensor([0]).cuda()
+    output = loss = corr1 = corr5 = valid_batches = 0
     
     if batch_size:
         # compute output
@@ -416,17 +420,15 @@ def distributed_predict(input, target, model, criterion):
             # with distributed validation sampler, we don't always have data for each gpu
             assert(isinstance(model, nn.parallel.DistributedDataParallel))
             output = model.module(input)
-            loss = criterion(output, target)
+            loss = criterion(output, target).data
         # measure accuracy and record loss
-        valid_batches = torch.tensor([1]).cuda()
+        valid_batches = 1
         corr1, corr5 = correct(output.data, target, topk=(1, 5))
-    batch_tensor = torch.tensor([batch_size]).cuda()
-    tot_batch = sum_tensor(batch_tensor).item()
-    valid_batches = sum_tensor(valid_batches).item()
-    reduced_loss = sum_tensor(loss.data)/valid_batches
 
-    corr1 = sum_tensor(corr1).float()
-    corr5 = sum_tensor(corr5).float()
+    metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
+    tot_batch, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics)
+    reduced_loss = reduced_loss/valid_batches
+
     prec1 = corr1*(100.0/tot_batch)
     prec5 = corr5*(100.0/tot_batch)
     return prec1, prec5, reduced_loss, tot_batch

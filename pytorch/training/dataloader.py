@@ -67,6 +67,7 @@ class DataPrefetcher():
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
         self.fp16 = fp16
+        self.loaditer = iter(self.loader)
         if self.fp16:
             self.mean = self.mean.half()
             self.std = self.std.half()
@@ -74,6 +75,7 @@ class DataPrefetcher():
             self.stream = torch.cuda.Stream()
             self.next_input = None
             self.next_target = None
+            self.preload()
 
     def __len__(self): return len(self.loader)
 
@@ -91,13 +93,10 @@ class DataPrefetcher():
         return input.sub_(self.mean).div_(self.std)
             
     def __iter__(self):
-        count = 0
-        self.loaditer = iter(self.loader)
         if not self.prefetch:
             for input, target in self.loaditer:
                 yield self.process_input(input), target.cuda()
             return
-        self.preload()
         while True:
             torch.cuda.current_stream().wait_stream(self.stream)
             input = self.next_input

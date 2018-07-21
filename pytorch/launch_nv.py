@@ -108,13 +108,11 @@ x4_args = [
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.94',
-  # '--resize-sched', '0.35,0.88',
   '--epochs', 40,
   '--lr', 0.35 * 4,
   '--init-bn0',
   '--batch-sched', '192,192,128',
   '--val-ar',
-  # '--weight-decay', 5e-5
   # '--resume', 'sz128_checkpoint.path.tar'
   # '--resume', 'sz244_checkpoint.path.tar'
 ]
@@ -134,7 +132,9 @@ x8ar_args = [
   '--lr', 0.25 * 8,
   '--init-bn0',
   '--batch-sched', 128,
-  '--val-ar'
+  '--val-ar',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  # '--resume', 'sz244_checkpoint.path.tar'
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
