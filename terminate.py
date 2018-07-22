@@ -7,7 +7,7 @@ Usage:
 ./terminate.py gpu   # terminates all instances matching "gpu*"
 
 # TODO: shortcut for --name
-# TODO: also delete corresponding placement groups (see "delete_placement_groups.py")
+# TODO: also delete corresponding placement groups if they are no longer used. (for now, workaround is to call "delete_placement_groups.py" once you hit placement group limit)
 """
 
 import boto3
