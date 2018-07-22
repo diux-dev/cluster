@@ -95,6 +95,7 @@ feed_gpu_tensor               :   1.3 GB/sec, min: 76.19, median: 83.05, mean: 8
 
 
 
+
 import argparse
 import inspect
 import numpy as np
@@ -772,6 +773,20 @@ if __name__ == '__main__':
   # remove garbage colleciton, automatic optimizations and tuning
   import gc
   gc.disable()
+
+  def get_tf_version_url():
+    import tensorflow as tf
+    version=tf.__version__
+    commit = tf.__git_version__
+    commit = commit.replace("'","")
+    if commit.endswith('-dirty'):
+      dirty = True
+      commit = commit[:-len('-dirty')]
+    commit=commit.rsplit('-g', 1)[1]
+    url = 'https://github.com/tensorflow/tensorflow/commit/'+commit
+    return url
+  tf_ver = tf.__git_version__#.decode('ascii')
+  print("Using TensorFlow version "+tf_ver+" "+get_tf_version_url())
 
   os.environ['TF_CPP_MIN_LOG_LEVEL']='0'
   os.environ['TF_CUDNN_USE_AUTOTUNE']='0'
