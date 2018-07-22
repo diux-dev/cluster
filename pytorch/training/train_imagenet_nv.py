@@ -196,6 +196,7 @@ def main():
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
         assert(args.world_size == dist.get_world_size())
+        print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
