@@ -28,7 +28,7 @@ import threading
 
 module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
-import util
+import util as u
 import aws_backend
 from launch_utils import *
 util.install_pdb_handler()
@@ -183,8 +183,11 @@ def create_job(run, job_name, num_tasks):
   if args.placement_group:
     print("Warning, placement_group is deprecated, use --use-placement-group 1 for automatically picked placement group (same as run name).")
     placement_group_name = args.placement_group
+  # use run+randomly generated names
+  # add randomness to avoid reusing placement groups from previous run of
+  # same name, which could've used different availability zone (illegal)
   if args.use_placement_group:
-    placement_group_name = args.name
+    placement_group_name = args.name+'-'+u.random_id()
   else:
     placement_group_name = ''
     
