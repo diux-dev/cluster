@@ -1,6 +1,8 @@
 # methods common to create_resources and delete_resources
 import os
 import argparse
+import random
+import string
 import boto3
 import shlex
 import re
@@ -500,9 +502,8 @@ def wait_on_fulfillment(ec2c, reqs):
       return instance_id
     return [get_instance_id(req) for req in reqs]
 
-def create_spot_instances(launch_specs, spot_price=None):
-    # (AS) forcing spot price to be higher for now
-    spot_price = '25'
+def create_spot_instances(launch_specs, spot_price=25):
+    spot_price = str(spot_price)
 
     ec2c = create_ec2_client()
     num_tasks = launch_specs['MinCount']
@@ -883,3 +884,8 @@ def get_username(instance):
   # for now use ubuntu by default, with env override if needed
   username = os.environ.get("USERNAME", "ubuntu")
   return username
+
+def random_id(N=5):
+  """Random id to use for AWS identifiers."""
+  #  https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
+  return ''.join(random.choices(string.ascii_lowercase + string.digits, k=N))
