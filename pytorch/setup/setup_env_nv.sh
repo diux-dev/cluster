@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# to be used with vanilla DLAMI v10
+# ImageNet training setup script for DLAMI + p3 instance
+# (tested on "Deep Learning AMI (Ubuntu) Version 11.0")
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
-# "us-east-1": "ami-6d720012", "us-east-2": "ami-23c4fb46", "us-west-2": "ami-e580c79d",
   
 echo 'Starting script'
 
@@ -16,6 +16,7 @@ source ~/.bashrc
 conda install pytorch torchvision cuda91 -c pytorch -y
 conda install tqdm -y
 
+# index file used to speed up evaluation
 pushd ~/data/imagenet 
 wget --no-clobber https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
 popd
@@ -40,7 +41,8 @@ export LD_LIBRARY_PATH="$HOME/turbojpeg/lib:$LD_LIBRARY_PATH"
 popd
 
 
-# setting max speed. Doesn't seem to boost performace though
+# following GPU settings from below (not clear if helps) 
+# http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/optimize_gpu.html
 sudo nvidia-smi -ac 877,1530
 
 cd ~/
