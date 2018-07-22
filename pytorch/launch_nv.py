@@ -1,17 +1,13 @@
 #!/usr/bin/env python
-# master command:
-# python launch_nv.py --name 4gpu_distributed --instance-type p3.16xlarge --num-tasks 4 --zone us-west-2c --use-placement-group 1 --spot --attach-volume imagenet_high_perf --params x4_args --ami-name="Deep Learning AMI (Ubuntu) Version 11.0"
+#
+# 4 machine training
+# export ami="Deep Learning AMI (Ubuntu) Version 11.0"
+# python launch_nv.py --name 4gpu_distributed --num-tasks 4 --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
 
-# 8 gpu training
-# python launch_nv.py --name 8gpu_zoneb --instance-type p3.16xlarge --num-tasks 8 --zone us-west-2b --placement-group pytorch_cluster_b --ami-name pytorch.imagenet.source.v2
-# spot command (attaching ebs volume and using default amazon ami):
-# python launch_nv.py --name 8gpu_distributed --instance-type p3.16xlarge --num-tasks 8 --zone us-west-2c --use-placement-group 1 --spot --attach-volume imagenet_high_perf --params x8_args --ami-name="Deep Learning AMI (Ubuntu) Version 11.0"
+# 8 machine training
+# python launch_nv.py --name yaro8 --num-tasks 8 --zone us-west-2c --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
 
-# virginia 8 machine run
-# export AWS_DEFAULT_REGION=us-east-1
-# python launch_nv.py --name yaro-friday-8 --num-tasks 8 --zone us-east-1c --params x8_args
-
-# virginia 16 machine run
+# 16 machine training
 # export AWS_DEFAULT_REGION=us-east-1
 # ./launch_nv.py --name yaro16 --num-tasks 16 --zone us-east-1c --params x16ar_args
 
@@ -60,8 +56,6 @@ parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
-# todo: rename to "num-machines", num-tasks is confusing since multiple pytorch
-# per machine
 parser.add_argument('--num-tasks', type=int, default=1,
                     help='number of instances to create')
 parser.add_argument('--install-script', type=str, default='',
