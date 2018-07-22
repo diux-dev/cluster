@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 #
-# 4 machine training
 # export ami="Deep Learning AMI (Ubuntu) Version 11.0"
+# 1 machine training
+# python launch_nv.py --name test --num-tasks 1 --zone us-west-2c --spot
+#
+# 4 machine training
 # python launch_nv.py --name 4gpu_distributed --num-tasks 4 --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
 
 # 8 machine training

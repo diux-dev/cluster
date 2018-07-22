@@ -54,11 +54,15 @@ fi
 
 if [ ! -d "$DATA_DIR/imagenet" ]; then
     cd $DATA_DIR
+    # cat get those files from
+    # wget https://s3.amazonaws.com/yaroslavvb/imagenet-data-sorted.tar
     rsync --progress /efs/data/imagenet-data-sorted.tar $DATA_DIR
     tar -xvf $DATA_DIR/imagenet-data-sorted.tar
     rm $DATA_DIR/imagenet-data-sorted.tar
     mv $DATA_DIR/raw-data $DATA_DIR/imagenet
 
+    # can get those files from
+    # wget https://s3.amazonaws.com/yaroslavvb/imagenet-sz.tar
     rsync --progress /efs/data/imagenet-sz.tar $DATA_DIR
     tar -xvf $DATA_DIR/imagenet-sz.tar
     rm $DATA_DIR/imagenet-sz.tar
