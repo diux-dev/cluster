@@ -86,14 +86,16 @@ class Run(backend.Run):
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
 
       assert not (ami and ami_name), "Must have only one of ami and ami_name, got "+ami+", "+ami_name
+      assert ami or ami_name, "Must specify at least one of ami and ami_name"
       if ami_name:
         ami = u.lookup_ami_id(ami_name).id
       security_group = u.get_security_group_dict()[u.get_resource_name()]
+      
       keypair = u.get_keypair_dict()[u.get_keypair_name()]
       vpc = u.get_vpc_dict()[u.get_resource_name()]
       subnet_dict = u.get_subnet_dict(vpc)
       region = u.get_region()
-      assert availability_zone in subnet_dict, "Availability zone %s is not in subnet dict for current AWS default region %s, available subnets are %s. (hint, set AWS_DEFAULT_REGION)"%(availability_zone, region, ', '.join(subnet_dict.keys()))
+      assert availability_zone in subnet_dict, "Availability zone %s is not in subnet dict for current AWS default region %s, available subnets are %s. (hint, set AWS_DEFAULT_REGION=%s)"%(availability_zone, region, ', '.join(subnet_dict.keys()), availability_zone[:-1])
       subnet = subnet_dict[availability_zone]
       ec2 = u.create_ec2_resource()
       u.maybe_create_placement_group(placement_group)
