@@ -10,7 +10,7 @@ from operator import itemgetter
 
 import util as u
 
-LIMIT_TO_KEY='yaroslav'
+LIMIT_TO_KEY='nexus'
 
 def list_instances():
   ec2 = u.create_ec2_resource()
