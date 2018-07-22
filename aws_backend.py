@@ -125,6 +125,7 @@ class Run(backend.Run):
 
       if use_spot: instances = u.create_spot_instances(args)
       else: instances = ec2.create_instances(**args)
+      assert instances
       assert len(instances) == num_tasks
 
       # assign proper names to tasks
