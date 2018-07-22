@@ -30,7 +30,7 @@ parser.add_argument('--skip-tensorboard', type=int, default=1,
 parser.add_argument('--soft', type=int, default=0,
                      help="use 'soft terminate', ie stop")
 # todo: add -n version
-parser.add_argument('--name', type=str, default="",
+parser.add_argument('-n', '--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
 args = parser.parse_args()
 
