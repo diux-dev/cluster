@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Tools for EFS related tasks
+# By default, lists all volumes, along with their availability zones and attacment points
 
 import boto3
 import sys
@@ -10,7 +11,7 @@ from operator import itemgetter
 
 import util as u
 
-def list_ebss():
+def list_ebss_by_instance():
   """Print list of instances with their attached volume id/size to console, ie
 master-us-east-1a.masters.df86c4e8-pachydermcluster.kubernetes.com: vol-0f0e841d0cc657002 (20),vol-06fb03280cf2598fb (20),vol-0e7ef0896b234db53 (64)
 nodes.df86c4e8-pachydermcluster.kubernetes.com: vol-012367900cd8dae8c (128)
@@ -32,7 +33,25 @@ box00.gpubox.0: vol-0c69c68295a89cde5 (50)
       volume_strs.append("%s (%s)"%(v.id, v.size))
     print("%s: %s" % (u.get_name(instance.tags), ','.join(volume_strs)))
 
+def list_ebss():
+  """."""
 
+  ec2 = u.create_ec2_resource()
+
+  volumes = list(ec2.volumes.all())
+  for vol in volumes:
+    vol_name = u.get_name(vol)
+    if not vol_name:
+      vol_name = vol.id
+    if vol.attachments:
+      instance_id = vol.attachments[0]["InstanceId"]
+      instance=ec2.Instance(instance_id)
+      attached_to = u.get_name(instance)
+    else:
+      attached_to = '<unattached>'
+
+    print("%25s %s %s"%(vol_name, vol.availability_zone, attached_to))
+    
 def grow_ebs_for_task(task_fragment, target_size_gb):
   """Grows EBS volume for given task."""
 
