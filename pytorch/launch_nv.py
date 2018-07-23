@@ -96,6 +96,15 @@ x_args_128 = [
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
+x2_args = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 50,
+  '--lr', 0.4 * 2,
+  '--init-bn0',
+  '--batch-sched', '192,192,128'
+]
+
+# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
 x4_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
   '--epochs', 50,
