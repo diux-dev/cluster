@@ -36,7 +36,8 @@ parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use")
 parser.add_argument('--ami-name', type=str,
-                    default='pytorch.imagenet.source.v2',
+                    default='',
+                    #default='pytorch.imagenet.source.v2',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help=("name of placement group to use (depecated, name "
