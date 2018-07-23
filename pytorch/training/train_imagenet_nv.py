@@ -232,7 +232,7 @@ def main():
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
         optimizer.load_state_dict(checkpoint['optimizer'])
 
-    print("Creating data loaders")
+    print("Creating data loaders (this could take 5-10 minutes)")
     dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
 
     start_time = datetime.now() # Loading start to after everything is loaded
