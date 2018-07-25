@@ -9,6 +9,10 @@ echo 'Starting script'
 sudo apt-get update
 sudo apt-get upgrade -y
 
+sudo apt install -y gdb
+sudo apt install -y nload
+sudo apt install -y htop
+
 # Change nccl to 9-1
 sed -i -e 's/cuda-9.0/cuda-9.1/g' ~/.bashrc
 source ~/.bashrc
