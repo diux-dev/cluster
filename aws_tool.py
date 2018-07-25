@@ -13,6 +13,7 @@ import util as u
 LIMIT_TO_KEY='nexus'
 
 def list_instances():
+  print("Region", u.get_region())
   ec2 = u.create_ec2_resource()
   instances = [(u.seconds_from_datetime(i.launch_time), i) for i in ec2.instances.all()]
   sorted_instances = sorted(instances, key=itemgetter(0))
