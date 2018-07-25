@@ -142,6 +142,16 @@ x8ar_args = [
   '--val-ar',
 ]
 
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+x8ar_args2 = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 40,
+  '--lr', 0.23 * 8,
+  '--init-bn0',
+  '--batch-sched', 128*2,
+  '--val-ar',
+]
+
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
 # python launch_nv.py --name yaro-friday-16 --num-tasks 16 --zone us-east-1c --params x16ar_args
 
