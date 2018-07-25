@@ -2,6 +2,8 @@
 # Tools for EFS related tasks
 # By default, lists all volumes, along with their availability zones and attacment points
 
+# TODO: clone tool to create clones of an EBS disk
+
 import boto3
 import sys
 import os
@@ -43,12 +45,14 @@ def list_ebss():
     vol_name = u.get_name(vol)
     if not vol_name:
       vol_name = vol.id
+    attached_to = []
     if vol.attachments:
-      instance_id = vol.attachments[0]["InstanceId"]
-      instance=ec2.Instance(instance_id)
-      attached_to = u.get_name(instance)
+      for attachment in vol.attachments:
+        instance_id = attachment["InstanceId"]
+        instance=ec2.Instance(instance_id)
+        attached_to.append(u.get_name(instance))
     else:
-      attached_to = '<unattached>'
+      attached_to.append('<unattached>')
 
     print("%25s %s %s"%(vol_name, vol.availability_zone, attached_to))
     
