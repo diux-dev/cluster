@@ -101,7 +101,6 @@ class DataPrefetcher():
             torch.cuda.current_stream().wait_stream(self.stream)
             input = self.next_input
             target = self.next_target
-            self.preload()
             try: self.preload() # 0.5 fix
             except Exception as e:
                 yield input, target
