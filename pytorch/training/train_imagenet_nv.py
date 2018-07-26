@@ -429,8 +429,7 @@ def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename
         'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
     }
     torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, f'{args.save_dir}/{filename}')
+    if is_best: shutil.copyfile(filename, f'{args.save_dir}/{filename}')
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

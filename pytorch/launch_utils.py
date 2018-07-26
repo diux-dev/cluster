@@ -67,7 +67,7 @@ def get_ebs_settings(use_iops):
 def get_nccl_args(num_tasks, num_gpus):
   if num_tasks <= 1: return 'NCCL_DEBUG=VERSION'
   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
-  return f'NCCL_RINGS="{nccl_rings}" NCCL_DEBUG=VERSION'
+  return f'NCCL_RINGS="{nccl_rings}" NCCL_SINGLE_RING_THRESHOLD=10 NCCL_DEBUG=VERSION'
 
 def get_nccl_rings(num_tasks, num_gpus):
   ring = build_ring_order(range(num_tasks), range(num_gpus))
@@ -78,7 +78,7 @@ def get_nccl_rings(num_tasks, num_gpus):
     # step size of 3 yields - [0,3,6,1,4,7,2,5]
     skip_machine_order = [(i*skip_step)%num_tasks for i in range(num_tasks)]
     ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
-    ring_skip_rev = build_ring_order(reversed(skip_machine_order), rotated_gpu_order)
+    ring_skip_rev = build_ring_order(reversed(skip_machine_order), reversed(rotated_gpu_order))
     rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
   elif num_tasks == 4:
     ring_skip = build_ring_order([0,2,1,3], rotated_gpu_order)

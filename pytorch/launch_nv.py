@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# export ami="Deep Learning AMI (Ubuntu) Version 11.0"
+# export ami="Deep Learning AMI (Ubuntu) Version 12.0"
 # 1 machine training
 # python launch_nv.py --name test --num-tasks 1 --zone us-west-2c --spot
 #
@@ -37,7 +37,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use")
 parser.add_argument('--ami-name', type=str,
                     default='',
-                    #default='pytorch.imagenet.source.v2',
+                    #default='pytorch.imagenet.source.v3',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help=("name of placement group to use (depecated, name "
