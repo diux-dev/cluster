@@ -6,6 +6,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
+from tensorboardX import SummaryWriter
+import time
+
+# values get saved to this dir, then run tensorboard --logdir/tmp/runs
+run_name = str(int(time.time()-1532629491))
+writer = SummaryWriter('/tmp/runs/'+run_name)
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -24,9 +31,13 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+global_step = 0
+
 def train(args, model, device, train_loader, optimizer, epoch):
+    global global_step
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
+        global_step+=1
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -34,6 +45,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
+            writer.add_scalar("loss", loss.item(), global_step)
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
@@ -62,7 +74,7 @@ def main():
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
+    parser.add_argument('--epochs', type=int, default=1, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                         help='learning rate (default: 0.01)')
@@ -104,6 +116,9 @@ def main():
         train(args, model, device, train_loader, optimizer, epoch)
         test(args, model, device, test_loader)
 
+
+    writer.export_scalars_to_json("/tmp/runs/"+run_name+".json")
+    writer.close()
 
 if __name__ == '__main__':
     main()
