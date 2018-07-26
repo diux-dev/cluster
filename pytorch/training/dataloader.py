@@ -83,10 +83,10 @@ class DataPrefetcher():
         self.next_input, self.next_target = next(self.loaditer)
         with torch.cuda.stream(self.stream):
             self.next_input = self.process_input(self.next_input)
-            self.next_target = self.next_target.cuda(async=True)
+            self.next_target = self.next_target.cuda(non_blocking=True)
     
-    def process_input(self, input, async=True):
-        input = input.cuda(async=async)
+    def process_input(self, input, non_blocking=True):
+        input = input.cuda(non_blocking=non_blocking)
         if self.fp16: input = input.half()
         else: input = input.float()
         if len(input.shape) < 3: return input
@@ -102,6 +102,10 @@ class DataPrefetcher():
             input = self.next_input
             target = self.next_target
             self.preload()
+            try: self.preload() # 0.5 fix
+            except Exception as e:
+                yield input, target
+                break
             yield input, target
 
 
