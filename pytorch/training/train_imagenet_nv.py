@@ -194,9 +194,10 @@ def main():
     # such as logging and checkpointing
     # $RANK is set by pytorch.distributed.launch
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
-    global is_chief, event_writer
+    global is_chief, event_writer, global_step
     is_chief = int(os.environ['RANK'])==0
 
+    global_step = 0
     if is_chief:
       if os.path.exists(args.logdir):
         print("Warning, logging directory already exists.")
@@ -290,7 +291,6 @@ def to_python_float(t):
         return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
-    global_step = 0
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
