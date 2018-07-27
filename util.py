@@ -523,6 +523,8 @@ def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
     spot_args['SpotPrice'] = spot_price
     spot_args['InstanceCount'] = num_tasks
     spot_args['ValidUntil'] = now + dt.timedelta(minutes=expiration_mins)
+    spot_args['InstanceInterruptionBehavior']='stop'
+    
     print(launch_specs)
 
     spot_requests = ec2c.request_spot_instances(**spot_args)
