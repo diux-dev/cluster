@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import print_function
 import argparse
 import torch
@@ -9,9 +10,6 @@ from torchvision import datasets, transforms
 from tensorboardX import SummaryWriter
 import time
 
-# values get saved to this dir, then run tensorboard --logdir/tmp/runs
-run_name = str(int(time.time()-1532629491))
-writer = SummaryWriter('/tmp/runs/'+run_name)
 
 class Net(nn.Module):
     def __init__(self):
@@ -32,9 +30,10 @@ class Net(nn.Module):
         return F.log_softmax(x, dim=1)
 
 global_step = 0
+writer = None
 
 def train(args, model, device, train_loader, optimizer, epoch):
-    global global_step
+    global global_step, writer
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         global_step+=1
@@ -68,6 +67,8 @@ def test(args, model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
 
 def main():
+    global writer
+    
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
@@ -86,8 +87,14 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--logdir', type=str, default='/tmp/logdir')
+
+
+
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
+
+    writer = SummaryWriter(args.logdir)
 
     torch.manual_seed(args.seed)
 
@@ -117,7 +124,7 @@ def main():
         test(args, model, device, test_loader)
 
 
-    writer.export_scalars_to_json("/tmp/runs/"+run_name+".json")
+    writer.export_scalars_to_json(args.logdir+'/scalars.json')
     writer.close()
 
 if __name__ == '__main__':
