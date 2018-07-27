@@ -373,7 +373,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
         if is_chief and should_print:
-            event_writer.add_scalar("time", batch_time.val, global_step)
+            event_writer.add_scalar("time", 1000*batch_time.val, global_step)
 
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
