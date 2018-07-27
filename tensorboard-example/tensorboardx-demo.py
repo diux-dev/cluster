@@ -19,6 +19,9 @@ for n_iter in range(100):
     writer.add_scalar('data/scalar1', dummy_s1[0], n_iter)
     writer.add_scalar('data/scalar2', dummy_s2[0], n_iter)
 
+# scalar group puts things into different runs
+#    don't use scalar_group: https://github.com/lanpa/tensorboardX/issues/195
+
 #    writer.add_scalars('data/scalar_group', {'xsinx': n_iter * np.sin(n_iter),
 #                                             'xcosx': n_iter * np.cos(n_iter),
 #                                             'arctanx': np.arctan(n_iter)}, n_iter)
@@ -50,5 +53,6 @@ features = images.view(100, 784)
 writer.add_embedding(features, metadata=label, label_img=images.unsqueeze(1))
 
 # export scalar data to JSON for external processing
+# json saving doesn't work https://github.com/lanpa/tensorboardX/issues/196
 writer.export_scalars_to_json("./all_scalars.json")
 writer.close()
