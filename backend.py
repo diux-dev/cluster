@@ -11,6 +11,9 @@ import util as u
 # aws_backend.py
 # tmux_backend.py
 
+LOGDIR_PREFIX='/efs/runs'
+
+
 """
 backend = aws_backend # alternatively, backend=tmux_backend to launch jobs locally in separate tmux sessions
 run = backend.make_run("helloworld")  # sets up /efs/runs/helloworld
@@ -54,11 +57,6 @@ class Run:
     install_script associated with the Run."""
     raise NotImplementedError()
   
-
-  @property
-  def logdir(self):
-    """Location of shared files, ie /efs/runs/attemp1"""
-    raise NotImplementedError()
 
   def run(self, *args, **kwargs):
     """Runs command on every job in the run."""

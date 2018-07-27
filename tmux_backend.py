@@ -1,5 +1,6 @@
 # Local implementation of backend.py using separate tmux sessions for jobs
 
+import datetime
 import glob
 import os
 import subprocess
@@ -15,7 +16,6 @@ import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-LOGDIR_PREFIX='/efs/runs'
 
 # TODO: use separate session for each task, for parity with AWS job launcher
 
@@ -32,6 +32,7 @@ class Run(backend.Run):
     self.name = name
     self.install_script = install_script
     self.jobs = []
+    self.logdir = f'{backend.LOGDIR_PREFIX}/{self.name}'
 
   # TODO: rename job_name to role_name
   def make_job(self, job_name, num_tasks=1, install_script='', **kwargs):
@@ -58,11 +59,14 @@ class Run(backend.Run):
     self.jobs.append(job)
     return job
 
-  @property
-  def logdir(self):
-    return LOGDIR_PREFIX+'/'+self.name
-
-
+  def setup_logdir(self):
+    if os.path.exists(self.logdir):
+      datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+      new_logdir = f'{backend.LOGDIR_PREFIX}/{self.name}.{datestr}'
+      self.log(f'Warning, logdir {self.logdir} exists, deduping to {new_logdir}')
+      self.logdir = new_logdir
+    os.makedirs(self.logdir)
+        
 class Job(backend.Job):
   def __init__(self, run, name, tmux_windows, install_script=''):
     self._run = run
