@@ -523,7 +523,8 @@ def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
     spot_args['SpotPrice'] = spot_price
     spot_args['InstanceCount'] = num_tasks
     spot_args['ValidUntil'] = now + dt.timedelta(minutes=expiration_mins)
-    spot_args['InstanceInterruptionBehavior']='stop'
+    # "stop" doesn't seem to be supported for spot instances
+    # spot_args['InstanceInterruptionBehavior']='stop'
     
     print(launch_specs)
 
