@@ -504,7 +504,11 @@ def wait_on_fulfillment(ec2c, reqs):
       return instance_id
     return [get_instance_id(req) for req in reqs]
 
-def create_spot_instances(launch_specs, spot_price=25):
+def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
+    """Args
+      expiration_mins: this request only valid for this many mins from now
+    """
+
     spot_price = str(spot_price)
 
     ec2c = create_ec2_client()
@@ -512,12 +516,19 @@ def create_spot_instances(launch_specs, spot_price=25):
     del launch_specs['MinCount']
     del launch_specs['MaxCount']
 
+
+    import pytz      # datetime is not timezone aware, use pytz to fix
+    import datetime as dt
+    now = dt.datetime.utcnow().replace(tzinfo=pytz.utc)
+
+    spot_args = {}
+    spot_args['LaunchSpecification'] = launch_specs
+    spot_args['SpotPrice'] = spot_price
+    spot_args['InstanceCount'] = num_tasks
+    spot_args['ValidUntil'] = now + dt.timedelta(minutes=expiration_mins)
     print(launch_specs)
 
-    if spot_price is None:
-      spot_requests = ec2c.request_spot_instances(LaunchSpecification=launch_specs, InstanceCount=num_tasks)    
-    else:
-      spot_requests = ec2c.request_spot_instances(SpotPrice=spot_price, LaunchSpecification=launch_specs, InstanceCount=num_tasks)
+    spot_requests = ec2c.request_spot_instances(**spot_args)
     spot_requests = spot_requests['SpotInstanceRequests']
     instance_ids = wait_on_fulfillment(ec2c, spot_requests)
     for i in instance_ids: 
