@@ -68,8 +68,8 @@ parser.add_argument('--attach-volume', type=str, default=None,
                     help='tag name of ebs volume to attach')
 parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
-parser.add_argument('--mount-efs', action='store_true',
-                    help='Mount efs. For loading imagenet')
+parser.add_argument('--skip-efs-mount', action='store_true',
+                    help='skip mounting EFS for speed')
 parser.add_argument('--params', type=str, default="x4_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
@@ -181,8 +181,9 @@ def main():
                              ami_name=args.ami_name,
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
-                             skip_efs_mount=(not args.mount_efs))
+                             skip_efs_mount=args.skip_efs_mount)
   job = create_job(run, 'worker', args.num_tasks)
+  run.setup_logdir()
 
   # Define custom params for training or use a preset above
   # TODO: move "save_tag" into command-line parameter
@@ -191,6 +192,8 @@ def main():
 
 
 def create_job(run, job_name, num_tasks):
+  """Creates job, blocks until job is ready."""
+  
   install_script = ''
   if args.install_script:
     with open(args.install_script, 'r') as f:
@@ -216,6 +219,7 @@ def create_job(run, job_name, num_tasks):
 
   job.run_async_join('killall python || echo failed')  # kill previous run
   job.run_async_join('source activate pytorch_p36')
+  job.run_async_join('pip install tensorboardX')
   # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
 
@@ -266,6 +270,7 @@ def start_training(job, params, save_tag):
     '--distributed'
   ]
   training_args = default_params + params
+  training_args = training_args + ["--logdir", job.logdir]
   training_args = ' '.join(map(str, training_args))
 
   # Run tasks

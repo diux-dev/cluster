@@ -146,6 +146,10 @@ class Job:
   def connect_instructions(self):
     return self.tasks[0].connect_instructions
 
+  @property
+  def logdir(self):
+    return self._run.logdir
+
     
 class Task:
   def run(self, cmd, sync, ignore_errors):
@@ -195,6 +199,11 @@ class Task:
     tasks run on a different network than user (ie, AWS internal vs. user's
     laptop)"""
     raise NotImplementedError()
+
+  @property
+  def logdir(self):
+    return self.job.logdir
+
     
   
   @property

@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import sys
+import os
 import math
 
 import torch
@@ -15,6 +16,8 @@ import torch.distributed as dist
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
+
+from tensorboardX import SummaryWriter
 
 # import models
 from fp16util import *
@@ -69,6 +72,8 @@ def get_parser():
     parser.add_argument('--local_rank', default=0, type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                         'or automatically set by using \'python -m multiproc\'.')
+    parser.add_argument('--logdir', default='', type=str,
+                        help='where logs go')
     return parser
 
 cudnn.benchmark = True
@@ -185,6 +190,19 @@ def init_dist_weights(model):
                 m.weight.data.normal_(0, 0.01)
 
 def main():
+    # is_chief indicates this machine will do shared tasks for the cluster
+    # such as logging and checkpointing
+    # $RANK is set by pytorch.distributed.launch
+    # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
+    global is_chief, event_writer
+    is_chief = int(os.environ['RANK'])==0
+
+    if is_chief:
+      if os.path.exists(args.logdir):
+        print("Warning, logging directory already exists.")
+      print(f"Creating event writer for directory {args.logdir}")
+      event_writer = SummaryWriter(args.logdir)
+      
     print(args)
     print("~~epoch\thours\ttop1Accuracy\n")
 
@@ -255,6 +273,11 @@ def main():
                 save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz128_checkpoint.path.tar')
             elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
                 save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz244_checkpoint.path.tar')
+
+    if is_chief:
+        event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
+        event_writer.close()
+
     
 def str_to_num_array(argstr, num_type=float):
     return [num_type(s) for s in argstr.split(',')]
@@ -267,6 +290,7 @@ def to_python_float(t):
         return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
+    global_step = 0
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -312,6 +336,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         # compute gradient and do SGD step
         # if i == 0: print('Evaluate and loss:', time.time()-st)
 
+        global_step+=1
         if args.fp16:
             model.zero_grad()
             loss.backward()
@@ -343,11 +368,16 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
                     epoch, batch_num, trn_len, batch_time=batch_time,
                     data_time=data_time, loss=losses, top1=top1, top5=top5)
             print(output)
+            print(is_chief)
+            print(os.environ['RANK'])
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
+        if is_chief and should_print:
+            event_writer.add_scalar("time", batch_time.val, global_step)
 
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
+
     
 def validate(val_loader, model, criterion, epoch, start_time):
     batch_time = AverageMeter()

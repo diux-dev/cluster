@@ -79,8 +79,10 @@ def main():
     print("no instance id contains fragment '%s'"%(fragment,))
     return
 
+  # connect to most recent instance
+  print(filtered_instance_list)
   instance = filtered_instance_list[0]
-  print("Found instance ", u.get_name(instance),
+  print("Connecting to ", u.get_name(instance),
         " launched ", instance.launch_time.astimezone(get_localzone()))
   cmd = ''
   keypair_fn = u.get_keypair_fn(instance.key_name)
