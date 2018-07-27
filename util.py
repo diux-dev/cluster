@@ -899,3 +899,16 @@ def random_id(N=5):
   """Random id to use for AWS identifiers."""
   #  https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
   return ''.join(random.choices(string.ascii_lowercase + string.digits, k=N))
+
+def validate_name(name):
+  """Checks that name matches AWS requirements."""
+  
+  # run name is used in tmux session name and instance name, so must restrict
+  # run name to also be valid part of tmux/instance names
+  # -Maximum number of tags per resource—50
+  # -Maximum key length—127 Unicode characters in UTF-8
+  # -Maximum value length—255 Unicode characters in UTF-8
+  # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
+  import re
+  assert len(name)<30
+  assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)

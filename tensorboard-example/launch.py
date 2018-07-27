@@ -56,9 +56,10 @@ def main():
                          availability_zone=args.zone)
   job1 = run.make_job('worker', instance_type=args.instance_type)
   job2 = run.make_job('tb', instance_type=args.tb_instance_type)
-  run.setup_logdir()
 
   job1.wait_until_ready()
+  run.setup_logdir()
+  
   job1.upload('pytorch-mnist-example.py')
   job1.run('source activate pytorch_p36')
   job1.run('pip install tensorboardX')

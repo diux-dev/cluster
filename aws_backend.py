@@ -7,12 +7,12 @@ import os
 import shlex
 import sys
 import time
+import datetime
 
 import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-LOGDIR_PREFIX='/efs/runs'
 TIMEOUT_SEC=5
 MAX_RETRIES = 10
 DEFAULT_PORT=3000  # port used for task internal communication
@@ -37,15 +37,8 @@ class Run(backend.Run):
   def __init__(self, name, **kwargs):
     self.name = name
 
-    # run name is used in tmux session name and instance name, so must restrict
-    # run name to also be valid part of tmux/instance names
-    # -Maximum number of tags per resource—50
-    # -Maximum key length—127 Unicode characters in UTF-8
-    # -Maximum value length—255 Unicode characters in UTF-8
-    # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
-    import re
-    assert len(name)<30
-    assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
+    self.logdir = f'{backend.LOGDIR_PREFIX}/{self.name}'
+    u.validate_name(name)
     
     self.kwargs = kwargs
     self.jobs = []
@@ -149,9 +142,21 @@ class Run(backend.Run):
     self.jobs.append(job)
     return job
 
-  @property
-  def logdir(self):
-    return LOGDIR_PREFIX+'/'+self.name
+
+  def setup_logdir(self):
+    """Create logdir (using first task of first job)."""
+    assert self.jobs
+    head_job = self.jobs[0]
+    assert head_job.tasks
+    head_task = head_job.tasks[0]
+    assert head_task.initialized, "Head task not initialized, must wait_until_ready"
+
+    if head_task.file_exists(self.logdir):
+      datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+      new_logdir = f'{backend.LOGDIR_PREFIX}/{self.name}.{datestr}'
+      self.log(f'Warning, logdir {self.logdir} exists, deduping to {new_logdir}')
+      self.logdir = new_logdir
+    head_task.run(f'mkdir -p {self.logdir}')
 
 
 class Job(backend.Job):
@@ -202,8 +207,9 @@ class Task(backend.Task):
     self.cached_ip = None
     self.cached_public_ip = None
     self.skip_efs_mount = skip_efs_mount
-    
-    self.initialized = False
+
+    # TODO, make below actually mean stuff (also, run_command_available)
+    self.initialized = False 
 
     # scratch is client-local space for temporary files
     self.scratch = "{}/{}.{}.{}.{}/scratch".format(TASKDIR_PREFIX,
@@ -302,8 +308,10 @@ class Task(backend.Task):
 ssh -i %s -o StrictHostKeyChecking=no %s@%s
 tmux a
 """.strip() % (self.keypair_fn, self.username, self.public_ip)
+    self.initialized = True
     self.log("Initialize complete")
     self.log(self.connect_instructions)
+
 
 
   # todo: rename wait_until_ready to wait_until_initialized
