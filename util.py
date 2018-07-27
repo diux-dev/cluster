@@ -27,6 +27,8 @@ WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
 
+LOGDIR_ROOT = '/efs/runs'  # where all logs go, should be globally constant
+
 def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
