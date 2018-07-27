@@ -78,7 +78,7 @@ def main():
     return
 
   action = 'soft terminate' if args.soft else 'terminate'
-  answer = input("%d instances found, %s in %s? (Y/n) " % (len(instances_to_kill), action, region))
+  answer = input("%d instances found, %s in %s? (y/N) " % (len(instances_to_kill), action, region))
   if not answer:
     answer = "y"
   if answer.lower() == "y":
