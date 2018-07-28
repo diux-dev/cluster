@@ -22,29 +22,53 @@ def get_gpu_count(instance):
   return gpu_count[instance.instance_type]
 
 # EBS Utils
+ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset):
   for i,t in enumerate(job.tasks):
     attach_instance_ebs(t.instance, f'{tag}_{i+offset}')
   job.run_async_join('sudo mkdir data -p')
-  job.run_async_join('sudo mount /dev/xvdf data', ignore_errors=True)
+  while True:
+    try:
+      # run_async doesn't propagate exceptions raised on workers, use regular
+      #      job.run_async_join('sudo mount /dev/xvdf data')
+      job.run('sudo umount /dev/xvdf || echo "ignored unmount error"')
+      job.run('sudo mount /dev/xvdf data')
+    except Exception as e:
+      print(f'Mount failed with: ({e})')
+      print(f'Retrying in {ATTACH_WAIT_INTERVAL_SEC}')
+      time.sleep(ATTACH_WAIT_INTERVAL_SEC)
+      continue
+    else:
+      print(f'Mount successful')
+      break
+    
   job.run_async_join('sudo chown `whoami` data')
-  
+
 def attach_instance_ebs(aws_instance, tag):
+  """Attaches volume to instance. Will try to detach volume if it's already mounted somewhere else. Will retry indefinitely on error."""
+  
   ec2 = util.create_ec2_resource()
   v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
   assert(v)
   v = v[0]
   already_attached = v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id
-  if already_attached: return
+  if already_attached:
+    print(f'volume {v} already attached')
+    return
   if v.state != 'available': 
-    print('Detaching from current instance')
-    v.detach_from_instance()
-    time.sleep(7)
-  try:
-    v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
-  except Exception as e:
-    print('Error attaching volume. Continuing...', e)
-  time.sleep(3)
+    response = v.detach_from_instance()
+    print(f'Detaching from current instance: response={response.get("State", "none")}')
+  while True:
+    try:
+      response = v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+      print(f'Attaching to current instance: response={response.get("State", "none")}')
+    except Exception as e:
+      print(f'Error attaching volume: ({e}). Retrying in {ATTACH_WAIT_INTERVAL_SEC}', e)
+      time.sleep(ATTACH_WAIT_INTERVAL_SEC)
+      continue
+    else:
+      print('Attachment successful')
+      break
 
 def get_ebs_settings(use_iops):
   ebs = {

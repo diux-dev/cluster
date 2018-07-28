@@ -120,6 +120,7 @@ class Job:
     def t_upload(t): t.upload(*args, **kwargs)
     self.async_join(t_upload)
 
+  # TODO: this should propagate exceptions raised in worker threads
   def async_join(self, task_fn):
     t_threads = [threading.Thread(name=f't_{i}', target=task_fn, args=[t]) for i,t in enumerate(self.tasks)]
     for thread in t_threads: thread.start()
