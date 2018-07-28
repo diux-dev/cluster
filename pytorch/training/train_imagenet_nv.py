@@ -291,6 +291,8 @@ def to_python_float(t):
         return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
+    global global_step
+    
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
