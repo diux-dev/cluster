@@ -167,6 +167,10 @@ class Task(backend.Task):
       else:
         self.log("Warning: command %s returned status %s"%(cmd, contents))
 
+  def _run_raw(self, cmd):
+    """Runs command directly, skipping tmux interface. Use if want to create additional tmux sessions manually."""
+    self._ossystem(cmd)
+    
  
   def upload(self, source_fn, target_fn='.'):
     #    self.log("uploading %s to %s"%(source_fn, target_fn))

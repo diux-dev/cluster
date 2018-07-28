@@ -104,6 +104,8 @@ class Run(backend.Run):
       # storage setup
       if ebs: args['BlockDeviceMappings'] = ebs
       # network setup
+      # TODO: get rid of zone? Zone seems to be required for constructor
+      # that allows to enable AssociatePublicIpAddress field
       args['NetworkInterfaces'] = [{'SubnetId': subnet.id,
                                     'DeviceIndex': 0,
                                     'AssociatePublicIpAddress': True,
@@ -436,6 +438,8 @@ tmux a
         
     return stdout_str, stderr_str
 
+  def _run_raw(self, cmd):
+    return self._run_ssh(cmd)
 
   # todo: transition to higher-level SshClient instead of paramiko.SSHClient
   def run(self, cmd, sync=True, ignore_errors=False,

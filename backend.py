@@ -64,6 +64,12 @@ class Run:
     for job in self.jobs:
       job.run(*args, **kwargs)
 
+  def _run_raw(self, *args, **kwargs):
+    """_run_raw on every job in the run."""
+    
+    for job in self.jobs:
+      job._run_raw(*args, **kwargs)
+
       
   def upload(self, *args, **kwargs):
     
@@ -93,6 +99,11 @@ class Job:
 
     for task in self.tasks:
       task.run(cmd, *args, **kwargs)
+
+  def _run_raw(self, *args, **kwargs):
+    """_run_raw on every task in the job."""
+    for task in self.tasks:
+      task._run_raw(*args, **kwargs)
 
   def run_async_join(self, cmd, *args, **kwargs):
     """Runs command on every task in the job async. Then waits for all to finish"""
@@ -154,6 +165,10 @@ class Job:
 class Task:
   def run(self, cmd, sync, ignore_errors):
     """Runs command on given task."""
+    raise NotImplementedError()    
+
+  def _run_raw(self, cmd, sync, ignore_errors):
+    """Runs command directly on every task in the job, skipping tmux interface. Use if want to create/manage additional tmux sessions manually."""
     raise NotImplementedError()    
 
   def run_async(self, cmd, *args, **kwargs):
