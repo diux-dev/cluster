@@ -199,9 +199,7 @@ def main():
 
     global_step = 0
     if is_chief:
-      if os.path.exists(args.logdir):
-        print("Warning, logging directory already exists.")
-      print(f"Creating event writer for directory {args.logdir}")
+      print(f"Logging to {args.logdir}")
       event_writer = SummaryWriter(args.logdir)
       
     print(args)
