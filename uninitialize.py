@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 """
 
-Script to unitialize a list of instances
+Script to unitialize a list of instances.
+Example usage
+
+# unitialize all instances with name containing "baseline"
+uninitialize baseline
+
 """
 
 # todo: allow to do ls, show tags
@@ -52,7 +57,8 @@ def main():
       ssh_client = u.SshClient(hostname=instance.public_ip_address,
                                ssh_key=key_file,
                                username=username)
-      ssh_client.run('rm /tmp/is_initialized')
+      ssh_client.run('rm /tmp/is_initialized || echo "failed 1"')
+      ssh_client.run('rm /tmp/nv_setup_complete || echo "failed 2"')
       ssh_client.run('rm *.sh')  # remove install scripts
 
 

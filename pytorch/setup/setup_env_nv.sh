@@ -1,31 +1,39 @@
 #!/bin/bash
 
 # ImageNet training setup script for DLAMI + p3 instance
-# (tested on "Deep Learning AMI (Ubuntu) Version 11.0")
+# (tested on "Deep Learning AMI (Ubuntu) Version 12.0")
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
   
 echo 'Starting script'
 
+echo '> update'
 sudo apt-get update
 sudo apt-get upgrade -y
 
+echo '> gdb'
 sudo apt install -y gdb
+echo '> nload'
 sudo apt install -y nload
+echo '> htop'
 sudo apt install -y htop
 
 # Change nccl to 9-1
 sed -i -e 's/cuda-9.0/cuda-9.2/g' ~/.bashrc
 source ~/.bashrc
 
+echo '>pytorch'
 conda install pytorch torchvision cuda91 -c pytorch -y
+echo '>tqdm'
 conda install tqdm -y
 
 # index file used to speed up evaluation
+echo '>indices'
 pushd ~/data/imagenet 
 wget --no-clobber https://s3.amazonaws.com/yaroslavvb/sorted_idxar.p
 popd
 
 # Installing through pip is faster than following this https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
+echo '>pillow'
 pip uninstall pillow -y
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 
@@ -54,6 +62,7 @@ if [ ! -d "$DATA_DIR" ]; then
 fi
 
 if [ ! -d "$DATA_DIR/imagenet" ]; then
+    echo '>imagenet'
     cd $DATA_DIR
     # cat get those files from
     # wget https://s3.amazonaws.com/yaroslavvb/imagenet-data-sorted.tar
