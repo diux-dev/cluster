@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # launch TensorBoard/monitoring server for runs
 # Run
 # ./launch.py
