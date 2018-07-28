@@ -7,8 +7,9 @@
 echo 'Starting script'
 
 echo '> update'
-sudo apt-get update
-sudo apt-get upgrade -y
+# Turn off apt-get update for now, since using recent DLAMI 12
+# sudo apt-get update
+# sudo apt-get upgrade -y
 
 echo '> gdb'
 sudo apt install -y gdb
