@@ -14,6 +14,8 @@
 # export AWS_DEFAULT_REGION=us-east-1
 # ./launch_nv.py --name yaro16 --num-tasks 16 --zone us-east-1c --params x16ar_args
 
+DATA_ROOT='/home/ubuntu/data' # location where attached EBS "data" volume is mounted
+
 from collections import OrderedDict
 import argparse
 import os
@@ -66,6 +68,9 @@ parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default=None,
                     help='tag name of ebs volume to attach')
+parser.add_argument('--use-local-conda', type=int, default=0,
+                    help=('use local conda installation (for initial setup, see'
+                          'recipes.md)'))
 parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
 parser.add_argument('--skip-efs-mount', action='store_true',
@@ -215,10 +220,21 @@ def create_job(run, job_name, num_tasks):
   job.wait_until_ready()
   print(job.connect_instructions)
 
-  if args.attach_volume: mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
+  # mount_volume hardcoded to use data now
+  # TODO: this should be global setting/constant instead
+  assert DATA_ROOT.endswith('/data')
+  if args.attach_volume:
+    mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
 
   job.run_async_join('killall python || echo failed')  # kill previous run
-  job.run_async_join('source activate pytorch_p36')
+  if not args.use_local_conda:
+    job.run_async_join('source activate pytorch_p36')
+  else:
+    #    job.run_async_join('source activate pytorch_p36')
+    # enable conda command
+    job.run_async_join('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
+    job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/pytorch_p36')
+
   job.run_async_join('pip install tensorboardX')
   # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
@@ -254,6 +270,7 @@ def start_training(job, params, save_tag):
   nccl_args = get_nccl_args(num_tasks, num_gpus)
 
   # Create save directory
+  # TODO: replace with DATA_ROOT? ~ is not understood by all programs
   base_save_dir = '~/data/training/nv'
   datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
   # base_save_dir = f'/efs/training/nv' # TODO: save to efs instead
