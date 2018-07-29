@@ -69,14 +69,22 @@ def main():
 
   # launch jupyter notebook server
   job.upload('jupyter_notebook_config.py') # don't know ~ => upload in 2 steps
+  run_tmux('cp jupyter_notebook_config.py ~/.jupyter')
 
   def run_tmux(cmd):   # run command in "jupyter" tmux session
     job._run_raw(f'tmux send-keys -t jupyter:0 "{cmd}" Enter')
     
   job._run_raw('tmux kill-session -t jupyter')
   job._run_raw('tmux new-session -s jupyter -n 0 -d')
-  run_tmux('cp jupyter_notebook_config.py ~/.jupyter')
   run_tmux('source activate tensorflow_p36')
+  run_tmux('conda activate tensorflow_p36')
+
+  # install table of contents extensions
+  run_tmux('fuser 8888/tcp -k')
+  run_tmux('conda install -c conda-forge jupyter_nbextensions_configurator -y')
+  run_tmux('conda install -c conda-forge jupyter_contrib_nbextensions -y')
+
+  # start notebook server
   run_tmux('mkdir -p /efs/notebooks')
   run_tmux('cd /efs/notebooks')
   run_tmux('jupyter notebook')
