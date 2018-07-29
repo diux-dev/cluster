@@ -42,23 +42,48 @@ def main():
   run = backend.make_run(args.name,
                          ami_name=args.ami_name,
                          availability_zone=args.zone)
-  tb_job = run.make_job('tb', instance_type=args.instance_type)
-  tb_job.wait_until_ready()
-  tb_job.run('source activate tensorflow_p36')
-  tb_job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006')
-  print(f'Tensorboard will be at http://{tb_job.public_ip}:6006')
+  job = run.make_job('tb', instance_type=args.instance_type)
+  job.wait_until_ready()
+
+  job.run('source activate tensorflow_p36')
+  job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006')
+  print(f'Tensorboard will be at http://{job.public_ip}:6006')
 
   # run second Tensorboard in new tmux session for "selected runs"
   # to select runs,
   # on instance, do "ln -s /efs/runs/<run_name> /efs/runs.selected/<run_name>
   # (must use abspath for ln -s left hand side for linking to work)
-  selected_logdir = backend_lib.LOGDIR_PREFIX+'.selected'
-  tb_job._run_raw("tmux kill-session -t selected")
-  tb_job._run_raw("tmux new-session -s selected -n 0 -d")
-  tb_job._run_raw("tmux send-keys -t selected:0 'source activate tensorflow_p36' Enter")
-  tb_job._run_raw(f"tmux send-keys -t selected:0 'tensorboard --logdir {selected_logdir} --port=6007' Enter")
 
-  print(f'Tensorboard selected will be at http://{tb_job.public_ip}:6007')
+  
+  # TODO: maybe replace "run_tmux" with task.run_tmux(name, cmd)
+
+  def run_tmux(cmd):   # run command in "selected" tmux session
+    job._run_raw(f'tmux send-keys -t selected:0 "{cmd}" Enter')
+
+  selected_logdir = backend_lib.LOGDIR_PREFIX+'.selected'
+  job._run_raw("tmux kill-session -t selected")
+  job._run_raw("tmux new-session -s selected -n 0 -d")
+  run_tmux('source activate tensorflow_p36')
+  run_tmux(f"tensorboard --logdir {selected_logdir} --port=6007")
+  print(f'Tensorboard selected will be at http://{job.public_ip}:6007')
+
+  # launch jupyter notebook server
+  job.upload('jupyter_notebook_config.py') # don't know ~ => upload in 2 steps
+
+  def run_tmux(cmd):   # run command in "jupyter" tmux session
+    job._run_raw(f'tmux send-keys -t jupyter:0 "{cmd}" Enter')
+    
+  job._run_raw('tmux kill-session -t jupyter')
+  job._run_raw('tmux new-session -s jupyter -n 0 -d')
+  run_tmux('cp jupyter_notebook_config.py ~/.jupyter')
+  run_tmux('source activate pytorch_p36')
+  run_tmux('mkdir -p /efs/notebooks')
+  run_tmux('cd /efs/notebooks')
+  run_tmux('jupyter notebook')
+
+  print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
+
+  
 
 
 if __name__=='__main__':
