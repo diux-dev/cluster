@@ -792,12 +792,18 @@ def seconds_from_datetime(dt):
   instance.launch_time:
      toseconds(instance.launch_time).
 
-  to invert:
+  to invert (assuming UTC timestamps):
      import pytz
      utc = pytz.UTC
      utc.localize(datetime.fromtimestamp(seconds))
   """
   return time.mktime(dt.utctimetuple())
+
+def datetime_from_seconds(seconds, timezone="US/Pacific"):
+  """
+  timezone: pytz timezone name to use for conversion, ie, UTC or US/Pacific
+  """
+  return dt.datetime.fromtimestamp(seconds, pytz.timezone(timezone))
 
 
 # augmented SFTP client that can transfer directories, from
