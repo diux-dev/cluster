@@ -31,10 +31,10 @@ def mount_volume_data(job, tag, offset):
     try:
       # run_async doesn't propagate exceptions raised on workers, use regular
       #      job.run_async_join('sudo mount /dev/xvdf data')
-      job.run('sudo umount /dev/xvdf || echo "ignored unmount error"')
+      job.run('sudo umount /dev/xvdf')
       job.run('sudo mount /dev/xvdf data')
     except Exception as e:
-      print(f'Mount failed with: ({e})')
+      print(f'(un)mount failed with: ({e})')
       print(f'Retrying in {ATTACH_WAIT_INTERVAL_SEC}')
       time.sleep(ATTACH_WAIT_INTERVAL_SEC)
       continue

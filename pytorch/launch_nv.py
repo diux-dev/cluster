@@ -220,13 +220,14 @@ def create_job(run, job_name, num_tasks):
   job.wait_until_ready()
   print(job.connect_instructions)
 
+  job.run_async_join('killall python || echo failed')  # kill previous run
+
   # mount_volume hardcoded to use data now
   # TODO: this should be global setting/constant instead
   assert DATA_ROOT.endswith('/data')
   if args.attach_volume:
     mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
 
-  job.run_async_join('killall python || echo failed')  # kill previous run
   if not args.use_local_conda:
     job.run_async_join('source activate pytorch_p36')
   else:
