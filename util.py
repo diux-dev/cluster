@@ -915,3 +915,10 @@ def validate_name(name):
   import re
   assert len(name)<30
   assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
+
+
+# no_op method/object to accept every signature
+def no_op(*args, **kwargs): pass
+class NoOp:
+  def __getattr__(self, *args):
+    return no_op

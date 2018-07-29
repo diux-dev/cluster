@@ -28,6 +28,14 @@ import resnet
 
 from dataloader import *
 
+
+# no_op method/object that accept every signature
+def no_op(*args, **kwargs): pass
+class NoOp:
+  def __getattr__(self, *args):
+    return no_op
+
+
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
@@ -114,9 +122,16 @@ class DataManager():
         
 
     def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
+        global last_batch_size, last_image_size
+        last_batch_size = batch_size  # save it for images/sec calculation
+        last_image_size = image_size
+        
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+valdir_prefix+'/validation'
         datainfo = f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nTrain Directory: {traindir}\nValidation Directory: {valdir}'
+        log_tb('image_size', image_size)
+        log_tb('batch_size', batch_size)
+
         return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), datainfo
 
 class Scheduler():
@@ -162,6 +177,7 @@ class Scheduler():
         lr = self.get_lr(epoch, batch_num, batch_tot)
         if (self.current_lr != lr) and ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
+            log_tb('lr', lr)
 
         self.current_lr = lr
         self.current_epoch = epoch
@@ -189,6 +205,10 @@ def init_dist_weights(model):
             if isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
 
+def log_tb(tag, val):
+  """Log value to tensorboard (relies on global_step being set properly)"""
+  event_writer.add_scalar(tag, val, global_step)
+  
 def main():
     # is_chief indicates this machine will do shared tasks for the cluster
     # such as logging and checkpointing
@@ -201,6 +221,8 @@ def main():
     if is_chief:
       print(f"Logging to {args.logdir}")
       event_writer = SummaryWriter(args.logdir)
+    else:
+      event_writer = NoOp()
       
     print(args)
     print("~~epoch\thours\ttop1Accuracy\n")
@@ -273,9 +295,8 @@ def main():
             elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
                 save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz244_checkpoint.path.tar')
 
-    if is_chief:
-        event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
-        event_writer.close()
+    event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
+    event_writer.close()
 
     
 def str_to_num_array(argstr, num_type=float):
@@ -354,7 +375,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         # if i == 0: print('Backward step:', time.time()-st)
         # measure elapsed time
         batch_time.update(time.time() - end)
-
         end = time.time()
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
@@ -372,11 +392,22 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             print(os.environ['RANK'])
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
-        if is_chief and should_print:
-            event_writer.add_scalar("time", 1000*batch_time.val, global_step)
+                
+            log_tb("batch_size", last_batch_size)
+            log_tb("time/step_ms", 1000*batch_time.val)
+            log_tb("time/data_ms", 1000*data_time.val)
+            log_tb("loss/loss", losses.val)
+            log_tb("loss/train_1", top1.val)
+            log_tb("loss/train_5", top5.val)
+            images_per_sec = last_batch_size/batch_time.val
+            pixels_per_sec = last_batch_size*last_image_size**2/batch_time.val
+            log_tb("time/1gpu_images_per_sec", images_per_sec)
+            log_tb("time/1gpu_pixels_per_sec_gpu", pixels_per_sec)
+            
 
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
+    shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
 
     
 def validate(val_loader, model, criterion, epoch, start_time):
@@ -385,6 +416,8 @@ def validate(val_loader, model, criterion, epoch, start_time):
     top1 = AverageMeter()
     top5 = AverageMeter()
 
+    eval_start_time = time.time()
+    
     model.eval()
     end = time.time()
     val_len = len(val_loader)
@@ -424,6 +457,12 @@ def validate(val_loader, model, criterion, epoch, start_time):
     time_diff = datetime.now()-start_time
     print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top5.avg:.3f}\n')
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
+    
+    log_tb('loss/test_1', top1.avg)
+    log_tb('loss/test_5', top5.avg)
+    log_tb('time/eval_sec', time.time()-eval_start_time)
+    log_tb('epoch', epoch)
+
 
     return top5.avg
 
