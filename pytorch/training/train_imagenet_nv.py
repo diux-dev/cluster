@@ -400,9 +400,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             log_tb("loss/train_1", top1.val)
             log_tb("loss/train_5", top5.val)
             images_per_sec = last_batch_size/batch_time.val
-            pixels_per_sec = last_batch_size*last_image_size**2/batch_time.val
             log_tb("time/1gpu_images_per_sec", images_per_sec)
-            log_tb("time/1gpu_pixels_per_sec_gpu", pixels_per_sec)
+            #pixels_per_sec = last_batch_size*last_image_size**2/batch_time.val
+            #log_tb("time/1gpu_pixels_per_sec_gpu", pixels_per_sec)
             
 
     # save script so we can reproduce from logs
