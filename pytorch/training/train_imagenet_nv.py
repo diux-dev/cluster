@@ -29,12 +29,38 @@ import resnet
 from dataloader import *
 
 
+################################################################################
+# Generic utility methods, eventually refactor into separate file
+################################################################################
+def network_bytes():
+  """Returns received bytes, transmitted bytes."""
+  
+  import subprocess
+  proc = subprocess.Popen(['cat', '/proc/net/dev'], stdout=subprocess.PIPE)
+  stdout,stderr = proc.communicate()
+  stdout=stdout.decode('ascii')
+
+  recv_bytes = 0
+  transmit_bytes = 0
+  lines=stdout.strip().split('\n')
+  lines = lines[2:]  # strip header
+  for line in lines:
+    line = line.strip()
+    # ignore loopback interface
+    if line.startswith('lo'):
+      continue
+    toks = line.split()
+
+    recv_bytes += int(toks[1])
+    transmit_bytes += int(toks[9])
+  return recv_bytes, transmit_bytes
+
 # no_op method/object that accept every signature
 def no_op(*args, **kwargs): pass
 class NoOp:
   def __getattr__(self, *args):
     return no_op
-
+################################################################################
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -126,6 +152,7 @@ class DataManager():
         
 
     def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
+      # todo: remove last_batch_size?
         global last_batch_size, last_image_size
         last_batch_size = batch_size  # save it for images/sec calculation
         last_image_size = image_size
@@ -223,7 +250,7 @@ def main():
     # is_chief must be true only for at most 1 process in training cluster
     # $RANK is set by pytorch.distributed.launch
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
-    global is_chief, event_writer, global_step
+    global is_chief, event_writer, global_step, last_recv_bytes, last_transmit_bytes, last_log_time
 
     is_chief = int(os.environ['RANK'])==0
 
@@ -233,7 +260,11 @@ def main():
       event_writer = SummaryWriter(args.logdir)
     else:
       event_writer = NoOp()
-      
+
+    # baseline number for network bytes
+    last_recv_bytes, last_transmit_bytes = network_bytes()
+    last_log_time = time.time()
+    
     print(args)
     print("~~epoch\thours\ttop1Accuracy\n")
 
@@ -320,14 +351,17 @@ def to_python_float(t):
         return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
-    global global_step
-    
+    global is_chief, event_writer, global_step, last_recv_bytes, last_transmit_bytes, last_log_time
+
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
 
+    recv_meter = AverageMeter()
+    transmit_meter = AverageMeter()
+    
     # switch to train mode
     model.train()
     end = time.time()
@@ -389,18 +423,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
         if args.local_rank == 0 and should_print:
-            output = ('Epoch: [{0}][{1}/{2}]\t' \
-                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
-                    + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
-                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
-                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    epoch, batch_num, trn_len, batch_time=batch_time,
-                    data_time=data_time, loss=losses, top1=top1, top5=top5)
-            print(output)
-            with open(f'{args.save_dir}/full.log', 'a') as f:
-                f.write(output + '\n')
-                
             log_tb("time/step_ms", 1000*batch_time.val)
             log_tb("time/data_ms", 1000*data_time.val)
             log_tb("loss/loss", losses.val)
@@ -408,8 +430,42 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             log_tb("loss/train_5", top5.val)
             images_per_sec = last_batch_size/batch_time.val
             log_tb("time/1gpu_images_per_sec", images_per_sec)
-            #pixels_per_sec = last_batch_size*last_image_size**2/batch_time.val
-            #log_tb("time/1gpu_pixels_per_sec_gpu", pixels_per_sec)
+
+            time_delta = time.time()-last_log_time
+            recv_bytes, transmit_bytes = network_bytes()
+            
+            recv_delta = recv_bytes - last_recv_bytes
+            transmit_delta = transmit_bytes - last_transmit_bytes
+
+            # turn into Gbps
+            recv_bw = 8*recv_delta/time_delta/1e9
+            transmit_bw = 8*recv_delta/time_delta/1e9
+            
+            last_log_time = time.time()
+            last_recv_bytes = recv_bytes
+            last_transmit_bytes = transmit_bytes
+
+            recv_meter.update(recv_bw)
+            transmit_meter.update(transmit_bw)
+            log_tb('net/recv_bw', recv_bw)
+            log_tb('net/transmit_bw', transmit_bw)
+            
+            output = ('Epoch: [{0}][{1}/{2}]\t' \
+                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
+                    + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
+                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
+                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
+                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t' \
+                      + 'bw {recv_meter.val:.3f} {transmit_meter.val:.3f}').format(
+                    epoch, batch_num, trn_len, batch_time=batch_time,
+                      data_time=data_time, loss=losses, top1=top1, top5=top5,
+                      recv_meter=recv_meter, transmit_meter=transmit_meter)
+            print(output)
+            with open(f'{args.save_dir}/full.log', 'a') as f:
+                f.write(output + '\n')
+                
+            
+            
             
 
     # save script so we can reproduce from logs
