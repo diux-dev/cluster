@@ -76,7 +76,7 @@ def main():
   job._run_raw('tmux kill-session -t jupyter')
   job._run_raw('tmux new-session -s jupyter -n 0 -d')
   run_tmux('cp jupyter_notebook_config.py ~/.jupyter')
-  run_tmux('source activate pytorch_p36')
+  run_tmux('source activate tensorflow_p36')
   run_tmux('mkdir -p /efs/notebooks')
   run_tmux('cd /efs/notebooks')
   run_tmux('jupyter notebook')
