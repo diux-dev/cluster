@@ -113,8 +113,12 @@ class DataManager():
     def get_val_loader(self): return DataPrefetcher(self.val_dl)
 
     def set_data(self, data):
-        loaders, datainfo = data
-        print(datainfo)
+        loaders, data_info = data
+        data_info_string = f'Dataset changed. \nImage size: {data_info["image_size"]} \nBatch size: {data_info["batch_size"]} \nTrain Directory: {data_info["traindir"]}\nValidation Directory: {data_info["valdir"]}'
+
+        print(data_info_string)
+        log_tb('image_size', data_info['image_size'])
+        log_tb('batch_size', data_info['batch_size'])
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
         # clear memory
         gc.collect()
@@ -128,11 +132,14 @@ class DataManager():
         
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+valdir_prefix+'/validation'
-        datainfo = f'Dataset changed. \nImage size: {image_size} \nBatch size: {batch_size} \nTrain Directory: {traindir}\nValidation Directory: {valdir}'
-        log_tb('image_size', image_size)
-        log_tb('batch_size', batch_size)
 
-        return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), datainfo
+        data_info = {}
+        data_info['image_size'] = image_size
+        data_info['batch_size'] = batch_size
+        data_info['traindir'] = traindir
+        data_info['valdir'] = valdir
+        
+        return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), data_info
 
 class Scheduler():
     def __init__(self, optimizer, lr_sched=[0.1, 0.47, 0.78, 0.95]):
@@ -207,14 +214,17 @@ def init_dist_weights(model):
 
 def log_tb(tag, val):
   """Log value to tensorboard (relies on global_step being set properly)"""
+  global global_step, event_writer
   event_writer.add_scalar(tag, val, global_step)
   
 def main():
     # is_chief indicates this machine will do shared tasks for the cluster
     # such as logging and checkpointing
+    # is_chief must be true only for at most 1 process in training cluster
     # $RANK is set by pytorch.distributed.launch
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
     global is_chief, event_writer, global_step
+
     is_chief = int(os.environ['RANK'])==0
 
     global_step = 0
@@ -327,6 +337,8 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
+        global_step+=1
+
         batch_num = i+2
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
@@ -356,8 +368,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
         # if i == 0: print('Evaluate and loss:', time.time()-st)
-
-        global_step+=1
         if args.fp16:
             model.zero_grad()
             loss.backward()
@@ -388,12 +398,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
                     epoch, batch_num, trn_len, batch_time=batch_time,
                     data_time=data_time, loss=losses, top1=top1, top5=top5)
             print(output)
-            print(is_chief)
-            print(os.environ['RANK'])
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
                 
-            log_tb("batch_size", last_batch_size)
             log_tb("time/step_ms", 1000*batch_time.val)
             log_tb("time/data_ms", 1000*data_time.val)
             log_tb("loss/loss", losses.val)
