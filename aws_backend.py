@@ -18,6 +18,8 @@ MAX_RETRIES = 10
 DEFAULT_PORT=3000  # port used for task internal communication
 TENSORBOARD_PORT=6006  # port used for external HTTP communication
 
+# TODO: a way to capture output of task.run. This could help with checking if umount is needed ('/dev/xdvf' in df)
+
 def make_run(name, **kwargs):
   return Run(name, **kwargs)
 
