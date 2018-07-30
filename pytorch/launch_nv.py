@@ -31,7 +31,7 @@ module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
 import util as u
 import aws_backend
-from launch_utils import *
+import launch_utils as launch_utils_lib
 util.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
@@ -228,7 +228,7 @@ def create_job(run, job_name, num_tasks):
     with open(args.install_script, 'r') as f:
       install_script = f.read()
   
-  ebs = get_ebs_settings(use_iops=(args.attach_volume is None))
+  ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
   if args.placement_group:
     print("Warning, placement_group is deprecated, use --use-placement-group 1 for automatically picked placement group (same as run name).")
     placement_group_name = args.placement_group
@@ -250,7 +250,7 @@ def create_job(run, job_name, num_tasks):
   # TODO: this should be global setting/constant instead
   assert DATA_ROOT.endswith('/data')
   if args.attach_volume:
-    mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
+    launch_utils_lib.mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
 
   if not args.use_local_conda:
     job.run_async_join('source activate pytorch_p36')
@@ -286,12 +286,12 @@ def start_training(job, params, save_tag):
   num_tasks = len(job.tasks)  
   instance_0 = job.tasks[0].instance
   world_0_ip = instance_0.private_ip_address
-  num_gpus = get_gpu_count(instance_0)
+  num_gpus = launch_utils_lib.get_gpu_count(instance_0)
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   world_size = num_gpus * num_tasks
 
   # Use NCCL rings for faster network throughput
-  nccl_args = get_nccl_args(num_tasks, num_gpus)
+  nccl_args = launch_utils_lib.get_nccl_args(num_tasks, num_gpus)
 
   # Create save directory
   # TODO: replace with DATA_ROOT? ~ is not understood by all programs

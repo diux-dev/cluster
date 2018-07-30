@@ -7,7 +7,7 @@ import collections
 
 module_path=os.path.dirname(os.path.abspath(__file__))
 sys.path.append(module_path+'/..')
-import util
+import util as u
 
 def get_gpu_count(instance):
   gpu_count = { 
@@ -60,7 +60,7 @@ def mount_volume_data(job, tag, offset):
 def attach_instance_ebs(aws_instance, tag):
   """Attaches volume to instance. Will try to detach volume if it's already mounted somewhere else. Will retry indefinitely on error."""
   
-  ec2 = util.create_ec2_resource()
+  ec2 = u.create_ec2_resource()
   v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
   assert(v)
   v = v[0]
