@@ -139,12 +139,16 @@ class DataManager():
     def get_val_loader(self): return DataPrefetcher(self.val_dl)
 
     def set_data(self, data):
+        """Initializes data loader."""
+        global last_batch_size, last_image_size
         loaders, data_info = data
         data_info_string = f'Dataset changed. \nImage size: {data_info["image_size"]} \nBatch size: {data_info["batch_size"]} \nTrain Directory: {data_info["traindir"]}\nValidation Directory: {data_info["valdir"]}'
 
         print(data_info_string)
         log_tb('image_size', data_info['image_size'])
         log_tb('batch_size', data_info['batch_size'])
+        last_batch_size = data_info['batch_size']
+        last_image_size = data_info['image_size']
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
         # clear memory
         gc.collect()
@@ -152,11 +156,7 @@ class DataManager():
         
 
     def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
-      # todo: remove last_batch_size?
-        global last_batch_size, last_image_size
-        last_batch_size = batch_size  # save it for images/sec calculation
-        last_image_size = image_size
-        
+      """Pre-initializes data-loaders. Use set_data to start using it."""
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+valdir_prefix+'/validation'
 
