@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # ImageNet training setup script for DLAMI + p3 instance
+# must be run after "source activate" to put things into current env
 # (tested on "Deep Learning AMI (Ubuntu) Version 12.0")
 # https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
-  
 echo 'Starting script'
 
 # echo '> update'
@@ -26,6 +26,7 @@ source ~/.bashrc
 # conda install pytorch torchvision cuda91 -c pytorch -y
 # echo '>tqdm'
 conda install tqdm -y
+pip install tensorboardX
 
 # index file used to speed up evaluation
 echo '>indices'

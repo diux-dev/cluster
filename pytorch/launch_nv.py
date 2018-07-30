@@ -260,7 +260,6 @@ def create_job(run, job_name, num_tasks):
     job.run_async_join('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
     job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/pytorch_p36')
 
-  job.run_async_join('pip install tensorboardX')
   # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
 
