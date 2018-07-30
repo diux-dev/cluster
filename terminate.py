@@ -32,7 +32,10 @@ parser.add_argument('--soft', type=int, default=0,
 # todo: add -n version
 parser.add_argument('-n', '--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
+parser.add_argument('name2', nargs='*')
 args = parser.parse_args()
+
+import pdb; pdb.set_trace()
 
 USER_KEY_NAME=getpass.getuser()
 if not args.limit_to_key:
