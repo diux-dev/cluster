@@ -29,12 +29,10 @@ def mount_volume_data(job, tag, offset):
   job.run_async_join('sudo mkdir data -p')
   while True:
     try:
+      # Need retry logic because attachment is async and can be slow
       # run_async doesn't propagate exceptions raised on workers, use regular
       #      job.run_async_join('sudo mount /dev/xvdf data')
-      # Need umount here because can't tell between mount failure because
-      # of drive already being mounted, vs EBS attachment not being ready
-
-      # heuristic on whether drive is mounted already
+      #
       # Possibilities:
       # mount fails because volume attachment is not fully ready, need retry
       # mount fails because volume is already attached
