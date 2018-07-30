@@ -32,7 +32,7 @@ sys.path.append(module_path+'/..')
 import util as u
 import aws_backend
 import launch_utils as launch_utils_lib
-util.install_pdb_handler()
+u.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
