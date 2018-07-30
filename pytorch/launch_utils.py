@@ -31,8 +31,23 @@ def mount_volume_data(job, tag, offset):
     try:
       # run_async doesn't propagate exceptions raised on workers, use regular
       #      job.run_async_join('sudo mount /dev/xvdf data')
-      job.run('sudo umount /dev/xvdf')
-      job.run('sudo mount /dev/xvdf data')
+      # Need umount here because can't tell between mount failure because
+      # of drive already being mounted, vs EBS attachment not being ready
+
+      # heuristic on whether drive is mounted already
+      # Possibilities:
+      # mount fails because volume attachment is not fully ready, need retry
+      # mount fails because volume is already attached
+      # umount fails because some processes are slow to die, need retry
+      # umount fails because volume is not attached
+      # Use heuristic on whether need to mount, first task already has it
+      # mounted
+      job.tasks[0].run('df > /tmp/mount_status')
+      status = job.tasks[0].file_read('/tmp/mount_status')
+      if '/dev/xvdf' in status:
+        print('Volume already mounted, ignoring')
+      else:
+        job.run('sudo mount /dev/xvdf data')
     except Exception as e:
       print(f'(un)mount failed with: ({e})')
       print(f'Retrying in {ATTACH_WAIT_INTERVAL_SEC}')
