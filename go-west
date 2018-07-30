@@ -1,0 +1,4 @@
+export REGION=us-west-2
+echo "setting region to $REGION"
+export AWS_DEFAULT_REGION=$REGION
+
