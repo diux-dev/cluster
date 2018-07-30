@@ -2,17 +2,17 @@
 #
 # export ami="Deep Learning AMI (Ubuntu) Version 12.0"
 # 1 machine training
-# python launch_nv.py --name test --num-tasks 1 --zone us-west-2c --spot
+# python launch_nv.py --name test --zone us-west-2c --spot
 #
 # 4 machine training
-# python launch_nv.py --name 4gpu_distributed --num-tasks 4 --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
+# python launch_nv.py --name 4gpu_distributed --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
 
 # 8 machine training
-# python launch_nv.py --name yaro8 --num-tasks 8 --zone us-west-2c --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
+# python launch_nv.py --name yaro8 --zone us-west-2c --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
 
 # 16 machine training
 # export AWS_DEFAULT_REGION=us-east-1
-# ./launch_nv.py --name yaro16 --num-tasks 16 --zone us-east-1c --params x16ar_args
+# ./launch_nv.py --name yaro16 --zone us-east-1c --params x16ar_args
 
 DATA_ROOT='/home/ubuntu/data' # location where attached EBS "data" volume is mounted
 
@@ -62,8 +62,8 @@ parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
-parser.add_argument('--num-tasks', type=int, default=1,
-                    help='number of instances to create')
+parser.add_argument('--num-tasks', type=int, default=-1,
+                    help='number of instances to create, deprecated, specify it in params')
 parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default=None,
@@ -75,7 +75,6 @@ parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
 parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
-parser.add_argument('--params', type=str, default="x4_args",
 parser.add_argument('--params', type=str, default="x_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
@@ -90,7 +89,8 @@ x_args = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '192,192,128'
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 1
 ]
 x_args_128 = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -98,7 +98,8 @@ x_args_128 = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', 128
+  '--batch-sched', 128,
+  '--num-tasks', 1
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -107,7 +108,8 @@ x2_args = [
   '--epochs', 50,
   '--lr', 0.4 * 2,
   '--init-bn0',
-  '--batch-sched', '192,192,128'
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 2
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -116,7 +118,8 @@ x4_args = [
   '--epochs', 50,
   '--lr', 0.4 * 4,
   '--init-bn0',
-  '--batch-sched', '192,192,128'
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 4
 ]
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
@@ -126,6 +129,7 @@ x4ar_args = [
   '--init-bn0',
   '--batch-sched', '192,192,128',
   '--val-ar',
+  '--num-tasks', 4
   # '--resume', 'sz128_checkpoint.path.tar'
   # '--resume', 'sz244_checkpoint.path.tar'
 ]
@@ -135,7 +139,8 @@ x8_args = [
   '--epochs', 55,
   '--lr', 0.3 * 8,
   '--init-bn0',
-  '--batch-sched', 128
+  '--batch-sched', 128,
+  '--num-tasks', 8
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
@@ -146,6 +151,7 @@ x8ar_args = [
   '--init-bn0',
   '--batch-sched', 128,
   '--val-ar',
+  '--num-tasks', 8
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
@@ -156,6 +162,7 @@ x8ar_args2 = [
   '--init-bn0',
   '--batch-sched', 128*2,
   '--val-ar',
+  '--num-tasks', 8
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
@@ -169,7 +176,8 @@ x16ar_args = [
   '--lr', 0.25 * 8,
   '--init-bn0',
   '--batch-sched', 64,
-  '--val-ar'
+  '--val-ar',
+  '--num-tasks', 16
 ]
 
 # temporary set for testing
@@ -179,8 +187,20 @@ yaro = [
   '--lr', 0.4,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', 64
+  '--batch-sched', 64,
+  '--num-tasks', 1
 ]
+
+def _extract_num_tasks(params):
+  args = [v for v in yaro if v=='--num-tasks']
+  assert len(args) == 1, "Must specify exactly 1 --num-tasks"
+  
+  for i in range(len(params)-1):
+    if params[i] == '--num-tasks':
+      val = params[i+1]
+      del params[i+1], params[i]
+      return val
+
 
 def main():
   run = aws_backend.make_run(args.name, ami=args.ami,
@@ -188,12 +208,15 @@ def main():
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=args.skip_efs_mount)
-  job = create_job(run, 'worker', args.num_tasks)
+  params = eval(args.params)
+  assert args.num_tasks == -1, "num_tasks is deprecated, it's now specified along with training parameters as --num_tasks."
+
+  num_tasks = _extract_num_tasks(params)
+  job = create_job(run, 'worker', num_tasks)
   run.setup_logdir()
 
   # Define custom params for training or use a preset above
   # TODO: move "save_tag" into command-line parameter
-  params = eval(args.params)
   start_training(job, params, save_tag=args.name)
 
 
@@ -261,7 +284,7 @@ def create_job(run, job_name, num_tasks):
   return job
 
 def start_training(job, params, save_tag):
-  num_tasks = len(job.tasks)
+  num_tasks = len(job.tasks)  
   instance_0 = job.tasks[0].instance
   world_0_ip = instance_0.private_ip_address
   num_gpus = get_gpu_count(instance_0)
