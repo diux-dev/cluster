@@ -35,7 +35,13 @@ parser.add_argument('-n', '--name', type=str, default="",
 parser.add_argument('name2', nargs='*')
 args = parser.parse_args()
 
-import pdb; pdb.set_trace()
+# optionally to use "terminate name" command
+if not args.name:
+  assert len(args.name2) == 1
+  fragment = args.name2[0]
+else:
+  assert len(args.name2) == 0
+  fragment = args.name
 
 USER_KEY_NAME=getpass.getuser()
 if not args.limit_to_key:
@@ -55,7 +61,7 @@ def main():
   for i in instances:
     name = u.get_name(i.tags)
     state = i.state['Name']
-    if not args.name in name:
+    if not fragment in name:
       continue
     if args.skip_tensorboard and '.tb.' in name:
       continue
@@ -77,13 +83,13 @@ def main():
     print("Current instances:")
     pp(valid_names)
     print("No running instances found for: Name '%s', key '%s'"%
-          (args.name, USER_KEY_NAME))
+          (fragment, USER_KEY_NAME))
     return
 
   action = 'soft terminate' if args.soft else 'terminate'
   answer = input("%d instances found, %s in %s? (y/N) " % (len(instances_to_kill), action, region))
   if not answer:
-    answer = "y"
+    answer = "n"
   if answer.lower() == "y":
     instance_ids = [i.id for i in instances_to_kill]
     if args.soft:
