@@ -25,7 +25,7 @@ source ~/.bashrc
 # echo '>pytorch'
 # conda install pytorch torchvision cuda91 -c pytorch -y
 # echo '>tqdm'
-# conda install tqdm -y
+conda install tqdm -y
 
 # index file used to speed up evaluation
 echo '>indices'
