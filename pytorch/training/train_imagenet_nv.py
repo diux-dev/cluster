@@ -156,7 +156,7 @@ class DataManager():
         
 
     def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
-      """Pre-initializes data-loaders. Use set_data to start using it."""
+        """Pre-initializes data-loaders. Use set_data to start using it."""
         traindir = args.data+dir_prefix+'/train'
         valdir = args.data+valdir_prefix+'/validation'
 
