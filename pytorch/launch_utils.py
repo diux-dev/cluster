@@ -23,7 +23,7 @@ def get_gpu_count(instance):
 
 # EBS Utils
 ATTACH_WAIT_INTERVAL_SEC = 5
-def mount_volume_data(job, tag, offset):
+def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):
   for i,t in enumerate(job.tasks):
     attach_instance_ebs(t.instance, f'{tag}_{i+offset}')
   job.run_async_join('sudo mkdir data -p')
@@ -41,10 +41,10 @@ def mount_volume_data(job, tag, offset):
       # mounted
       job.tasks[0].run('df > /tmp/mount_status')
       status = job.tasks[0].file_read('/tmp/mount_status')
-      if '/dev/xvdf' in status:
+      if unix_device in status:
         print('Volume already mounted, ignoring')
       else:
-        job.run('sudo mount /dev/xvdf data')
+        job.run(f'sudo mount {unix_device} data')
     except Exception as e:
       print(f'(un)mount failed with: ({e})')
       print(f'Retrying in {ATTACH_WAIT_INTERVAL_SEC}')
@@ -56,7 +56,7 @@ def mount_volume_data(job, tag, offset):
     
   job.run_async_join('sudo chown `whoami` data')
 
-def attach_instance_ebs(aws_instance, tag):
+def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   """Attaches volume to instance. Will try to detach volume if it's already mounted somewhere else. Will retry indefinitely on error."""
   
   ec2 = u.create_ec2_resource()
@@ -72,9 +72,16 @@ def attach_instance_ebs(aws_instance, tag):
     print(f'Detaching from current instance: response={response.get("State", "none")}')
   while True:
     try:
-      response = v.attach_to_instance(InstanceId=aws_instance.id, Device='/dev/xvdf')
+      response = v.attach_to_instance(InstanceId=aws_instance.id,
+                                      Device=unix_device)
       print(f'Attaching to current instance: response={response.get("State", "none")}')
+
+    # sometimes have unrecoverable failure on brand new instance with
+    # possibly because of https://forums.aws.amazon.com/thread.jspa?threadID=66192
+    #    Error attaching volume: (An error occurred (InvalidParameterValue) when calling the AttachVolume operation: Invalid value '/dev/xvdf' for unixDevice. Attachment point /dev/xvdf is already in use). Retrying in 5 An error occurred (InvalidParameterValue) when calling the AttachVolume operation: Invalid value '/dev/xvdf' for unixDevice. Attachment point /dev/xvdf is already in use
+
     except Exception as e:
+      print(f"Failed attaching ({v.id}) to ({aws_instance.id})")
       print(f'Error attaching volume: ({e}). Retrying in {ATTACH_WAIT_INTERVAL_SEC}', e)
       time.sleep(ATTACH_WAIT_INTERVAL_SEC)
       continue

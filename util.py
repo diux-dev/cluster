@@ -26,6 +26,9 @@ u = util
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
+# name to use for mounting external drive
+DEFAULT_UNIX_DEVICE='/dev/xvdq' # used to be /dev/xvdf
+
 def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
@@ -131,6 +134,9 @@ def create_ec2_client():
 
 
 def create_efs_client():
+  # TODO: below sometimes fails with
+  # botocore.exceptions.DataNotFoundError: Unable to load data for: endpoints
+  # need to add retry
   return get_session().client('efs')
 
 
@@ -969,7 +975,7 @@ def create_blank_volume(name, zone, size, iops, voltype='io1'):
 
 
 ATTACH_WAIT_INTERVAL_SEC=5
-def attach_vol(vol, instance, device='/dev/xvdf'):
+def attach_vol(vol, instance, device=DEFAULT_UNIX_DEVICE):
   """Attaches volume to given instance."""
   
   while True:
