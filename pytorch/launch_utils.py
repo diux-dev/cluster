@@ -31,7 +31,6 @@ def mount_volume_data(job, tag, offset):
     try:
       # Need retry logic because attachment is async and can be slow
       # run_async doesn't propagate exceptions raised on workers, use regular
-      #      job.run_async_join('sudo mount /dev/xvdf data')
       #
       # Possibilities:
       # mount fails because volume attachment is not fully ready, need retry

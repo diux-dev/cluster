@@ -61,11 +61,12 @@ def get_name(tags_or_instance):
      Returns '' if there's less than one name.
   """
 
+  assert tags_or_instance is not None
   if hasattr(tags_or_instance, 'tags'):
     tags = tags_or_instance.tags
   else:
     tags = tags_or_instance
-    
+
   if not tags:
     return ''
   names = [entry['Value'] for entry in tags if entry['Key']=='Name']
@@ -692,6 +693,18 @@ def lookup_aws_instances(job_name, states=['running', 'stopped']):
 
   return result
 
+def lookup_volume(name):
+  """Looks up volume matching given name."""
+  ec2 = u.create_ec2_resource()
+  vols = []
+  for v in ec2.volumes.all():
+    if u.get_name(v) == name:
+      vols.append(v)
+  assert len(vols)>0, f"volume {name} not found"
+  assert len(vols)<2, f"multiple volumes with name={name}"
+  return vols[0]
+
+
 def maybe_create_placement_group(name='', max_retries=10):
   """Creates placement group or reuses existing one. crash if unable to create
   placement group. If name is empty, ignores request."""
@@ -896,6 +909,14 @@ def get_instances(fragment, verbose=True, filter_by_key=True):
     filtered_instance_list.append(instance)
   return filtered_instance_list
 
+def get_instance(fragment, verbose=False, filter_by_key=True):
+  """Gets a single instance containing given fragment."""
+  instances = get_instances(fragment, verbose=verbose,
+                            filter_by_key=filter_by_key)
+  assert len(instances)>0, f"instances with ({fragment}) not found"
+  assert len(instances)<2, f"multiple instances matching ({fragment})"
+  return instances[0]
+
 def get_username(instance):
   """Gets username needed to connect to given instance."""
 
@@ -928,3 +949,37 @@ def no_op(*args, **kwargs): pass
 class NoOp:
   def __getattr__(self, *args):
     return no_op
+
+
+def create_blank_volume(name, zone, size, iops, voltype='io1'):
+  """Creates blank volume with given specs."""
+  
+  tag_specs = [{
+    'ResourceType': 'volume',
+    'Tags': [{
+        'Key': 'Name',
+        'Value': name
+    }]
+  }]
+  volume = ec2.create_volume(Size=size, VolumeType=voltype,
+                             TagSpecifications=tag_specs,
+                             AvailabilityZone=zone,
+                             Iops=iops)
+  return volume
+
+
+ATTACH_WAIT_INTERVAL_SEC=5
+def attach_vol(vol, instance, device='/dev/xvdf'):
+  """Attaches volume to given instance."""
+  
+  while True:
+    try:
+      response = vol.attach_to_instance(InstanceId=instance.id, Device=device)
+      print(f'Attaching {u.get_name(vol)} to {u.get_name(instance)}: response={response.get("State", "none")}')
+    except Exception as e:
+      print(f'Error attaching volume: ({e}). Retrying in {ATTACH_WAIT_INTERVAL_SEC}', e)
+      time.sleep(ATTACH_WAIT_INTERVAL_SEC)
+      continue
+    else:
+      print('Attachment successful')
+      break
