@@ -99,7 +99,7 @@ def get_parser():
     parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--world-size', default=-1, type=int, 
-                        help='Number of gpus per machine. Param only needed for single machine training when using (faster) file sync')
+                        help='total number of processes (machines*gpus)')
     parser.add_argument('--dist-url', default='env://', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
@@ -145,8 +145,9 @@ class DataManager():
         data_info_string = f'Dataset changed. \nImage size: {data_info["image_size"]} \nBatch size: {data_info["batch_size"]} \nTrain Directory: {data_info["traindir"]}\nValidation Directory: {data_info["valdir"]}'
 
         print(data_info_string)
-        log_tb('image_size', data_info['image_size'])
-        log_tb('batch_size', data_info['batch_size'])
+        log_tb('sizes/image', data_info['image_size'])
+        log_tb('sizes/batch', data_info['batch_size'])
+        log_tb('sizes/world', args.world_size)
         last_batch_size = data_info['batch_size']
         last_image_size = data_info['image_size']
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
@@ -240,9 +241,9 @@ def init_dist_weights(model):
                 m.weight.data.normal_(0, 0.01)
 
 def log_tb(tag, val):
-  """Log value to tensorboard (relies on global_step being set properly)"""
-  global global_step, event_writer
-  event_writer.add_scalar(tag, val, global_step)
+  """Log value to tensorboard (relies on global_example_count being set properly)"""
+  global global_example_count, event_writer
+  event_writer.add_scalar(tag, val, global_example_count)
   
 def main():
     # is_chief indicates this machine will do shared tasks for the cluster
@@ -250,11 +251,11 @@ def main():
     # is_chief must be true only for at most 1 process in training cluster
     # $RANK is set by pytorch.distributed.launch
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
-    global is_chief, event_writer, global_step, last_recv_bytes, last_transmit_bytes, last_log_time
+    global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
 
     is_chief = int(os.environ['RANK'])==0
 
-    global_step = 0
+    global_example_count = 0
     if is_chief:
       print(f"Logging to {args.logdir}")
       event_writer = SummaryWriter(args.logdir)
@@ -351,7 +352,7 @@ def to_python_float(t):
         return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
-    global is_chief, event_writer, global_step, last_recv_bytes, last_transmit_bytes, last_log_time
+    global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -371,7 +372,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
-        global_step+=1
+        global_example_count+=last_batch_size*args.world_size
 
         batch_num = i+2
         # if i == 0: print('Received input:', time.time()-st)
@@ -423,13 +424,13 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
         if args.local_rank == 0 and should_print:
-            log_tb("time/step_ms", 1000*batch_time.val)
-            log_tb("time/data_ms", 1000*data_time.val)
-            log_tb("loss/loss", losses.val)
-            log_tb("loss/train_1", top1.val)
-            log_tb("loss/train_5", top5.val)
+            log_tb("times/step", 1000*batch_time.val)
+            log_tb("times/data", 1000*data_time.val)
+            log_tb("losses/xent", losses.val)
+            log_tb("losses/train_1", top1.val)   # precision@1
+            log_tb("losses/train_5", top5.val)   # precision@5
             images_per_sec = last_batch_size/batch_time.val
-            log_tb("time/1gpu_images_per_sec", images_per_sec)
+            log_tb("times/1gpu_images_per_sec", images_per_sec)
 
             time_delta = time.time()-last_log_time
             recv_bytes, transmit_bytes = network_bytes()
@@ -438,17 +439,17 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             transmit_delta = transmit_bytes - last_transmit_bytes
 
             # turn into Gbps
-            recv_bw = 8*recv_delta/time_delta/1e9
-            transmit_bw = 8*recv_delta/time_delta/1e9
+            recv_gbit = 8*recv_delta/time_delta/1e9
+            transmit_gbit = 8*recv_delta/time_delta/1e9
             
             last_log_time = time.time()
             last_recv_bytes = recv_bytes
             last_transmit_bytes = transmit_bytes
 
-            recv_meter.update(recv_bw)
-            transmit_meter.update(transmit_bw)
-            log_tb('net/recv_bw', recv_bw)
-            log_tb('net/transmit_bw', transmit_bw)
+            recv_meter.update(recv_gbit)
+            transmit_meter.update(transmit_gbit)
+            log_tb('net/recv_gbit', recv_gbit)
+            log_tb('net/transmit_gbit', transmit_gbit)
             
             output = ('Epoch: [{0}][{1}/{2}]\t' \
                     + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
@@ -465,9 +466,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
                 f.write(output + '\n')
                 
             
-            
-            
-
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
     shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
@@ -521,9 +519,9 @@ def validate(val_loader, model, criterion, epoch, start_time):
     print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top5.avg:.3f}\n')
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
     
-    log_tb('loss/test_1', top1.avg)
-    log_tb('loss/test_5', top5.avg)
-    log_tb('time/eval_sec', time.time()-eval_start_time)
+    log_tb('losses/test_1', top1.avg)
+    log_tb('losses/test_5', top5.avg)
+    log_tb('times/eval_sec', time.time()-eval_start_time)
     log_tb('epoch', epoch)
 
 
