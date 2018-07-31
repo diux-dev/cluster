@@ -36,9 +36,9 @@ u.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami', type=str, default='',
-                     help="id of AMI to use")
+                     help="id of AMI to use (deprecated, use ami-name)")
 parser.add_argument('--ami-name', type=str,
-                    default='',
+                    default='-1',
                     #default='pytorch.imagenet.source.v3',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
@@ -90,7 +90,33 @@ x_args = [
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
   '--batch-sched', '192,192,128',
-  '--num-tasks', 1
+  '--num-tasks', 1,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+]
+
+# Current benchmark for 1x p3
+xar_args = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 45,
+  '--lr', 0.4,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--init-bn0',
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 1,
+  '--val-ar',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+]
+
+xar_args_pytorch = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 45,
+  '--lr', 0.4,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--init-bn0',
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 1,
+  '--val-ar',
+  '--ami-name', 'pytorch.imagenet.source.v3',
 ]
 x_args_128 = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -99,7 +125,8 @@ x_args_128 = [
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
   '--batch-sched', 128,
-  '--num-tasks', 1
+  '--num-tasks', 1,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -109,7 +136,8 @@ x2_args = [
   '--lr', 0.4 * 2,
   '--init-bn0',
   '--batch-sched', '192,192,128',
-  '--num-tasks', 2
+  '--num-tasks', 2,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -119,7 +147,8 @@ x4_args = [
   '--lr', 0.4 * 4,
   '--init-bn0',
   '--batch-sched', '192,192,128',
-  '--num-tasks', 4
+  '--num-tasks', 4,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
@@ -129,7 +158,8 @@ x4ar_args = [
   '--init-bn0',
   '--batch-sched', '192,192,128',
   '--val-ar',
-  '--num-tasks', 4
+  '--num-tasks', 4,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
   # '--resume', 'sz128_checkpoint.path.tar'
   # '--resume', 'sz244_checkpoint.path.tar'
 ]
@@ -140,7 +170,8 @@ x8_args = [
   '--lr', 0.3 * 8,
   '--init-bn0',
   '--batch-sched', 128,
-  '--num-tasks', 8
+  '--num-tasks', 8,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
@@ -151,18 +182,8 @@ x8ar_args = [
   '--init-bn0',
   '--batch-sched', 128,
   '--val-ar',
-  '--num-tasks', 8
-]
-
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
-x8ar_args2 = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 40,
-  '--lr', 0.23 * 8,
-  '--init-bn0',
-  '--batch-sched', 128*2,
-  '--val-ar',
-  '--num-tasks', 8
+  '--num-tasks', 8,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
@@ -177,41 +198,38 @@ x16ar_args = [
   '--init-bn0',
   '--batch-sched', 64,
   '--val-ar',
-  '--num-tasks', 16
+  '--num-tasks', 16,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
 
-# temporary set for testing
-yaro = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
-  '--lr', 0.4,
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-  '--init-bn0',
-  '--batch-sched', 64,
-  '--num-tasks', 1
-]
-
-def _extract_num_tasks(params):
-  args = [v for v in yaro if v=='--num-tasks']
-  assert len(args) == 1, "Must specify exactly 1 --num-tasks"
+# hacks to allow launcher level flags in worker params list
+def _extract_param(params, name):
+  args = [v for v in params if v==name]
+  assert len(args) == 1, f"Must specify exactly 1 {name}"
   
   for i in range(len(params)-1):
-    if params[i] == '--num-tasks':
+    if params[i] == name:
       val = params[i+1]
       del params[i+1], params[i]
       return val
 
+def _extract_num_tasks(params): return _extract_param(params, '--num-tasks')
+def _extract_ami_name(params): return _extract_param(params, '--ami-name')
+
 
 def main():
+  params = eval(args.params)
+  assert args.num_tasks == -1, "num-tasks is deprecated, it's now specified along with training parameters as --num-tasks."
+  assert args.ami_name == '-1', "ami_name is deprecated, it's now specified along with training parameters as --ami-name."
+  ami_name = _extract_ami_name(params)
+  num_tasks = _extract_num_tasks(params)
+
   run = aws_backend.make_run(args.name, ami=args.ami,
-                             ami_name=args.ami_name,
+                             ami_name=ami_name,
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=args.skip_efs_mount)
-  params = eval(args.params)
-  assert args.num_tasks == -1, "num_tasks is deprecated, it's now specified along with training parameters as --num_tasks."
-
-  num_tasks = _extract_num_tasks(params)
+  
   job = create_job(run, 'worker', num_tasks)
   run.setup_logdir()
 
