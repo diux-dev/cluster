@@ -258,7 +258,7 @@ class Task(backend.Task):
   def _setup_tmux(self):
     self._tmux_session_name = self.job._run.name
     self._run_ssh('tmux kill-session -t '+self._tmux_session_name)
-    self._run_ssh('tmux new-session -s %s -n 0 -d'%(self._tmux_session_name,))
+    self._run_ssh('tmux set-option -g history-limit 50000 \; new-session -s %s -n 0 -d'%(self._tmux_session_name,))
     self._run_command_available = True
 
   def _mount_efs(self):
