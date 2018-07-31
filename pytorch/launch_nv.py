@@ -79,6 +79,7 @@ parser.add_argument('--params', type=str, default="x_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
 
+DEFAULT_ENV_NAME='pytorch_p36'
 
 # Current best settings
 
@@ -117,7 +118,22 @@ xar_args_pytorch = [
   '--num-tasks', 1,
   '--val-ar',
   '--ami-name', 'pytorch.imagenet.source.v3',
+  '--env-name', 'pytorch_source'
 ]
+
+# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
+x2ar_args_pytorch = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 50,
+  '--lr', 0.4 * 2,
+  '--init-bn0',
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 2,
+  '--ami-name', 'pytorch.imagenet.source.v3',
+  '--env-name', 'pytorch_source'
+  '--val-ar',
+]
+
 x_args_128 = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
   '--epochs', 45,
@@ -203,9 +219,13 @@ x16ar_args = [
 ]
 
 # hacks to allow launcher level flags in worker params list
-def _extract_param(params, name):
+def _extract_param(params, name, strict=True):
   args = [v for v in params if v==name]
-  assert len(args) == 1, f"Must specify exactly 1 {name}"
+  if strict:
+    assert len(args) == 1, f"Must specify exactly 1 {name}"
+
+  if not args:
+    return ''
   
   for i in range(len(params)-1):
     if params[i] == name:
@@ -215,6 +235,12 @@ def _extract_param(params, name):
 
 def _extract_num_tasks(params): return _extract_param(params, '--num-tasks')
 def _extract_ami_name(params): return _extract_param(params, '--ami-name')
+def _extract_env_name(params):
+  name = _extract_param(params, '--env-name', strict=False)
+  if not name:
+    return DEFAULT_ENV_NAME
+  else:
+    return name
 
 
 def main():
@@ -223,14 +249,15 @@ def main():
   assert args.ami_name == '-1', "ami_name is deprecated, it's now specified along with training parameters as --ami-name."
   ami_name = _extract_ami_name(params)
   num_tasks = _extract_num_tasks(params)
-
+  env_name = _extract_env_name(params)
+  
   run = aws_backend.make_run(args.name, ami=args.ami,
                              ami_name=ami_name,
                              availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=args.skip_efs_mount)
   
-  job = create_job(run, 'worker', num_tasks)
+  job = create_job(run, 'worker', num_tasks, env_name)
   run.setup_logdir()
 
   # Define custom params for training or use a preset above
@@ -238,7 +265,7 @@ def main():
   start_training(job, params, save_tag=args.name)
 
 
-def create_job(run, job_name, num_tasks):
+def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
   
   install_script = ''
@@ -271,12 +298,11 @@ def create_job(run, job_name, num_tasks):
     launch_utils_lib.mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
 
   if not args.use_local_conda:
-    job.run_async_join('source activate pytorch_p36')
+    job.run_async_join(f'source activate {env_name}')
   else:
-    #    job.run_async_join('source activate pytorch_p36')
     # enable conda command
     job.run_async_join('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
-    job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/pytorch_p36')
+    job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/{env_name}')
 
   # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
