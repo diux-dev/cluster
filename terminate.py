@@ -29,6 +29,8 @@ parser.add_argument('--skip-tensorboard', type=int, default=1,
                      help="don't terminate tensorboard jobs")
 parser.add_argument('--soft', type=int, default=0,
                      help="use 'soft terminate', ie stop")
+parser.add_argument('-d', '--delay', type=int, default=0,
+                     help="delay termination for this many seconds")
 # todo: add -n version
 parser.add_argument('-n', '--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
@@ -92,6 +94,9 @@ def main():
     answer = "n"
   if answer.lower() == "y":
     instance_ids = [i.id for i in instances_to_kill]
+    if args.delay:
+      print(f"Sleeping for {args.delay} seconds")
+      time.sleep(args.delay)
     if args.soft:
       response = ec2_client.stop_instances(InstanceIds=instance_ids)
       print("soft terminating, got response: %s", response)
