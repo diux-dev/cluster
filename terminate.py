@@ -39,8 +39,11 @@ args = parser.parse_args()
 
 # optionally to use "terminate name" command
 if not args.name:
-  assert len(args.name2) == 1
-  fragment = args.name2[0]
+  assert len(args.name2) <= 1
+  if not args.name2:
+    fragment = ''
+  else:
+    fragment = args.name2[0]
 else:
   assert len(args.name2) == 0
   fragment = args.name
