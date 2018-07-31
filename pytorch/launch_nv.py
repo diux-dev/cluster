@@ -79,7 +79,7 @@ parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
 parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
-parser.add_argument('--params', type=str, default="x_args",
+parser.add_argument('--params', type=str, default="xar_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
 
