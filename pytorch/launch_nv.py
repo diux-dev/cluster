@@ -14,6 +14,10 @@
 # export AWS_DEFAULT_REGION=us-east-1
 # ./launch_nv.py --name yaro16 --zone us-east-1c --params x16ar_args
 
+# one machine training with slow pytorch
+# python launch_nv.py --name pytorch-one-machines-ar --params=xar_args_pytorch --zone=$zone --zone=$zone --attach-volume imagenet_high_perf
+
+
 DATA_ROOT='/home/ubuntu/data' # location where attached EBS "data" volume is mounted
 
 from collections import OrderedDict
@@ -119,6 +123,18 @@ xar_args_pytorch = [
   '--val-ar',
   '--ami-name', 'pytorch.imagenet.source.v3',
   '--env-name', 'pytorch_source'
+]
+
+# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
+x2ar_args = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 50,
+  '--lr', 0.4 * 2,
+  '--init-bn0',
+  '--batch-sched', '192,192,128',
+  '--num-tasks', 2,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--val-ar',
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -327,6 +343,7 @@ def create_job(run, job_name, num_tasks, env_name):
   return job
 
 def start_training(job, params, save_tag):
+
   num_tasks = len(job.tasks)  
   instance_0 = job.tasks[0].instance
   world_0_ip = instance_0.private_ip_address
@@ -336,7 +353,9 @@ def start_training(job, params, save_tag):
 
   # Use NCCL rings for faster network throughput
   nccl_args = launch_utils_lib.get_nccl_args(num_tasks, num_gpus)
-
+  # below is what official version uses
+  #  nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
+  
   # Create save directory
   # TODO: replace with DATA_ROOT? ~ is not understood by all programs
   base_save_dir = '~/data/training/nv'
