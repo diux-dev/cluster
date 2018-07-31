@@ -859,7 +859,7 @@ def lookup_ami_id(wildcard):
   filter = {'Name': 'name', 'Values' : [wildcard]}
   images = list(ec2.images.filter(Filters = [filter], Owners=['self', 'amazon']))
   assert len(images)<=1, "Multiple images match "+str(wildcard)
-  assert len(images)>=0, "No images match "+str(wildcard)
+  assert len(images)>0, "No images match "+str(wildcard)
   return images[0]
 
 
