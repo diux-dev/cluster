@@ -85,7 +85,7 @@ def get_parser():
     parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
                         help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
-    parser.add_argument('--print-freq', '-p', default=10, type=int,
+    parser.add_argument('--print-freq', '-p', default=20, type=int,
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
@@ -372,8 +372,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
-        global_example_count+=last_batch_size*args.world_size
-
         batch_num = i+2
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
@@ -464,7 +462,10 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
-                
+
+        global_example_count+=last_batch_size*args.world_size
+
+             
             
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
