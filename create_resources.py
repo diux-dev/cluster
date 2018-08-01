@@ -26,9 +26,13 @@ ROUTE_TABLE_NAME=u.get_resource_name()
 KEYPAIR_NAME=u.get_keypair_name()
 EFS_NAME=u.get_resource_name()
 
-PUBLIC_TCP_PORTS = [8888, 8889, 8890,  # ipython notebook ports
-                    6379,              # redis port
-                    6006, 6007, 6008,  # tensorboard ports
+PUBLIC_TCP_PORTS = [
+  # ipython notebook ports
+  8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895, 8896, 8897,
+  # redis port
+  6379,              
+   # tensorboard ports
+  6006, 6007, 6008, 6009, 6010, 6011, 6012, 6013, 6014, 6015,
 ]
 
 # region is taken from environment variable AWS_DEFAULT_REGION
