@@ -172,6 +172,10 @@ class Job:
   def logdir(self):
     return self._run.logdir
 
+  @property
+  def instance(self):
+    return self.tasks[0].instance
+
     
 class Task:
   def run(self, cmd, sync, ignore_errors):
