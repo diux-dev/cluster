@@ -28,6 +28,7 @@ import resnet
 
 from dataloader import *
 
+from experimental_utils import *
 
 ################################################################################
 # Generic utility methods, eventually refactor into separate file
@@ -87,6 +88,7 @@ def get_parser():
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
+    parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -301,12 +303,14 @@ def main():
 
 
     global model_params, master_params
-    if args.fp16:  model_params, master_params = prep_param_lists(model)
+    if args.fp16: model_params, master_params = prep_param_lists(model)
     else: master_params = list(model.parameters())
+
+    optim_params = bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(optim_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
 
     if args.resume: # we must load optimizer params separately
