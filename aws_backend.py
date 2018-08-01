@@ -176,7 +176,6 @@ class Run(backend.Run):
     # get list of all logdirs
     find_command = f'find {backend.LOGDIR_PREFIX} -type d -maxdepth 1'
     logdir_ls = head_task.run_and_capture_output(find_command)
-    print("logdir ls was", logdir_ls)
     new_logdir = self.logdir  # default logdir set in __init__
     counter = 0
     while new_logdir in logdir_ls:
