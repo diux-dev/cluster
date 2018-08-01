@@ -46,6 +46,13 @@ def main():
   job.wait_until_ready()
 
   job.run('source activate tensorflow_p36')
+  job.run('conda install -c conda-forge jupyter_nbextensions_configurator -y')
+  job.run('conda install -c conda-forge jupyter_contrib_nbextensions -y')
+  job.run('conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
+  job.upload('jupyter_notebook_config.py') # 2 step upload since don't know ~
+  job.run('cp jupyter_notebook_config.py ~/.jupyter')
+  job.run('mkdir -p /efs/notebooks')
+  
   job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006')
   print(f'Tensorboard will be at http://{job.public_ip}:6006')
 
@@ -55,40 +62,25 @@ def main():
   # (must use abspath for ln -s left hand side for linking to work)
 
   
-  # TODO: maybe replace "run_tmux" with task.run_tmux(name, cmd)
+  # TODO: maybe replace "run_tmux_async" with task.run_tmux_async(name, cmd)
 
-  def run_tmux(cmd):   # run command in "selected" tmux session
-    job._run_raw(f'tmux send-keys -t selected:0 "{cmd}" Enter')
+  def run_tmux_async(session, cmd):   # run command in "selected" tmux session
+    job._run_raw(f'tmux send-keys -t {session}:0 "{cmd}" Enter')
 
   selected_logdir = backend_lib.LOGDIR_PREFIX+'.selected'
   job._run_raw("tmux kill-session -t selected")
   job._run_raw("tmux new-session -s selected -n 0 -d")
-  run_tmux('source activate tensorflow_p36')
-  run_tmux(f"tensorboard --logdir {selected_logdir} --port=6007")
+  run_tmux_async('selected', 'source activate tensorflow_p36')
+  run_tmux_async('selected',
+                 f"tensorboard --logdir {selected_logdir} --port=6007")
   print(f'Tensorboard selected will be at http://{job.public_ip}:6007')
 
   # launch jupyter notebook server
-  job.upload('jupyter_notebook_config.py') # don't know ~ => upload in 2 steps
-  run_tmux('cp jupyter_notebook_config.py ~/.jupyter')
-
-  def run_tmux(cmd):   # run command in "jupyter" tmux session
-    job._run_raw(f'tmux send-keys -t jupyter:0 "{cmd}" Enter')
-    
   job._run_raw('tmux kill-session -t jupyter')
   job._run_raw('tmux new-session -s jupyter -n 0 -d')
-  run_tmux('source activate tensorflow_p36')
-  run_tmux('conda activate tensorflow_p36')
-
-  # install table of contents extensions
-  run_tmux('fuser 8888/tcp -k')
-  run_tmux('conda install -c conda-forge jupyter_nbextensions_configurator -y')
-  run_tmux('conda install -c conda-forge jupyter_contrib_nbextensions -y')
-
-  # start notebook server
-  run_tmux('mkdir -p /efs/notebooks')
-  run_tmux('cd /efs/notebooks')
-  run_tmux('jupyter notebook')
-
+  run_tmux_async('jupyter', 'cd /efs/notebooks')
+  run_tmux_async('jupyter', 'source activate tensorflow_p36')
+  run_tmux_async('jupyter', 'jupyter notebook')
   print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
 
   
