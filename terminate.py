@@ -6,6 +6,9 @@ Usage:
 
 ./terminate.py gpu   # terminates all instances matching "gpu*"
 
+If instance doesn't have name, it's assigned name "noname", so to kill those
+./terminate.py noname
+
 # TODO: shortcut for --name
 # TODO: also delete corresponding placement groups if they are no longer used. (for now, workaround is to call "delete_placement_groups.py" once you hit placement group limit)
 """
@@ -77,7 +80,7 @@ def main():
     if state == 'terminated':
       continue
     instances_to_kill.append(i)
-    print(u.get_name(i))
+    print(u.get_name(i), i.instance_type, i.key_name)
 
 
   # print extra info if couldn't find anything to kill

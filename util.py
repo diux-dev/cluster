@@ -64,7 +64,9 @@ def get_name(tags_or_instance):
      Returns '' if there's less than one name.
   """
 
-  assert tags_or_instance is not None, "Found a machine with no name"
+  #  assert tags_or_instance is not None, "Found a machine with no name"
+  if not tags_or_instance:
+    return 'noname'
   if hasattr(tags_or_instance, 'tags'):
     tags = tags_or_instance.tags
   else:
