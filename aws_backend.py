@@ -142,6 +142,7 @@ class Run(backend.Run):
             self.log("create_tags failed with %s, retrying in %d seconds"%(
               str(e), TIMEOUT_SEC))
             time.sleep(TIMEOUT_SEC)
+
     job = Job(self, job_name, instances=instances,
               install_script=install_script,
               linux_type=linux_type,
