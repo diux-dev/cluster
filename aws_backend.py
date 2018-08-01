@@ -46,6 +46,7 @@ class Run(backend.Run):
     self.jobs = []
 
   # TODO: get rid of linux type (only login username)
+  # move everything into kwargs
   def make_job(self, role_name, num_tasks=1, skip_existing_job_validation=False, **kwargs):
     """skip_existing_job_validation: if True, doesn't check that existing job on server has same number of tasks as requested."""
     
@@ -66,7 +67,14 @@ class Run(backend.Run):
     user_data = kwargs.get('user_data', '')
     ebs = kwargs.get('ebs', '')
     use_spot = kwargs.get('use_spot', False)
+    monitoring = kwargs.get('monitoring', True)
 
+    # always install tmux on Amazon linux types
+    # TODO: has no effect for some reason
+    # https://console.aws.amazon.com/support/v1?region=us-west-2#/case/?displayId=5256445351&language=en
+    if linux_type == 'amazon':
+      user_data+='sudo yum install tmux -y'
+    
     if user_data:
       user_data+='\necho userdata_ok >> /tmp/is_initialized\n'
 
@@ -119,9 +127,10 @@ class Run(backend.Run):
       
 
       placement_arg = {'AvailabilityZone': availability_zone}
-      
       if placement_group: placement_arg['GroupName'] = placement_group
       args['Placement'] = placement_arg
+      
+      if monitoring: args['Monitoring'] = {'Enabled': True}
       args['UserData'] = user_data
 
       if use_spot: instances = u.create_spot_instances(args)
@@ -179,8 +188,9 @@ class Run(backend.Run):
     head_task.run(f'mkdir -p {self.logdir}')
 
 
+# TODO: refactor common fields like "linux_type", "user_data" to be
+# stored in job instead of task
 class Job(backend.Job):
-  # TODO: get rid of linux_type
   def __init__(self, run, name, instances, install_script=None,
                linux_type=None, user_data='', skip_efs_mount=False):
     self._run = run
@@ -216,13 +226,15 @@ class Job(backend.Job):
 class Task(backend.Task):
   # TODO: replace linux_type with username
   def __init__(self, instance, job, task_id, install_script=None,
-               linux_type=None, user_data='', skip_efs_mount=False):
+               user_data='', linux_type=None, skip_efs_mount=False):
     self.initialize_called = False
     self.instance = instance
     self.job = job
     self.id = task_id
+
     self.install_script = install_script
     self.user_data = user_data
+    self.linux_type = linux_type
     self._run_counter = 0
     self.cached_ip = None
     self.cached_public_ip = None
@@ -269,6 +281,9 @@ class Task(backend.Task):
 
   def _setup_tmux(self):
     self._tmux_session_name = self.job._run.name
+    # hack to get around Amazon linux not having tmux
+    if self.linux_type == 'amazon':
+      self._run_ssh('sudo yum install tmux -y')
     self._run_ssh('tmux kill-session -t '+self._tmux_session_name)
     self._run_ssh('tmux set-option -g history-limit 50000 \; new-session -s %s -n 0 -d'%(self._tmux_session_name,))
     self._run_command_available = True
@@ -452,8 +467,9 @@ tmux a
     stdout_str = stdout.read().decode()
     stderr_str = stderr.read().decode()
     # todo, line below always prints nothing
-    #    self.log("run_ssh returned: " + stdout_str)
-        
+    if 'command not found' in stdout_str or 'command not found' in stderr_str:
+      self.log(f"command ({cmd}) failed with ({stdout_str}), ({stderr_str})")
+      assert False, "run_ssh command failed"
     return stdout_str, stderr_str
 
   def run_and_capture_output(self, cmd, sync=True, ignore_errors=False):
