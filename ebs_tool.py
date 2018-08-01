@@ -95,7 +95,7 @@ def main():
   else:
     mode = sys.argv[1]
 
-  if mode == 'list':
+  if mode == 'list' or mode == 'ls':
     list_ebss()
   elif mode == 'grow':
     task_fragment = sys.argv[2]
