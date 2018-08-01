@@ -152,18 +152,29 @@ class Run(backend.Run):
 
 
   def setup_logdir(self):
-    """Create logdir (using first task of first job)."""
+    """Create logdir (using first task of first job).
+
+    This is necessary to be called, and must run after first job/task is ready.
+    """
+    print("creating logdir")
     assert self.jobs
     head_job = self.jobs[0]
     assert head_job.tasks
     head_task = head_job.tasks[0]
     assert head_task.initialized, "Head task not initialized, must wait_until_ready"
 
-    if head_task.file_exists(self.logdir):
-      datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-      new_logdir = f'{backend.LOGDIR_PREFIX}/{self.name}.{datestr}'
-      self.log(f'Warning, logdir {self.logdir} exists, deduping to {new_logdir}')
-      self.logdir = new_logdir
+    # get list of all logdirs
+    find_command = f'find {backend.LOGDIR_PREFIX} -type d -maxdepth 1'
+    logdir_ls = head_task.run_and_capture_output(find_command)
+    print("logdir ls was", logdir_ls)
+    new_logdir = self.logdir  # default logdir set in __init__
+    counter = 0
+    while new_logdir in logdir_ls:
+      counter+=1
+      lll = '%s.%02d'%(self.logdir, counter)
+      self.log(f'Warning, logdir {new_logdir} exists, deduping to {lll}')
+      new_logdir = lll
+    self.logdir = new_logdir
     head_task.run(f'mkdir -p {self.logdir}')
 
 
