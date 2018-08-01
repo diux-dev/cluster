@@ -89,6 +89,8 @@ def main():
     pp(valid_names)
     print("No running instances found for: Name '%s', key '%s'"%
           (fragment, USER_KEY_NAME))
+    if args.skip_tensorboard:
+      print("skipping tensorboard")
     return
 
   action = 'soft terminate' if args.soft else 'terminate'
