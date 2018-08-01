@@ -102,14 +102,28 @@ x_args = [
 # Current benchmark for 1x p3
 xar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
-  '--lr', 0.4,
+  '--epochs', 40,
+  '--lr', 0.5,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '192,192,128',
+  '--batch-sched', '256,256,128',
   '--num-tasks', 1,
   '--val-ar',
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+]
+
+# Current benchmark for 1x p3
+xar_args_bnwd = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 40,
+  '--lr', 0.5,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--init-bn0',
+  '--batch-sched', '256,256,128',
+  '--num-tasks', 1,
+  '--val-ar',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--no-bn-wd'
 ]
 
 xar_args_pytorch = [
