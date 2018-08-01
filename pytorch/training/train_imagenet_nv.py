@@ -85,8 +85,8 @@ def get_parser():
     parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
                         help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
-    parser.add_argument('--print-freq', '-p', default=20, type=int,
-                        metavar='N', help='print frequency (default: 10)')
+    parser.add_argument('--print-freq', '-p', default=5, type=int,
+                        metavar='N', help='print every this many steps (default: 5)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
