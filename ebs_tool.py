@@ -100,6 +100,9 @@ def main():
   elif mode == 'grow':
     task_fragment = sys.argv[2]
     grow_ebs_for_task(task_fragment, 500)
+  elif mode == 'detach':
+    vol = u.lookup_volume(sys.argv[2])
+    vol.detach_from_instance()
   else:
     assert False, "Unknown mode "+mode
       
