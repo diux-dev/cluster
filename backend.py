@@ -64,6 +64,11 @@ class Run:
     for job in self.jobs:
       job.run(*args, **kwargs)
 
+  def run_and_capture_output(self, *args, **kwargs):
+    """Runs command on every first job in the run, returns stdout."""
+
+    return self.jobs[0].run_and_capture_output(*args, **kwargs)
+
   def _run_raw(self, *args, **kwargs):
     """_run_raw on every job in the run."""
     
@@ -99,6 +104,11 @@ class Job:
 
     for task in self.tasks:
       task.run(cmd, *args, **kwargs)
+
+  def run_and_capture_output(self, cmd, *args, **kwargs):
+    """Runs command on first task in the job, returns stdout."""
+
+    return self.tasks[0].run_and_capture_output(cmd, *args, **kwargs)
 
   def _run_raw(self, *args, **kwargs):
     """_run_raw on every task in the job."""

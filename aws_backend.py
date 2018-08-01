@@ -444,6 +444,15 @@ tmux a
         
     return stdout_str, stderr_str
 
+  def run_and_capture_output(self, cmd, sync=True, ignore_errors=False):
+    assert '|' not in cmd, "don't support piping (since we append piping here)"
+    
+    ts = str(u.now_micros())
+    cmd_stdout_fn = self.remote_scratch+'/'+str(self._run_counter)+'.'+ts+'.out'
+    cmd = f'{cmd} | tee {cmd_stdout_fn}'
+    self.run(cmd, sync, ignore_errors)
+    return self.file_read(cmd_stdout_fn)
+    
   def _run_raw(self, cmd):
     return self._run_ssh(cmd)
 

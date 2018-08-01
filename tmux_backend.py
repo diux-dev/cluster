@@ -167,6 +167,13 @@ class Task(backend.Task):
       else:
         self.log("Warning: command %s returned status %s"%(cmd, contents))
 
+  def run_and_capture_output(self, cmd, sync=True, ignore_errors=False):
+    cmd_stdout_fn  = '%s/%d.stdout'%(self.scratch, self._run_counter)
+    assert '|' not in cmd, "don't support piping (since we append piping here)"
+    cmd = f'{cmd} | tee {cmd_stdout_fn}'
+    self.run(cmd, sync, ignore_errors)
+    return self.file_read(cmd_stdout_fn)
+    
   def _run_raw(self, cmd):
     """Runs command directly, skipping tmux interface. Use if want to create additional tmux sessions manually."""
     self._ossystem(cmd)
@@ -202,9 +209,7 @@ class Task(backend.Task):
   
 
   def file_read(self, remote_fn):
-    tmp_fn = self._make_temp_fn()
-    self.download(remote_fn, tmp_fn)
-    return open(tmp_fn).read()
+    return open(remote_fn).read()
 
   def wait_until_ready(self):
     return
