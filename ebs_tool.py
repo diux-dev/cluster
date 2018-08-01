@@ -103,6 +103,12 @@ def main():
   elif mode == 'detach':
     vol = u.lookup_volume(sys.argv[2])
     vol.detach_from_instance()
+  elif mode == 'delete':
+    vol = u.lookup_volume(sys.argv[2])
+    response = vol.delete()
+    print(f"Deleting {vol.id}, success: {u.is_good_response(response)}")
+
+    
   else:
     assert False, "Unknown mode "+mode
       
