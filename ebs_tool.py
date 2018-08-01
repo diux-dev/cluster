@@ -107,7 +107,6 @@ def main():
     vol = u.lookup_volume(sys.argv[2])
     response = vol.delete()
     print(f"Deleting {vol.id}, success: {u.is_good_response(response)}")
-
     
   else:
     assert False, "Unknown mode "+mode
