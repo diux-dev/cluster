@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # tool to automate various AWS commands
+# TODO: transition to argparse
 
 import boto3
 import sys
