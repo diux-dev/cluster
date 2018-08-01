@@ -975,8 +975,13 @@ def create_blank_volume(name, zone, size, iops, voltype='io1'):
 
 
 ATTACH_WAIT_INTERVAL_SEC=5
-def attach_vol(vol, instance, device=DEFAULT_UNIX_DEVICE):
+def attach_volume(vol, instance, device=DEFAULT_UNIX_DEVICE):
   """Attaches volume to given instance."""
+
+  existing_attachments = [d['InstanceId'] for d in vol.attachments]
+  if instance.id in existing_attachments:
+    print("Volume is already attached, skipping")
+    return
   
   while True:
     try:
@@ -988,4 +993,25 @@ def attach_vol(vol, instance, device=DEFAULT_UNIX_DEVICE):
       continue
     else:
       print('Attachment successful')
+      break
+
+def mount_volume(volume, task, mount_directory, device=DEFAULT_UNIX_DEVICE):
+  while True:
+    try:
+      # Need retry logic because attachment is async and can be slow
+      # run_async doesn't propagate exceptions raised on workers, use regular
+      df_output = task.run_and_capture_output('df')
+      if device in df_output:
+        print('Volume already mounted, skipping')
+        return
+      task.run(f'sudo mkdir {mount_directory}', ignore_errors=True)
+      task.run(f'sudo mount {device} {mount_directory}')
+      task.run(f'sudo chown `whoami` {mount_directory}')
+    except Exception as e:
+      print(f'mount failed with: ({e})')
+      print(f'Retrying in {ATTACH_WAIT_INTERVAL_SEC}')
+      time.sleep(ATTACH_WAIT_INTERVAL_SEC)
+      continue
+    else:
+      print(f'Mount successful')
       break
