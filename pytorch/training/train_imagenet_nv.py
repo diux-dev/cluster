@@ -379,6 +379,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
+        batch_size = input.size(0)
         batch_num = i+1
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
@@ -392,18 +393,23 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         output = model(input)
         loss = criterion(output, target)
 
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-
         if args.distributed:
+            # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
             metrics = torch.tensor([loss.data,prec1,prec5]).float().cuda()
-            reduced_loss, prec1, prec5 = reduce_tensor(metrics)
+            corr1, corr5 = correct(output.data, target, topk=(1, 5))
+            metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
+            batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics)
+            reduced_loss = reduced_loss
+            prec1 = corr1*(100.0/batch_total)
+            prec5 = corr5*(100.0/batch_total)
         else:
             reduced_loss = loss.data
+            batch_total = input.size(0)
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
 
-        losses.update(to_python_float(reduced_loss), input.size(0))
-        top1.update(to_python_float(prec1), input.size(0))
-        top5.update(to_python_float(prec5), input.size(0))
+        losses.update(to_python_float(reduced_loss), batch_total)
+        top1.update(to_python_float(prec1), batch_total)
+        top5.update(to_python_float(prec5), batch_total)
 
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
@@ -434,7 +440,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             log_tb("losses/xent", losses.val)
             log_tb("losses/train_1", top1.val)   # precision@1
             log_tb("losses/train_5", top5.val)   # precision@5
-            images_per_sec = last_batch_size/batch_time.val
+            images_per_sec = batch_size/batch_time.val
             log_tb("times/1gpu_images_per_sec", images_per_sec)
 
             time_delta = time.time()-last_log_time
@@ -470,7 +476,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
 
-        global_example_count+=last_batch_size*args.world_size
+        global_example_count+=batch_total
 
              
             
@@ -494,17 +500,17 @@ def validate(val_loader, model, criterion, epoch, start_time):
     for i,(input,target) in enumerate(iter(val_loader)):
         batch_num = i+1
         if args.distributed:
-            prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
+            prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)
         else:
             with torch.no_grad():
                 output = model(input)
                 loss = criterion(output, target).data
-            tot_batch = input.size(0)
+            batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1,5))
             
-        losses.update(to_python_float(loss), tot_batch)
-        top1.update(to_python_float(prec1), tot_batch)
-        top5.update(to_python_float(prec5), tot_batch)
+        losses.update(to_python_float(loss), batch_total)
+        top1.update(to_python_float(prec1), batch_total)
+        top5.update(to_python_float(prec5), batch_total)
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -552,12 +558,12 @@ def distributed_predict(input, target, model, criterion):
         corr1, corr5 = correct(output.data, target, topk=(1, 5))
 
     metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
-    tot_batch, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics)
+    batch_total, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics)
     reduced_loss = reduced_loss/valid_batches
 
-    prec1 = corr1*(100.0/tot_batch)
-    prec5 = corr5*(100.0/tot_batch)
-    return prec1, prec5, reduced_loss, tot_batch
+    prec1 = corr1*(100.0/batch_total)
+    prec5 = corr5*(100.0/batch_total)
+    return prec1, prec5, reduced_loss, batch_total
 
 
 def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
