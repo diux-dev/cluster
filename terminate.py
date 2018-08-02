@@ -99,7 +99,9 @@ def main():
     return
 
   action = 'soft terminate' if args.soft else 'terminate'
-  if not args.yes:
+  if args.yes:
+    answer = 'y'
+  else:
     answer = input("%d instances found, %s in %s? (y/N) " % (len(instances_to_kill), action, region))
   if not answer:
     answer = "n"
