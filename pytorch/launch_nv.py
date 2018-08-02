@@ -102,23 +102,25 @@ x_args = [
 # Current benchmark for 1x p3
 xar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
-  '--lr', 0.4,
+  '--epochs', 35,
+  '--lr', 1.0,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '192,192,128',
+  '--batch-sched', '512,192,128',
   '--num-tasks', 1,
   '--val-ar',
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+  '--lr-linear-scale',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--no-bn-wd'
 ]
 
 xar_args_pytorch = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
   '--epochs', 45,
-  '--lr', 0.4,
+  '--lr', 1.0,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '192,192,128',
+  '--batch-sched', '512,192,128',
   '--num-tasks', 1,
   '--val-ar',
   '--ami-name', 'pytorch.imagenet.source.v3',
@@ -195,6 +197,23 @@ x4ar_args = [
   # '--resume', 'sz128_checkpoint.path.tar'
   # '--resume', 'sz244_checkpoint.path.tar'
 ]
+
+# Current benchmark for 1x p3
+x4ar_args_bnwd = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 40,
+  '--lr', 0.47 * 4,
+  '--init-bn0',
+  # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
+  '--batch-sched', '256,192,128',
+  '--num-tasks', 4,
+  '--val-ar',
+  '--lr-linear-scale',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--no-bn-wd'
+]
+
+
 # Current benchmark for 8x p3's - without Aspect Ratio Validatoin
 x8_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -223,12 +242,11 @@ x8ar_args = [
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x16ar_args = [
-  '--lr-sched', '0.14,0.43,0.75,0.94',
-  '--resize-sched', '0.35,0.88',
-  '--epochs', 60,
-  '--lr', 0.2 * 16,
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 40,
+  '--lr', 0.23 * 8,
   '--init-bn0',
-  '--batch-sched', 128,
+  '--batch-sched', 64,
   '--val-ar',
   '--num-tasks', 16,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
@@ -330,6 +348,7 @@ def create_job(run, job_name, num_tasks, env_name):
   job.upload_async('training/dataloader.py')
   job.upload_async('training/dataloader_performance.py')
   job.upload_async('training/train_imagenet_nv.py')
+  job.upload_async('training/experimental_utils.py')
 
   # Sometimes get SSH session not active or "connection reset by peer"
   # bad internet?
@@ -354,7 +373,7 @@ def start_training(job, params, save_tag):
   # Use NCCL rings for faster network throughput
   nccl_args = launch_utils_lib.get_nccl_args(num_tasks, num_gpus)
   # below is what official version uses
-  #  nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
+  # nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
   
   # Create save directory
   # TODO: replace with DATA_ROOT? ~ is not understood by all programs
@@ -369,7 +388,7 @@ def start_training(job, params, save_tag):
     '~/data/imagenet',
     '--save-dir', save_dir,
     '--fp16',
-    '--loss-scale', 512,
+    '--loss-scale', 1024,
     '--world-size', world_size,
     '--distributed'
   ]

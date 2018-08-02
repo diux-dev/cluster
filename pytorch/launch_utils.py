@@ -111,22 +111,25 @@ def get_nccl_args(num_tasks, num_gpus):
   if num_tasks <= 1: return 'NCCL_DEBUG=VERSION'
   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
   return f'NCCL_RINGS="{nccl_rings}" NCCL_SINGLE_RING_THRESHOLD=10 NCCL_DEBUG=VERSION'
+  # return 'NCCL_MIN_NRINGS=2 NCCL_SINGLE_RING_THRESHOLD=10 NCCL_DEBUG=VERSION'
 
+def get_skip_order(size):
+    if size == 4: return [0,2,1,3]
+    skip_step = 5 if size == 16 else 3
+    # step size of 3 yields - [0,3,6,1,4,7,2,5]
+    return [(i*skip_step)%size for i in range(size)]
+  
 def get_nccl_rings(num_tasks, num_gpus):
   ring = build_ring_order(range(num_tasks), range(num_gpus))
   ring_rev = build_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
   rotated_gpu_order = [3,2,1,0,7,6,5,4]
-  if (num_tasks >= 8):
-    assert((num_tasks % 8) == 0)
-    skip_step = 5 if num_tasks == 16 else 3
-    # step size of 3 yields - [0,3,6,1,4,7,2,5]
-    skip_machine_order = [(i*skip_step)%num_tasks for i in range(num_tasks)]
+  skip_gpu_order = get_skip_order(num_gpus)
+  if (num_tasks >= 4):
+    assert((num_tasks % 4) == 0)
+    skip_machine_order = get_skip_order(num_tasks)
     ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
-    ring_skip_rev = build_ring_order(reversed(skip_machine_order), reversed(rotated_gpu_order))
+    ring_skip_rev = build_ring_order(reversed(skip_machine_order), skip_gpu_order)
     rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
-  elif num_tasks == 4:
-    ring_skip = build_ring_order([0,2,1,3], rotated_gpu_order)
-    rings_arr = [ring, ring_rev, ring_skip]
   else:
     rings_arr = [ring, ring_rev]
   return ' | '.join(rings_arr)

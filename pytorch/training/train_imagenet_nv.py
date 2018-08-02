@@ -28,6 +28,7 @@ import resnet
 
 from dataloader import *
 
+from experimental_utils import *
 
 ################################################################################
 # Generic utility methods, eventually refactor into separate file
@@ -84,9 +85,12 @@ def get_parser():
                         help='Scheduler to resize from 128 -> 224 -> 288')
     parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
                         help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
+    parser.add_argument('--lr-linear-scale', action='store_true',
+                        help='Linear scale the learning rate if we change the batch size later on')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
+    parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -129,8 +133,12 @@ class DataManager():
         
     def set_epoch(self, epoch):
         if epoch == 0: self.set_data(self.data0)
-        if epoch==int(args.epochs*self.resize_sched[0]+0.5): self.set_data(self.data1)
-        if epoch==int(args.epochs*self.resize_sched[1]+0.5): self.set_data(self.data2)
+        if epoch==int(args.epochs*self.resize_sched[0]+0.5):
+            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[1]/self.batch_sched[0]
+            self.set_data(self.data1)
+        if epoch==int(args.epochs*self.resize_sched[1]+0.5):
+            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[2]/self.batch_sched[1]
+            self.set_data(self.data2)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
@@ -231,14 +239,11 @@ class Scheduler():
 def init_dist_weights(model):
     # https://arxiv.org/pdf/1706.02677.pdf
     # https://github.com/pytorch/examples/pull/262
-    if args.arch.startswith('resnet'):
-        for m in model.modules():
-            if isinstance(m, resnet.BasicBlock):
-                m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
-            if isinstance(m, resnet.Bottleneck):
-                m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
-            if isinstance(m, nn.Linear):
-                m.weight.data.normal_(0, 0.01)
+    if not args.arch.startswith('resnet'): return
+    for m in model.modules():
+        if isinstance(m, resnet.BasicBlock): m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
+        if isinstance(m, resnet.Bottleneck): m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
+        if isinstance(m, nn.Linear): m.weight.data.normal_(0, 0.01)
 
 def log_tb(tag, val):
   """Log value to tensorboard (relies on global_example_count being set properly)"""
@@ -253,7 +258,7 @@ def main():
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
     global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
 
-    is_chief = int(os.environ['RANK'])==0
+    is_chief = (not args.distributed) or (int(os.environ['RANK'])==0)
 
     global_example_count = 0
     if is_chief:
@@ -301,12 +306,14 @@ def main():
 
 
     global model_params, master_params
-    if args.fp16:  model_params, master_params = prep_param_lists(model)
+    if args.fp16: model_params, master_params = prep_param_lists(model)
     else: master_params = list(model.parameters())
+
+    optim_params = bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(master_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(optim_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
 
     if args.resume: # we must load optimizer params separately
@@ -372,7 +379,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
-        batch_num = i+2
+        batch_num = i+1
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
 
@@ -485,7 +492,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
     val_len = len(val_loader)
 
     for i,(input,target) in enumerate(iter(val_loader)):
-        batch_num = i+2
+        batch_num = i+1
         if args.distributed:
             prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
         else:
