@@ -395,7 +395,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         if args.distributed:
             # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
-            metrics = torch.tensor([loss.data,prec1,prec5]).float().cuda()
             corr1, corr5 = correct(output.data, target, topk=(1, 5))
             metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
             batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics)
