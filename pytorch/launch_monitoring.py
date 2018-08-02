@@ -52,8 +52,17 @@ def main():
   job.upload('jupyter_notebook_config.py') # 2 step upload since don't know ~
   job.run('cp jupyter_notebook_config.py ~/.jupyter')
   job.run('mkdir -p /efs/notebooks')
+
+  if args.zone.startswith('us-west-2'):
+    window_title = 'Oregon'
+  elif args.zone.startswith('us-east-1'):
+    window_title = 'Virginia'
+  elif args.zone.startswith('us-east-2'):
+    window_title = 'Ohio'
+  else:
+    window_title = ''
+  job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006 --window_title={window_title}')
   
-  job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006')
   print(f'Tensorboard will be at http://{job.public_ip}:6006')
 
   # run second Tensorboard in new tmux session for "selected runs"
