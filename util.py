@@ -29,6 +29,8 @@ WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 # name to use for mounting external drive
 DEFAULT_UNIX_DEVICE='/dev/xvdq' # used to be /dev/xvdf
 
+EMPTY_NAME="noname"
+
 def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
@@ -64,16 +66,13 @@ def get_name(tags_or_instance):
      Returns '' if there's less than one name.
   """
 
-  #  assert tags_or_instance is not None, "Found a machine with no name"
-  if not tags_or_instance:
-    return 'noname'
   if hasattr(tags_or_instance, 'tags'):
     tags = tags_or_instance.tags
   else:
     tags = tags_or_instance
 
   if not tags:
-    return ''
+    return EMPTY_NAME
   names = [entry['Value'] for entry in tags if entry['Key']=='Name']
   if not names:
     return ''
@@ -176,7 +175,7 @@ def get_vpc_dict():
   ec2 = create_ec2_resource()
   for vpc_response in response['Vpcs']:
     key = get_name(vpc_response.get('Tags', []))
-    if not key:  # skip VPC's that don't have a name assigned
+    if not key or key==EMPTY_NAME:  # skip VPC's that don't have a name assigned
       continue
     
     assert key not in result, ("Duplicate VPC group %s in %s" %(key,
@@ -197,7 +196,7 @@ def get_security_group_dict():
   ec2 = create_ec2_resource()
   for security_group_response in response['SecurityGroups']:
     key = get_name(security_group_response.get('Tags', []))
-    if not key:
+    if not key or key==EMPTY_NAME:
       continue  # ignore unnamed security groups
     #    key = security_group_response['GroupName']
     assert key not in result, ("Duplicate security group " + key)
@@ -255,7 +254,7 @@ def get_efs_dict():
     tag_response = efs_client.describe_tags(FileSystemId=fs_id)
     assert u.is_good_response(tag_response)
     key = u.get_name(tag_response['Tags'])
-    if not key:   # skip EFS's without a name
+    if not key or key==EMPTY_NAME:   # skip EFS's without a name
       continue
     assert key not in result
     result[key] = fs_id
@@ -717,7 +716,7 @@ def maybe_create_placement_group(name='', max_retries=10):
   """Creates placement group or reuses existing one. crash if unable to create
   placement group. If name is empty, ignores request."""
   
-  if not name:
+  if not name or name==EMPTY_NAME:
     return
   
   client = u.create_ec2_client()
