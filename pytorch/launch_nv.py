@@ -225,10 +225,10 @@ x8ar_args = [
 x16ar_args = [
   '--lr-sched', '0.14,0.43,0.75,0.94',
   '--resize-sched', '0.35,0.88',
-  '--epochs', 40,
-  '--lr', 0.25 * 8,
+  '--epochs', 60,
+  '--lr', 0.2 * 16,
   '--init-bn0',
-  '--batch-sched', 64,
+  '--batch-sched', 128,
   '--val-ar',
   '--num-tasks', 16,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
