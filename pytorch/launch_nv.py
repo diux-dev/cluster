@@ -234,7 +234,23 @@ x8ar_args = [
   '--batch-sched', 128,
   '--val-ar',
   '--num-tasks', 8,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--no-bn-wd'
+]
+
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+x8ar_args_nobnwd = [
+  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--epochs', 40,
+  '--lr', 0.23 * 8 * 2,
+  '--init-bn0',
+  '--batch-sched', '256,128,128',
+  # (AS) TODO: TEST OUT NCCL RINGS FOR 224 image sizes. Seems like we are getting much slower times
+  '--val-ar',
+  '--num-tasks', 8,
+  '--lr-linear-scale',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--no-bn-wd'
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
