@@ -23,7 +23,7 @@ parser.add_argument('--ami-name', type=str,
                     default="Deep Learning AMI (Ubuntu) Version 12.0",
                     help="name of AMI to use")
 parser.add_argument('--name', type=str, default='monitoring', help='run name')
-parser.add_argument('--instance-type', type=str, default='r5.4xlarge',
+parser.add_argument('--instance-type', type=str, default='r5.large',
                      help='instance type to use for tensorboard job')
 parser.add_argument('--zone', type=str, default='us-west-2c',
                     help='which availability zone to use')
