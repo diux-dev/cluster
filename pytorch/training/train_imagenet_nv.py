@@ -85,6 +85,8 @@ def get_parser():
                         help='Scheduler to resize from 128 -> 224 -> 288')
     parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
                         help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
+    parser.add_argument('--lr-linear-scale', action='store_true',
+                        help='Linear scale the learning rate if we change the batch size later on')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
@@ -131,8 +133,12 @@ class DataManager():
         
     def set_epoch(self, epoch):
         if epoch == 0: self.set_data(self.data0)
-        if epoch==int(args.epochs*self.resize_sched[0]+0.5): self.set_data(self.data1)
-        if epoch==int(args.epochs*self.resize_sched[1]+0.5): self.set_data(self.data2)
+        if epoch==int(args.epochs*self.resize_sched[0]+0.5):
+            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[1]/self.batch_sched[0]
+            self.set_data(self.data1)
+        if epoch==int(args.epochs*self.resize_sched[1]+0.5):
+            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[2]/self.batch_sched[1]
+            self.set_data(self.data2)
 
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
@@ -255,7 +261,7 @@ def main():
     # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
     global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
 
-    is_chief = int(os.environ['RANK'])==0
+    is_chief = (not args.distributed) or (int(os.environ['RANK'])==0)
 
     global_example_count = 0
     if is_chief:

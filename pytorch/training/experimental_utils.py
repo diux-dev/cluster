@@ -1,6 +1,7 @@
+import torch
 
 def bnwd_optim_params(model, model_params, master_params):
-    bn_params, remaining_params = split_bn_params(m, model_params, master_params)
+    bn_params, remaining_params = split_bn_params(model, model_params, master_params)
     return [{'params':bn_params,'weight_decay':0}, {'params':remaining_params}]
 
 
