@@ -107,6 +107,13 @@ class DataPrefetcher():
                 break
             yield input, target
 
+# https://github.com/fastai/fastai_v1/blob/master/dev_nb/nb_002.py
+def pil2tensor(image):
+    arr = torch.ByteTensor(torch.ByteStorage.from_buffer(image.tobytes()))
+    arr = arr.view(image.size[1], image.size[0], -1)
+    arr = arr.permute(2,0,1)
+    return arr
+    # return arr.float().div_(255)
 
 def fast_collate(batch):
     if not batch: return torch.tensor([]), torch.tensor([])
@@ -121,8 +128,10 @@ def fast_collate(batch):
         if(nump_array.ndim < 3):
             nump_array = np.expand_dims(nump_array, axis=-1)
         nump_array = np.rollaxis(nump_array, 2)
-
         tensor[i] += torch.from_numpy(nump_array)
+
+        # Seems to be slower for our pipeline. Need to ask Sylvain
+        # tensor[i] += pil2tensor(img)
         
     return tensor, targets
 
@@ -131,7 +140,7 @@ def sort_ar(valdir):
     idx2ar_file = valdir+'/../sorted_idxar.p'
     if os.path.isfile(idx2ar_file): return pickle.load(open(idx2ar_file, 'rb'))
     print('Creating AR indexes. Please be patient this may take a couple minutes...')
-    val_dataset = datasets.ImageFolder(valdir)
+    val_dataset = datasets.ImageFolder(valdir) # AS: TODO: use Image.open instead of looping through dataset
     sizes = [img[0].size for img in tqdm(val_dataset, total=len(val_dataset))]
     idx_ar = [(i, round(s[0]/s[1], 5)) for i,s in enumerate(sizes)]
     sorted_idxar = sorted(idx_ar, key=lambda x: x[1])

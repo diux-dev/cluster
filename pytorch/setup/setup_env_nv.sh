@@ -19,7 +19,7 @@ echo 'Starting script'
 # sudo apt install -y htop
 
 # Change nccl to 9-1
-sed -i -e 's/cuda-9.0/cuda-9.2/g' ~/.bashrc
+# sed -i -e 's/cuda-9.0/cuda-9.2/g' ~/.bashrc
 source ~/.bashrc
 
 # echo '>pytorch'

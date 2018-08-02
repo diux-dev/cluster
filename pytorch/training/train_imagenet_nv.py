@@ -239,14 +239,11 @@ class Scheduler():
 def init_dist_weights(model):
     # https://arxiv.org/pdf/1706.02677.pdf
     # https://github.com/pytorch/examples/pull/262
-    if args.arch.startswith('resnet'):
-        for m in model.modules():
-            if isinstance(m, resnet.BasicBlock):
-                m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
-            if isinstance(m, resnet.Bottleneck):
-                m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
-            if isinstance(m, nn.Linear):
-                m.weight.data.normal_(0, 0.01)
+    if not args.arch.startswith('resnet'): return
+    for m in model.modules():
+        if isinstance(m, resnet.BasicBlock): m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
+        if isinstance(m, resnet.Bottleneck): m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
+        if isinstance(m, nn.Linear): m.weight.data.normal_(0, 0.01)
 
 def log_tb(tag, val):
   """Log value to tensorboard (relies on global_example_count being set properly)"""
@@ -382,7 +379,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     # print('Begin training loop:', st)
     for i,(input,target) in enumerate(iter(trn_loader)):
-        batch_num = i+2
+        batch_num = i+1
         # if i == 0: print('Received input:', time.time()-st)
         if args.prof and (i > 200): break
 
@@ -495,7 +492,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
     val_len = len(val_loader)
 
     for i,(input,target) in enumerate(iter(val_loader)):
-        batch_num = i+2
+        batch_num = i+1
         if args.distributed:
             prec1, prec5, loss, tot_batch = distributed_predict(input, target, model, criterion)
         else:
