@@ -37,6 +37,8 @@ parser.add_argument('-d', '--delay', type=int, default=0,
 # todo: add -n version
 parser.add_argument('-n', '--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
+parser.add_argument('-y', '--yes', action='store_true', default="",
+                     help="skip confirmation")
 parser.add_argument('name2', nargs='*')
 args = parser.parse_args()
 
@@ -97,10 +99,11 @@ def main():
     return
 
   action = 'soft terminate' if args.soft else 'terminate'
-  answer = input("%d instances found, %s in %s? (y/N) " % (len(instances_to_kill), action, region))
+  if not args.yes:
+    answer = input("%d instances found, %s in %s? (y/N) " % (len(instances_to_kill), action, region))
   if not answer:
     answer = "n"
-  if answer.lower() == "y":
+  if answer.lower() == "y" or args.yes:
     instance_ids = [i.id for i in instances_to_kill]
     if args.delay:
       print(f"Sleeping for {args.delay} seconds")
