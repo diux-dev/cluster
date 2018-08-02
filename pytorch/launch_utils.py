@@ -119,16 +119,7 @@ def get_skip_order(size):
     # step size of 3 yields - [0,3,6,1,4,7,2,5]
     return [(i*skip_step)%size for i in range(size)]
   
-def get_random_nccl_rings(num_tasks, num_gpus):
-  import random
-  world_size = num_tasks * num_gpus
-  r_order = random.sample(range(world_size), world_size)
-  return ' '.join(map(str, r_order))
-
 def get_nccl_rings(num_tasks, num_gpus):
-  # rings_arr = [get_random_nccl_rings(num_tasks, num_gpus) for i in range(4)]
-  # return ' | '.join(rings_arr)
-      
   ring = build_ring_order(range(num_tasks), range(num_gpus))
   ring_rev = build_ring_order(reversed(range(num_tasks)), reversed(range(num_gpus)))
   rotated_gpu_order = [3,2,1,0,7,6,5,4]
