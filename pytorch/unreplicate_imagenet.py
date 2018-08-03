@@ -15,6 +15,8 @@ parser.add_argument('--zone', type=str, default='')
 parser.add_argument('--replicas', type=int, default=8)
 parser.add_argument('--volume-offset', type=int, default=0, help='start numbering with this value')
 parser.add_argument('--dryrun', action='store_true')
+parser.add_argument('--iops', type=int, default=10000, help="unused")
+parser.add_argument('--size_gb', type=int, default=0, help="unused")
 args = parser.parse_args()
 
 import os
@@ -36,7 +38,12 @@ if __name__=='__main__':
   print(f"Deleting {args.replicas} replicas in {args.zone}")
   for i in range(args.volume_offset, args.replicas+args.volume_offset):
     vol_name = 'imagenet_%02d'%(i)
+    print(f"Deleting {vol_name}")
+    if not vol_name in vols:
+      print("    Not found")
+      continue
     vol = vols[vol_name]
-    print(f"Deleting {vol_name} {vol.id}")
+    assert vol.volume_type == 'io1', "Safety check to prevent killing XView volumes (they are gp2)"
     if not args.dryrun:
       vol.delete()
+      print(f"   {vol.id} deleted")

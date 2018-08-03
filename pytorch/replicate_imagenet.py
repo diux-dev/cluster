@@ -33,6 +33,8 @@ parser.add_argument('--snapshot-desc', type=str, default='imagenet_blank',
                     help='look for snapshot containing given string')
 parser.add_argument('--volume-offset', type=int, default=0, help='start numbering with this value')
 parser.add_argument('--iops', type=int, default=10000, help="iops requirement")
+parser.add_argument('--size_gb', type=int, default=0, help="size in GBs")
+
 args = parser.parse_args()
 
 import os
@@ -51,7 +53,7 @@ def create_tags(name):
     }]
 }]
 
-if __name__=='__main__':
+def main():
   ec2 = u.create_ec2_resource()
   assert not args.snapshot, "Switched to snapshot_desc"
   assert args.zone
@@ -64,12 +66,20 @@ if __name__=='__main__':
   assert len(snapshots)>0, f"no snapshot matching {args.snapshot_desc}"
   assert len(snapshots)<2, f"multiple snapshots matching {args.snapshot_desc}"
   snap = snapshots[0]
-  print(f"Making {args.replicas} replicas in {args.zone}")
+  if not args.size_gb:
+    args.size_gb = snap.volume_size
+    
+  print(f"Making {args.replicas} {args.size_gb} GB replicas in {args.zone}")
+  
   for i in range(args.volume_offset, args.replicas+args.volume_offset):
     vol_name = 'imagenet_%02d'%(i)
-    vol = ec2.create_volume(Size=300, VolumeType='io1',
+
+    vol = ec2.create_volume(Size=args.size_gb, VolumeType='io1',
                       TagSpecifications=create_tags(vol_name),
                       AvailabilityZone=args.zone,
                       SnapshotId=snap.id,
                             Iops=args.iops)
     print(f"Creating {vol_name} {vol.id}")
+
+if __name__=='__main__':
+  main()
