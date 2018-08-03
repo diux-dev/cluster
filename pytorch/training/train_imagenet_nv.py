@@ -264,6 +264,7 @@ def main():
     if is_chief:
       print(f"Logging to {args.logdir}")
       event_writer = SummaryWriter(args.logdir)
+      log_tb("first", time.time())
     else:
       event_writer = NoOp()
 
@@ -441,6 +442,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             log_tb("losses/train_5", top5.val)   # precision@5
             images_per_sec = batch_size/batch_time.val
             log_tb("times/1gpu_images_per_sec", images_per_sec)
+            log_tb("times/8gpu_images_per_sec", 8*images_per_sec)
 
             time_delta = time.time()-last_log_time
             recv_bytes, transmit_bytes = network_bytes()
