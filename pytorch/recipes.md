@@ -2,8 +2,24 @@
 Assumes {GIT_ROOT}/cluster is in your $PATH
 
 
+
 ## Moving regions/zones
-This replicates data from snapshots (see below) into EBS volume with names like imagenet_00, imagenet_01
+
+Following 9 zones have p3's at spot pricing:
+
+- us-east-1a  $24.4800
+- us-east-1c  $7.3440
+- us-east-1d  $7.3440
+- us-east-1f  $7.3440
+
+- us-east-2a  $7.3440
+- us-east-2b  $7.751
+
+- us-west-2a  $15.4726
+- us-west-2b  $8.0036
+- us-west-2c  $8.0479
+
+To create ImageNet high performance volumes use `replicate_imagenet.py` script. It creates volumes with names like imagenet_00, imagenet_01, ...
 ```
 source go-west
 python replicate_imagenet.py --zone=us-west-2b --replicas=8
@@ -21,6 +37,33 @@ There's a region-wide limit on IOPS, so occasionally may need to undo this opera
 python unreplicate_imagenet.py --zone=us-west-2b --replicas=8
 ```
 Also use `ebs_tool.py` to see existing volumes
+
+## Monitoring
+```
+cd ~/git0/cluster/pytorch
+conda activate gpubox
+
+Oregon monitoring 
+source go-west
+./launch_monitoring --zone=us-west-2c
+Tensorboard will be at http://35.161.232.69:6006
+Tensorboard selected will be at http://35.161.232.69:6007
+Jupyter notebook will be at http://35.161.232.69:8888
+
+Virginia monitoring:
+source go-east
+./launch_monitoring --zone=us-east-2c
+Tensorboard will be at http://52.202.163.26:6006
+Tensorboard selected will be at http://52.202.163.26:6007
+Jupyter notebook will be at http://52.202.163.26:8888
+
+Ohio Monitoring
+source go-ohio
+./launch_monitoring --zone=us-east-2a
+Tensorboard will be at http://18.188.60.21:6006
+Tensorboard selected will be at http://18.188.60.21:6007
+Jupyter notebook will be at http://18.188.60.21:8888
+```
 
 ## Testing changes setup scripts like setup_nv.sh
 
