@@ -231,6 +231,8 @@ class Task(backend.Task):
     self.job = job
     self.id = task_id
 
+    if user_data:
+      assert user_data.startswith('#!/bin/bash')
     self.install_script = install_script
     self.user_data = user_data
     self.linux_type = linux_type
