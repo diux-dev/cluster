@@ -181,7 +181,7 @@ x4ar_args_bnwd = [
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
 x8ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 60,
+  '--epochs', 40,
   '--lr', 0.23 * 8,
   '--init-bn0',
   '--batch-sched', 128,
@@ -212,7 +212,7 @@ x8ar_args_nobnwd = [
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x16ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 60,
+  '--epochs', 40,
   '--lr', 0.23 * 8,
   '--init-bn0',
   '--batch-sched', 64,
