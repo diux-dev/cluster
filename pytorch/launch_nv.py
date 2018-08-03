@@ -86,19 +86,6 @@ args = parser.parse_args()
 DEFAULT_ENV_NAME='pytorch_p36'
 
 # Current best settings
-
-# Current benchmark for 1x p3
-x_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
-  '--lr', 0.4,
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-  '--init-bn0',
-  '--batch-sched', '192,192,128',
-  '--num-tasks', 1,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
-]
-
 # Current benchmark for 1x p3
 xar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
@@ -162,28 +149,6 @@ x_args_128 = [
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
 ]
-
-# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
-x2_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 50,
-  '--lr', 0.4 * 2,
-  '--init-bn0',
-  '--batch-sched', '192,192,128',
-  '--num-tasks', 2,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
-]
-
-# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
-x4_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 50,
-  '--lr', 0.4 * 4,
-  '--init-bn0',
-  '--batch-sched', '192,192,128',
-  '--num-tasks', 4,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
-]
 # Current benchmark for 4x p3's - with Aspect Ratio Validatoin
 x4ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.94',
@@ -213,22 +178,10 @@ x4ar_args_bnwd = [
   '--no-bn-wd'
 ]
 
-
-# Current benchmark for 8x p3's - without Aspect Ratio Validatoin
-x8_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 55,
-  '--lr', 0.3 * 8,
-  '--init-bn0',
-  '--batch-sched', 128,
-  '--num-tasks', 8,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
-]
-
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
 x8ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 40,
+  '--epochs', 60,
   '--lr', 0.23 * 8,
   '--init-bn0',
   '--batch-sched', 128,
@@ -259,7 +212,7 @@ x8ar_args_nobnwd = [
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x16ar_args = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 40,
+  '--epochs', 60,
   '--lr', 0.23 * 8,
   '--init-bn0',
   '--batch-sched', 64,
