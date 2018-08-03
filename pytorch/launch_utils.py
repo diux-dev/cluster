@@ -25,7 +25,10 @@ def get_gpu_count(instance):
 ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):
   for i,t in enumerate(job.tasks):
-    attach_instance_ebs(t.instance, f'{tag}_{i+offset}')
+    if tag == 'imagenet_high_perf':  # old naming
+      attach_instance_ebs(t.instance, f'{tag}_{i+offset}')
+    else:  # new naming
+      attach_instance_ebs(t.instance, '%s_%02d'%(tag, i+offset))
   job.run_async_join('sudo mkdir data -p')
   while True:
     try:
@@ -61,7 +64,7 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   
   ec2 = u.create_ec2_resource()
   v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
-  assert(v)
+  assert(v), f"Volume {tag} not found."
   v = v[0]
   already_attached = v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id
   if already_attached:

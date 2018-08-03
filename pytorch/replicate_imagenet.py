@@ -26,10 +26,13 @@
 
 import argparse
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--zone', type=str, default='us-east-1c')
+parser.add_argument('--zone', type=str, default='')
 parser.add_argument('--replicas', type=int, default=8)
-parser.add_argument('--snapshot', type=str, default='snap-0d37b903e01bb794a')
+parser.add_argument('--snapshot', type=str, default='') # snap-0d37b903e01bb794a
+parser.add_argument('--snapshot-desc', type=str, default='imagenet_blank',
+                    help='look for snapshot containing given string')
 parser.add_argument('--volume-offset', type=int, default=0, help='start numbering with this value')
+parser.add_argument('--iops', type=int, default=10000, help="iops requirement")
 args = parser.parse_args()
 
 import os
@@ -50,11 +53,23 @@ def create_tags(name):
 
 if __name__=='__main__':
   ec2 = u.create_ec2_resource()
+  assert not args.snapshot, "Switched to snapshot_desc"
+  assert args.zone
+  
+  snapshots = []
+  for snap in ec2.snapshots.filter(OwnerIds=['self']):
+    if args.snapshot_desc in snap.description:
+      snapshots.append(snap)
+
+  assert len(snapshots)>0, f"no snapshot matching {args.snapshot_desc}"
+  assert len(snapshots)<2, f"multiple snapshots matching {args.snapshot_desc}"
+  snap = snapshots[0]
   print(f"Making {args.replicas} replicas in {args.zone}")
   for i in range(args.volume_offset, args.replicas+args.volume_offset):
+    vol_name = 'imagenet_%02d'%(i)
     vol = ec2.create_volume(Size=300, VolumeType='io1',
-                      TagSpecifications=create_tags('imagenet_%02d'%(i)),
+                      TagSpecifications=create_tags(vol_name),
                       AvailabilityZone=args.zone,
-                      SnapshotId=args.snapshot,
-                      Iops=10000)
-    print(f"Creating {vol.id}")
+                      SnapshotId=snap.id,
+                            Iops=args.iops)
+    print(f"Creating {vol_name} {vol.id}")
