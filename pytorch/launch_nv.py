@@ -165,10 +165,14 @@ x4ar_args = [
 
 # Current benchmark for 4x p3
 x4ar_args_test_sched = [
-  '--lr-sched', '5,18,30,37',
-  '--resize-sched', '0,16,36',
+  '--lr-sched', '5,17,28,35',
   '--batch-sched', '256,192,128',
-  '--epochs', 40,
+  '--resize-sched', '0,15,34',
+  '--epochs', 38,
+  # '--lr-sched', '5,18,30,37',
+  # '--resize-sched', '0,16,36',
+  # '--batch-sched', '256,192,128',
+  # '--epochs', 40,
   '--lr', 0.47 * 4,
   '--init-bn0',
   # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
@@ -180,29 +184,8 @@ x4ar_args_test_sched = [
   '--ami-name', 'pytorch.imagenet.source.v4',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
-  '--use-352-folder'
-  # '--c10d'
-]
-
-# Current benchmark for 4x p3
-x4ar_args_test_sched2 = [
-  '--lr-sched', '5,18,30,37',
-  '--resize-sched', '0,16,36',
-  '--batch-sched', '256,192,128',
-  '--epochs', 40,
-  '--lr', 0.47 * 4,
-  '--init-bn0',
-  # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
-  '--num-tasks', 4,
-  '--no-bn-wd',
-  '--val-ar',
-  '--lr-linear-scale',
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v4',
-  # '--resume', 'sz128_checkpoint.path.tar'
-  '--env-name', 'pytorch_source',
-  '--use-352-folder'
-  # '--c10d'
+  '--use-352-folder',
+  '--c10d'
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
