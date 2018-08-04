@@ -98,7 +98,8 @@ xar_args = [
   '--val-ar',
   '--lr-linear-scale',
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--no-bn-wd'
+  '--no-bn-wd',
+  '--env-name', 'pytorch_source_tv'
 ]
 
 xar_args_pytorch = [

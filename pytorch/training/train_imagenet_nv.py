@@ -19,6 +19,11 @@ import torch.utils.data.distributed
 
 from tensorboardX import SummaryWriter
 
+from torch.distributed import c10d
+from torch.nn.parallel import distributed_c10d
+
+import torch.nn.parallel.distributed_c10d
+
 # import models
 from fp16util import *
 import gc
@@ -282,7 +287,10 @@ def main():
         print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
-        assert(args.world_size == dist.get_world_size())
+
+        store = c10d.TCPStore('localhost', 6006, args.local_rank == 0)
+        process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
+        # assert(args.world_size == dist.get_world_size())
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
@@ -303,7 +311,8 @@ def main():
         args.start_epoch = checkpoint['epoch']
         best_prec5 = checkpoint['best_prec5']
 
-    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    # if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.distributed: model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
 
 
     global model_params, master_params
@@ -551,7 +560,7 @@ def distributed_predict(input, target, model, criterion):
         with torch.no_grad():
             # using module instead of model because DistributedDataParallel forward function has a sync point.
             # with distributed validation sampler, we don't always have data for each gpu
-            assert(isinstance(model, nn.parallel.DistributedDataParallel))
+            assert(isinstance(model, nn.parallel.DistributedDataParallel) or isinstance(model, distributed_c10d._DistributedDataParallelC10d))
             output = model.module(input)
             loss = criterion(output, target).data
         # measure accuracy and record loss
