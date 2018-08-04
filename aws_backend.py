@@ -184,7 +184,8 @@ class Run(backend.Run):
       self.log(f'Warning, logdir {new_logdir} exists, deduping to {lll}')
       new_logdir = lll
     self.logdir = new_logdir
-    head_task.run(f'mkdir -p {self.logdir}')
+    head_task.run(f'sudo mkdir -p {self.logdir}')
+    head_task.run(f'sudo chown `whoami` {self.logdir}')
 
 
 # TODO: refactor common fields like "linux_type", "user_data" to be
