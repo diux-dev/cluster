@@ -72,9 +72,8 @@ parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default=None,
                     help='tag name of ebs volume to attach')
-parser.add_argument('--use-local-conda', type=int, default=0,
-                    help=('use local conda installation (for initial setup, see'
-                          'recipes.md)'))
+parser.add_argument('--use-local-conda', action='store_true',
+                    help='use local conda installation (for initial setup, see recipes.md)')
 parser.add_argument('--volume-offset', type=int, default=0,
                     help='Offset number for vollume attachment. If running multiple jobs')
 parser.add_argument('--skip-efs-mount', action='store_true',
@@ -85,15 +84,29 @@ args = parser.parse_args()
 
 DEFAULT_ENV_NAME='pytorch_p36'
 
+# Original dawn entry
+x_args = [
+  '--lr-sched', '4,20,34,42',
+  '--batch-sched', '192,192,128',
+  '--resize-sched', '0,18,41',
+  '--epochs', 45,
+  '--lr', 0.4,
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--num-tasks', 1,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+]
+
+
 # Current best settings
 # Current benchmark for 1x p3
 xar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '4,15,26,32',
+  '--batch-sched', '512,192,128',
+  '--resize-sched', '0,14,32',
   '--epochs', 35,
   '--lr', 1.0,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '512,192,128',
   '--num-tasks', 1,
   '--val-ar',
   '--lr-linear-scale',
@@ -103,12 +116,13 @@ xar_args = [
 ]
 
 xar_args_pytorch = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '4,15,26,32',
+  '--resize-sched', '0,14,32',
+  '--batch-sched', '512,192,128',
   '--epochs', 35,
   '--lr', 1.0,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
-  '--batch-sched', '512,192,128',
   '--num-tasks', 1,
   '--val-ar',
   '--lr-linear-scale',
@@ -119,94 +133,88 @@ xar_args_pytorch = [
   '--c10d'
 ]
 
-# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
+# 2x p3's - is this still being used?
 x2ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '6,23,38,47',
+  '--resize-sched', '0,20,46',
+  '--batch-sched', '192,192,128',
   '--epochs', 50,
   '--lr', 0.4 * 2,
   '--init-bn0',
-  '--batch-sched', '192,192,128',
   '--num-tasks', 2,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--val-ar',
 ]
 
-# Current benchmark for 4x p3's - without Aspect Ratio Validatoin
-x2ar_args_pytorch = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 50,
-  '--lr', 0.4 * 2,
-  '--init-bn0',
-  '--batch-sched', '192,192,128',
-  '--num-tasks', 2,
-  '--ami-name', 'pytorch.imagenet.source.v4',
-  '--env-name', 'pytorch_source'
-  '--val-ar',
-]
 
-x_args_128 = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
-  '--lr', 0.4,
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-  '--init-bn0',
-  '--batch-sched', 128,
-  '--num-tasks', 1,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
-]
-# Current benchmark for 4x p3's - with Aspect Ratio Validatoin
+# Current benchmark for 4x p3
 x4ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.94',
+  '--lr-sched', '5,18,30,37',
+  '--resize-sched', '0,16,37',
+  '--batch-sched', '256,192,128',
   '--epochs', 40,
-  '--lr', 0.35 * 4,
+  '--lr', 0.47 * 4,
   '--init-bn0',
-  '--batch-sched', '192,192,128',
-  '--val-ar',
   '--num-tasks', 4,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+  '--no-bn-wd'
+  '--val-ar',
+  '--lr-linear-scale',
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   # '--resume', 'sz128_checkpoint.path.tar'
-  # '--resume', 'sz244_checkpoint.path.tar'
 ]
 
-# Current benchmark for 1x p3
-x4ar_args_bnwd = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+# Current benchmark for 4x p3
+x4ar_args_test_sched = [
+  '--lr-sched', '5,18,30,37',
+  '--resize-sched', '0,16,36',
+  '--batch-sched', '256,192,128',
   '--epochs', 40,
   '--lr', 0.47 * 4,
   '--init-bn0',
   # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
-  '--batch-sched', '256,192,128',
   '--num-tasks', 4,
+  '--no-bn-wd',
   '--val-ar',
   '--lr-linear-scale',
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--no-bn-wd'
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v4',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+  '--use-352-folder'
+  # '--c10d'
+]
+
+# Current benchmark for 4x p3
+x4ar_args_test_sched2 = [
+  '--lr-sched', '5,18,30,37',
+  '--resize-sched', '0,16,36',
+  '--batch-sched', '256,192,128',
+  '--epochs', 40,
+  '--lr', 0.47 * 4,
+  '--init-bn0',
+  # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
+  '--num-tasks', 4,
+  '--no-bn-wd',
+  '--val-ar',
+  '--lr-linear-scale',
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v4',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+  '--use-352-folder'
+  # '--c10d'
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
 x8ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '5,18,30,37',
+  '--resize-sched', '0,16,37',
+  '--batch-sched', 128,
   '--epochs', 40,
   '--lr', 0.23 * 8,
   '--init-bn0',
-  '--batch-sched', 128,
   '--val-ar',
   '--num-tasks', 8,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--no-bn-wd'
-]
-
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
-x8ar_args_nobnwd = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 40,
-  '--lr', 0.23 * 8 * 2,
-  '--init-bn0',
-  '--batch-sched', '256,128,128',
-  # (AS) TODO: TEST OUT NCCL RINGS FOR 224 image sizes. Seems like we are getting much slower times
-  '--val-ar',
-  '--num-tasks', 8,
-  '--lr-linear-scale',
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--no-bn-wd'
 ]
@@ -216,11 +224,12 @@ x8ar_args_nobnwd = [
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validatoin
 x16ar_args = [
-  '--lr-sched', '0.14,0.47,0.78,0.95',
+  '--lr-sched', '5,18,30,37',
+  '--resize-sched', '0,16,37',
+  '--batch-sched', 64,
   '--epochs', 40,
   '--lr', 0.23 * 8,
   '--init-bn0',
-  '--batch-sched', 64,
   '--val-ar',
   '--num-tasks', 16,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'

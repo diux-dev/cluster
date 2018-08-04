@@ -74,16 +74,17 @@ def get_parser():
                         help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
-    parser.add_argument('-b', '--batch-sched', default='192,192,128', type=str,
-                        metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                         metavar='LR', help='initial learning rate')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
-    parser.add_argument('--resize-sched', default='0.4,0.92', type=str,
+    parser.add_argument('-b', '--batch-sched', default='192,192,128', type=str,
+                        metavar='N', help='mini-batch size (default: 256)')
+    parser.add_argument('--resize-sched', default='0,18,41', type=str,
                         help='Scheduler to resize from 128 -> 224 -> 288')
-    parser.add_argument('--lr-sched', default='0.1,0.47,0.78,0.95', type=str,
+    parser.add_argument('--use-352-folder', action='store_true', help='Train images from 352 resized folder - faster at cost of accuracy')
+    parser.add_argument('--lr-sched', default='5,21,35,43', type=str,
                         help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
     parser.add_argument('--lr-linear-scale', action='store_true',
                         help='Linear scale the learning rate if we change the batch size later on')
@@ -124,24 +125,22 @@ if args.c10d:
     from torch.nn.parallel import distributed_c10d
 
 class DataManager():
-    def __init__(self, resize_sched=[0.4, 0.92], batch_sched=[192,192,128]):
+    def __init__(self, resize_sched, batch_sched):
         self.resize_sched = resize_sched
         self.batch_sched = batch_sched
         if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
 
-        # self.data0 = self.load_data('/resize/128', '/resize/224', self.batch_sched[0], 128, min_scale=0.1)
         self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
-        # if args.world_size == 32: self.data1 = self.load_data('/resize/352', '', self.batch_sched[1], 224, min_scale=0.086) # slightly faster image loading than using full size
-        # else: self.data1 = self.load_data('', '', self.batch_sched[1], 224) # worse accuracy for 8 machines right now
-        self.data1 = self.load_data('', '', self.batch_sched[1], 224)
+        if args.use_352_folder: self.data1 = self.load_data('-sz/352', '', self.batch_sched[1], 224, min_scale=0.086) # faster loading at the cost of accuracy
+        else: self.data1 = self.load_data('', '', self.batch_sched[1], 224)
         self.data2 = self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
         
     def set_epoch(self, epoch):
-        if epoch == 0: self.set_data(self.data0)
-        if epoch==int(args.epochs*self.resize_sched[0]+0.5):
+        if epoch==self.resize_sched[0]: self.set_data(self.data0)
+        if epoch==self.resize_sched[1]:
             if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[1]/self.batch_sched[0]
             self.set_data(self.data1)
-        if epoch==int(args.epochs*self.resize_sched[1]+0.5):
+        if epoch==self.resize_sched[2]:
             if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[2]/self.batch_sched[1]
             self.set_data(self.data2)
 
@@ -183,7 +182,7 @@ class DataManager():
         return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), data_info
 
 class Scheduler():
-    def __init__(self, optimizer, lr_sched=[0.1, 0.47, 0.78, 0.95]):
+    def __init__(self, optimizer, lr_sched):
         self.optimizer = optimizer
         self.current_lr = None
         self.current_epoch = 0
@@ -211,15 +210,13 @@ class Scheduler():
         """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
         # faster lr schedule [0.14, 0.43, 0.73, 0.94]
         # original lr schedule [0.1, 0.47, 0.78, 0.95]
-        if epoch<int(args.epochs*self.lr_sched[0]+0.5):
-            epoch_tot = args.epochs*self.lr_sched[0]+0.5
-            if args.init_bn0: lr = self.bn0_lr_warmup(epoch, epoch_tot, batch_num, batch_tot)
-            else: lr = self.linear_lr_warmup(epoch, epoch_tot, batch_num, batch_tot)
-        elif epoch<int(args.epochs*self.lr_sched[1]+0.5): return args.lr/1
-        elif epoch<int(args.epochs*self.lr_sched[2]+0.5): return args.lr/10
-        elif epoch<int(args.epochs*self.lr_sched[3]+0.5): return args.lr/100
-        else         : lr = args.lr/1000
-        return lr
+        if epoch<=self.lr_sched[0]:
+            if args.init_bn0: return self.bn0_lr_warmup(epoch, self.lr_sched[0], batch_num, batch_tot)
+            else:             return self.linear_lr_warmup(epoch, self.lr_sched[0], batch_num, batch_tot)
+        elif epoch<=self.lr_sched[1]: return args.lr/1
+        elif epoch<=self.lr_sched[2]: return args.lr/10
+        elif epoch<=self.lr_sched[3]: return args.lr/100
+        else                        : return args.lr/1000
 
     def update_lr(self, epoch, batch_num, batch_tot):
         lr = self.get_lr(epoch, batch_num, batch_tot)
@@ -291,8 +288,10 @@ def main():
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
     if args.c10d:
         print('Distributed: loading c10d process group')
-        store = c10d.TCPStore('localhost', 6006, args.local_rank==0)
-        process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
+        # https://github.com/pytorch/pytorch/blob/master/torch/lib/c10d/TCPStore.hpp
+        store = c10d.TCPStore(os.environ['MASTER_ADDR'], 6008, dist.get_rank()==0) # (masterAddr, masterPort, isServer) 
+        process_group = c10d.ProcessGroupNCCL(store, dist.get_rank(), args.world_size) # (store, rank, size)
+        # process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
@@ -333,7 +332,7 @@ def main():
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     print("Creating data loaders (this could take 6-12 minutes)")
-    dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched, num_type=int))
+    dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched))
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
@@ -360,7 +359,7 @@ def main():
     event_writer.close()
 
     
-def str_to_num_array(argstr, num_type=float):
+def str_to_num_array(argstr, num_type=int):
     return [num_type(s) for s in argstr.split(',')]
 
 # item() is a recent addition, so this helps with backward compatibility.
@@ -410,7 +409,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             corr1, corr5 = correct(output.data, target, topk=(1, 5))
             metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
             batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics)
-            reduced_loss = reduced_loss
+            reduced_loss = reduced_loss/dist.get_world_size()
             prec1 = corr1*(100.0/batch_total)
             prec5 = corr5*(100.0/batch_total)
         else:

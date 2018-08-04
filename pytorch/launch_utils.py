@@ -25,9 +25,6 @@ def get_gpu_count(instance):
 ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):
   for i,t in enumerate(job.tasks):
-    if tag == 'imagenet_high_perf':  # old naming
-      attach_instance_ebs(t.instance, f'{tag}_{i+offset}')
-    else:  # new naming
       attach_instance_ebs(t.instance, '%s_%02d'%(tag, i+offset))
   job.run_async_join('sudo mkdir data -p')
   while True:
