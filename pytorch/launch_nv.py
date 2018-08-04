@@ -43,7 +43,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use (deprecated, use ami-name)")
 parser.add_argument('--ami-name', type=str,
                     default='-1',
-                    #default='pytorch.imagenet.source.v3',
+                    #default='pytorch.imagenet.source.v4',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help=("name of placement group to use (depecated, name "
@@ -104,15 +104,19 @@ xar_args = [
 
 xar_args_pytorch = [
   '--lr-sched', '0.14,0.47,0.78,0.95',
-  '--epochs', 45,
+  '--epochs', 35,
   '--lr', 1.0,
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   '--init-bn0',
   '--batch-sched', '512,192,128',
   '--num-tasks', 1,
   '--val-ar',
-  '--ami-name', 'pytorch.imagenet.source.v3',
-  '--env-name', 'pytorch_source'
+  '--lr-linear-scale',
+  '--ami-name', 'pytorch.imagenet.source.v4',
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--env-name', 'pytorch_source',
+  '--no-bn-wd',
+  '--c10d'
 ]
 
 # Current benchmark for 4x p3's - without Aspect Ratio Validatoin
@@ -135,7 +139,7 @@ x2ar_args_pytorch = [
   '--init-bn0',
   '--batch-sched', '192,192,128',
   '--num-tasks', 2,
-  '--ami-name', 'pytorch.imagenet.source.v3',
+  '--ami-name', 'pytorch.imagenet.source.v4',
   '--env-name', 'pytorch_source'
   '--val-ar',
 ]

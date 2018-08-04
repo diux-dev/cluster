@@ -19,11 +19,6 @@ import torch.utils.data.distributed
 
 from tensorboardX import SummaryWriter
 
-from torch.distributed import c10d
-from torch.nn.parallel import distributed_c10d
-
-import torch.nn.parallel.distributed_c10d
-
 # import models
 from fp16util import *
 import gc
@@ -107,6 +102,7 @@ def get_parser():
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
     parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
+    parser.add_argument('--c10d', action='store_true', help='Run distributed training with c10d')
     parser.add_argument('--world-size', default=-1, type=int, 
                         help='total number of processes (machines*gpus)')
     parser.add_argument('--dist-url', default='env://', type=str,
@@ -122,6 +118,10 @@ def get_parser():
 cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+if args.c10d:
+    assert(args.distributed)
+    from torch.distributed import c10d
+    from torch.nn.parallel import distributed_c10d
 
 class DataManager():
     def __init__(self, resize_sched=[0.4, 0.92], batch_sched=[192,192,128]):
@@ -287,11 +287,12 @@ def main():
         print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
-
-        store = c10d.TCPStore('localhost', 6006, args.local_rank == 0)
-        process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
-        # assert(args.world_size == dist.get_world_size())
+        assert(args.world_size == dist.get_world_size())
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
+    if args.c10d:
+        print('Distributed: loading c10d process group')
+        store = c10d.TCPStore('localhost', 6006, args.local_rank==0)
+        process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
@@ -311,8 +312,9 @@ def main():
         args.start_epoch = checkpoint['epoch']
         best_prec5 = checkpoint['best_prec5']
 
-    # if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    if args.distributed: model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
+
+    if args.c10d: model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
+    elif args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
 
     global model_params, master_params
@@ -560,7 +562,7 @@ def distributed_predict(input, target, model, criterion):
         with torch.no_grad():
             # using module instead of model because DistributedDataParallel forward function has a sync point.
             # with distributed validation sampler, we don't always have data for each gpu
-            assert(isinstance(model, nn.parallel.DistributedDataParallel) or isinstance(model, distributed_c10d._DistributedDataParallelC10d))
+            assert(is_distributed_model(model))
             output = model.module(input)
             loss = criterion(output, target).data
         # measure accuracy and record loss
@@ -577,13 +579,16 @@ def distributed_predict(input, target, model, criterion):
 
 
 def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
-    if isinstance(model, nn.parallel.DistributedDataParallel): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
+    if is_distributed_model(model): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
     state = {
         'epoch': epoch+1, 'state_dict': model.state_dict(),
         'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
     }
     torch.save(state, filename)
     if is_best: shutil.copyfile(filename, f'{args.save_dir}/{filename}')
+
+def is_distributed_model(model):
+    return isinstance(model, nn.parallel.DistributedDataParallel) or (args.c10d and isinstance(model, distributed_c10d._DistributedDataParallelC10d))
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
