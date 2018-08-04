@@ -70,25 +70,6 @@ conda install -c pytorch magma-cuda90 -y
 # Install libjpeg-turbo with pillow-simd
 # sudo apt install yasm
 # https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
-# conda uninstall --force pillow -y 
-# pip uninstall pillow -y
-# # install libjpeg-turbo to $HOME/turbojpeg 
-# git clone https://github.com/libjpeg-turbo/libjpeg-turbo 
-# pushd libjpeg-turbo 
-# mkdir build 
-# cd build 
-# cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$HOME/turbojpeg 
-# make 
-# make install 
-# popd 
-# # install pillow-simd with jpeg-turbo support 
-# git clone https://github.com/uploadcare/pillow-simd 
-# pushd pillow-simd 
-# CPATH=$HOME/turbojpeg/include LIBRARY_PATH=$HOME/turbojpeg/lib CC="cc -mavx2" python setup.py install 
-# # add turbojpeg to LD_LIBRARY_PATH 
-# export LD_LIBRARY_PATH="$HOME/turbojpeg/lib:$LD_LIBRARY_PATH" 
-# popd
-
 # seems like it's faster without the top versioncond
 pip uninstall pillow -y
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
@@ -100,6 +81,9 @@ sudo mv cuda-9.1/ cuda-9.1.bak
 sudo mv cuda-9.0/ cuda-9.0.bak
 sudo mv cuda-8.0/ cuda-8.0.bak
 popd
+
+# Must remember to change this line in DistributedSampler, otherwise performance is degraded
+# https://github.com/pytorch/pytorch/pull/8958#issuecomment-410125932
 
 pushd ~/pytorch
 USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
@@ -119,6 +103,8 @@ pip install torchvision torchtext
 # CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 conda install jupyter bcolz scipy tqdm -y
 pip install sklearn-pandas
+conda install tqdm -y
+pip install tensorboardX
 
 # Create fastai environment
 conda create -n fastai_source --clone pytorch_source
