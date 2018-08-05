@@ -63,7 +63,7 @@ def create_job(run, job_name, num_tasks):
   # single machine
   num_gpus = gpu_count[args.instance_type]
   if (num_tasks == 1) and (num_gpus == 1):
-    job.run_async('python train_cifar10.py ~/data') # single instance
+    job.run_async('python train_cifar10.py ~/data/cifar10') # single instance
     return
 
   # multi job

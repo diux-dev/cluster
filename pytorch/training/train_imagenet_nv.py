@@ -279,19 +279,23 @@ def main():
 
     # need to index validation directory before we start counting the time
     if args.val_ar: sort_ar(args.data+'/validation')
-
-    if args.distributed:
+    
+    global reduce_function
+    if args.c10d:
+        print('Distributed: loading c10d process group')
+        # https://github.com/pytorch/pytorch/blob/master/torch/lib/c10d/TCPStore.hpp
+        torch.cuda.set_device(args.local_rank)
+        rank = int(os.environ['RANK'])
+        store = c10d.TCPStore(os.environ['MASTER_ADDR'], int(os.environ['MASTER_PORT']), rank==0) # (masterAddr, masterPort, isServer) 
+        process_group = c10d.ProcessGroupNCCL(store, rank, args.world_size) # (store, rank, size)
+        reduce_function = lambda t: process_group.allreduce(t, c10d.AllreduceOptions().reduceOp)
+    elif args.distributed:
         print('Distributed: initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
         assert(args.world_size == dist.get_world_size())
+        reduce_function = lambda t: dist.all_reduce(t, op=dist.reduce_op.SUM)
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
-    if args.c10d:
-        print('Distributed: loading c10d process group')
-        # https://github.com/pytorch/pytorch/blob/master/torch/lib/c10d/TCPStore.hpp
-        store = c10d.TCPStore(os.environ['MASTER_ADDR'], 6008, dist.get_rank()==0) # (masterAddr, masterPort, isServer) 
-        process_group = c10d.ProcessGroupNCCL(store, dist.get_rank(), args.world_size) # (store, rank, size)
-        # process_group = c10d.ProcessGroupNCCL(store, args.local_rank, args.world_size)
 
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
@@ -299,7 +303,6 @@ def main():
     model = resnet.resnet50(pretrained=args.pretrained)
 
     model = model.cuda()
-    n_dev = torch.cuda.device_count()
     if args.init_bn0: init_dist_weights(model) # Sets batchnorm std to 0
     if args.fp16: model = network_to_half(model)
     best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
@@ -311,10 +314,10 @@ def main():
         args.start_epoch = checkpoint['epoch']
         best_prec5 = checkpoint['best_prec5']
 
-
-    if args.c10d: model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.c10d:
+        model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
+        c10d_sanity_check()
     elif args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
-
 
     global model_params, master_params
     if args.fp16: model_params, master_params = prep_param_lists(model)
@@ -341,7 +344,6 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         estart = time.time()
         dm.set_epoch(epoch)
-
         train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
         prec5 = validate(dm.get_val_loader(), model, criterion, epoch, start_time)
@@ -367,6 +369,12 @@ def to_python_float(t):
     if isinstance(t, float): return t
     if hasattr(t, 'item'): return t.item()
     else: return t[0]
+
+def c10d_sanity_check():
+    print('Sanity check to make sure tensor creation works')
+    tt = torch.tensor([1]).float().cuda()
+    print('Currently deadlock here', tt)
+    print('Woot able to reduce tensor:', sum_tensor(tt))
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
@@ -408,7 +416,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             corr1, corr5 = correct(output.data, target, topk=(1, 5))
             metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
             batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics)
-            reduced_loss = reduced_loss/dist.get_world_size()
+            reduced_loss = reduced_loss/args.world_size
             prec1 = corr1*(100.0/batch_total)
             prec5 = corr5*(100.0/batch_total)
         else:
@@ -626,15 +634,10 @@ def correct(output, target, topk=(1,)):
     return res
 
 
+def reduce_tensor(tensor): return sum_tensor(tensor)/args.world_size
 def sum_tensor(tensor):
     rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    return rt
-
-def reduce_tensor(tensor):
-    rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    rt /= args.world_size
+    reduce_function(rt)
     return rt
 
 if __name__ == '__main__': 

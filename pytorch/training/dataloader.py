@@ -18,6 +18,12 @@ from tqdm import tqdm
 
 from autoaugment import ImageNetPolicy
 
+def get_world_size():
+    return int(os.environ['WORLD_SIZE'])
+
+def get_rank():
+    return int(os.environ['RANK'])
+
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False, autoaugment=False):
     val_bs = val_bs or bs
     train_tfms = [
@@ -28,7 +34,7 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
     if autoaugment: train_tfms.append(ImageNetPolicy())
     train_dataset = datasets.ImageFolder(
         traindir, transforms.Compose(train_tfms))
-    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if distributed else None)
+    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
@@ -185,8 +191,8 @@ class DistValSampler(Sampler):
         self.indices = indices
         self.batch_size = batch_size
         if distributed:
-            self.world_size = dist.get_world_size()
-            self.global_rank = dist.get_rank()
+            self.world_size = get_world_size()
+            self.global_rank = get_rank()
         else: 
             self.global_rank = 0
             self.world_size = 1
