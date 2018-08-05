@@ -57,11 +57,10 @@ def create_job(run, job_name, num_tasks):
 
   # upload files
   job.upload('resnet.py')
-  job.upload('train_cifar10.py')
-  job.upload('fp16util.py')
+  job.upload('train_cifar10_fastai.py')
 
   # setup env
-  job.run('source activate pytorch_p36')
+  job.run('source activate fastai')
 
 
   # single machine
