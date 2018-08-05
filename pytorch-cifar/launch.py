@@ -20,14 +20,13 @@ import util
 util.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--ami', type=str, default='ami-e580c79d',
-                     help="name of AMI to use ")
+parser.add_argument('--ami-name', type=str,
+                    default='Deep Learning AMI (Ubuntu) Version 12.0',
+                    help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
-parser.add_argument('--job-name', type=str, default='distributed',
-                     help="name of the jobs to run")
 parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
@@ -38,17 +37,14 @@ parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 parser.add_argument('--num-tasks', type=int, default=1,
                     help='number of instances to create')
-parser.add_argument('--install-script', type=str, default='setup_env.sh',
-                    help='location of script to install')
+parser.add_argument('--skip-efs-mount', action='store_true',
+                    help='skip mounting EFS for speed')
 args = parser.parse_args()
 
 
 gpu_count = collections.defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks):
-  install_script = ''
-  with open(args.install_script, 'r') as script:
-    install_script = script.read()
-  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, install_script=install_script, placement_group=args.placement_group)
+  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, placement_group=args.placement_group)
   job.wait_until_ready()
   print(job.connect_instructions)
 
@@ -65,23 +61,20 @@ def create_job(run, job_name, num_tasks):
 
 
   # single machine
-  if num_tasks == 1:
-    # job.run_async('python train_cifar10.py ~/data --loss-scale 512 --fp16 --lr 1.3') # multi-gpu
-    job.run_async('python train_cifar10.py ~/data --loss-scale 512 --fp16') # single instance
+  num_gpus = gpu_count[args.instance_type]
+  if (num_tasks == 1) and (num_gpus == 1):
+    job.run_async('python train_cifar10.py ~/data') # single instance
     return
 
   # multi job
   world_0_ip = job.tasks[0].instance.private_ip_address
   port = '6006' # 6006, 6007, 6008, 8890, 6379
   job.run('ulimit -n 9000') # to prevent tcp too many files open error
+  world_size = num_gpus * num_tasks
 
   for i,t in enumerate(job.tasks):
-    # tcp only supports CPU - https://pytorch.org/docs/master/distributed.html
-    # dist_params = f'--world-size {num_tasks} --rank {i} --dist-url tcp://{world_0_ip}:{port} --dist-backend tcp' # tcp
-    
     # Pytorch distributed
-    num_gpus = gpu_count[args.instance_type]
-    training_args = '~/data --loss-scale 512 --fp16 -b 128 --lr 1.3 -j 7 --dist-url env:// --dist-backend gloo --distributed'
+    training_args = f'~/data/cifar10 --dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2' # must tweak --scale-lr
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
 
@@ -90,10 +83,11 @@ def create_job(run, job_name, num_tasks):
 def main():
   import aws_backend
 
-  run = aws_backend.make_run(args.name, ami=args.ami,
+  run = aws_backend.make_run(args.name, ami_name=args.ami_name,
                              availability_zone=args.zone,
-                             linux_type=args.linux_type)
-  create_job(run, args.job_name, args.num_tasks)
+                             linux_type=args.linux_type,
+                             skip_efs_mount=args.skip_efs_mount)
+  create_job(run, 'worker', args.num_tasks)
 
 if __name__=='__main__':
   main()

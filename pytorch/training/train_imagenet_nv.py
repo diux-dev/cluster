@@ -364,10 +364,9 @@ def str_to_num_array(argstr, num_type=int):
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return t[0]
+    if isinstance(t, float): return t
+    if hasattr(t, 'item'): return t.item()
+    else: return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
@@ -417,9 +416,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
 
-        losses.update(to_python_float(reduced_loss), batch_total)
-        top1.update(to_python_float(prec1), batch_total)
-        top5.update(to_python_float(prec5), batch_total)
+        losses.update(to_python_float(reduced_loss), to_python_float(batch_total))
+        top1.update(to_python_float(prec1), to_python_float(batch_total))
+        top5.update(to_python_float(prec5), to_python_float(batch_total))
 
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
@@ -519,9 +518,9 @@ def validate(val_loader, model, criterion, epoch, start_time):
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1,5))
             
-        losses.update(to_python_float(loss), batch_total)
-        top1.update(to_python_float(prec1), batch_total)
-        top5.update(to_python_float(prec5), batch_total)
+        losses.update(to_python_float(loss), to_python_float(batch_total))
+        top1.update(to_python_float(prec1), to_python_float(batch_total))
+        top5.update(to_python_float(prec5), to_python_float(batch_total))
 
         # measure elapsed time
         batch_time.update(time.time() - end)

@@ -11,6 +11,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 import argparse, os, shutil, time, warnings
+import torch.distributed as dist
+import torch.utils.data.distributed
 
 from fp16util import *
 from resnet import *
@@ -38,6 +40,7 @@ def get_parser():
     parser.add_argument('--loss-scale', type=float, default=512,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
+    parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--world-size', default=-1, type=int, 
                         help='total number of processes (machines*gpus)')
     parser.add_argument('--dist-url', default='env://', type=str,
@@ -51,11 +54,13 @@ def get_parser():
 
 global args
 args = get_parser().parse_args()
-
 torch.backends.cudnn.benchmark = True
-PATH = Path.home()/'data/cifar10/'
-os.makedirs(PATH,exist_ok=True)
 
+class DummyFile(object):
+    def write(self, x): pass
+    def flush(self): pass
+import sys
+if args.local_rank > 0: sys.stdout = DummyFile()
 
 
 # Model
@@ -135,7 +140,7 @@ class ResNet18(nn.Module):
 def pad(img, p=4, padding_mode='reflect'):
     return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))
 
-def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
+def torch_loader(data_path, size, bs, val_bs=None):
 
     val_bs = val_bs or bs
     # Data loading code
@@ -148,20 +153,25 @@ def torch_loader(data_path, size, bs, val_bs=None, prefetcher=True):
     ] + tfms)
     val_tfms = transforms.Compose(tfms)
 
-    train_dataset = datasets.CIFAR10(root=data_path, train=True, download=True, transform=train_tfms)
-    val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=True, transform=val_tfms)
+    train_dataset = datasets.CIFAR10(root=data_path, train=True, download=(args.local_rank==0), transform=train_tfms)
+    val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=(args.local_rank==0), transform=val_tfms)
+
+    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
+    # val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
+    val_sampler = None
 
     train_loader = DataLoader(
-        train_dataset, batch_size=bs, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+        train_dataset, batch_size=bs, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True,
+        sampler=train_sampler)
 
     val_loader = DataLoader(
         val_dataset, batch_size=val_bs, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=True,
+        sampler=val_sampler)
     
-    if prefetcher:
-        train_loader = DataPrefetcher(train_loader)
-        val_loader = DataPrefetcher(val_loader)
+    train_loader = DataPrefetcher(train_loader)
+    val_loader = DataPrefetcher(val_loader)
     
     return train_loader, val_loader
 
@@ -213,6 +223,9 @@ class Scheduler():
         self.tot_epochs = sum([p[2] for p in phases])
 
     def linear_lr(self, start_lr, end_lr, epoch_curr, batch_curr, epoch_tot, batch_tot):
+        if args.scale_lr != 1:
+            start_lr *= args.scale_lr
+            end_lr *= args.scale_lr
         step_tot = epoch_tot * batch_tot
         step_curr = epoch_curr * batch_tot + epoch_curr
         step_size = (end_lr - start_lr)/step_tot
@@ -244,11 +257,10 @@ class Scheduler():
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return float(t[0])
-#         return t[0]
+    if isinstance(t, float): return t
+    if isinstance(t, int): return t
+    if hasattr(t, 'item'): return t.item()
+    else: return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     batch_time = AverageMeter()
@@ -277,7 +289,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         if args.distributed:
             # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
-            corr1 = correct(output.data, target)
+            corr1 = correct(output.data, target)[0]
             metrics = torch.tensor([batch_size, loss, corr1]).float().cuda()
             batch_total, reduced_loss, corr1 = sum_tensor(metrics)
             reduced_loss = reduced_loss/dist.get_world_size()
@@ -285,10 +297,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         else:
             reduced_loss = loss.data
             batch_total = input.size(0)
-            prec1 = accuracy(output.data, target) # measure accuracy and record loss
-
-        losses.update(to_python_float(reduced_loss), batch_total)
-        top1.update(to_python_float(prec1), batch_total)
+            prec1 = accuracy(output.data, target)[0] # measure accuracy and record loss
+        losses.update(to_python_float(reduced_loss), to_python_float(batch_total))
+        top1.update(to_python_float(prec1), to_python_float(batch_total))
 
         loss = loss*args.loss_scale
         
@@ -329,7 +340,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
             output = model(input)
             loss = criterion(output, target).data
         batch_total = input.size(0)
-        prec1 = accuracy(output.data, target)
+        prec1 = accuracy(output.data, target)[0]
             
         losses.update(to_python_float(loss), batch_total)
         top1.update(to_python_float(prec1), batch_total)
@@ -345,8 +356,11 @@ def validate(val_loader, model, criterion, epoch, start_time):
 
 def log_batch(epoch, batch_num, batch_len, batch_time, loss, top1):
     if args.local_rank==0 and args.verbose:
-        output = ('Epoch: [{0}][{1}/{2}]\t'                 + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'                 + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t'                 + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})').format(
-                epoch, batch_num, trn_len, batch_time=batch_time, loss=loss, top1=top1)
+        output = ('Epoch: [{0}][{1}/{2}]\t'                 
+                + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'                 
+                + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t'                 
+                + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})').format(
+                epoch, batch_num, batch_len, batch_time=batch_time, loss=loss, top1=top1)
         print(output)
         with open(f'{args.save_dir}/full.log', 'a') as f:
             f.write(output + '\n')
@@ -425,11 +439,11 @@ def main():
 
 
     sz = 32
-    trn_loader, val_loader = torch_loader(PATH, sz, args.batch_size, args.batch_size*2)
+    trn_loader, val_loader = torch_loader(args.data, sz, args.batch_size, args.batch_size*2)
 
     print(args)
-    print('\n\n\n\n')
-    print("epoch\ttime (min)\ttrn_loss\tval_loss\taccuracy")
+    print('\n\n')
+    print("epoch\t\tnum_batch\ttime (min)\ttrn_loss\tval_loss\taccuracy")
     start_time = datetime.now() # Loading start to after everything is loaded
     for epoch in range(scheduler.tot_epochs):
         trn_top1, trn_loss = train(trn_loader, model, criterion, optimizer, scheduler, epoch)
@@ -438,7 +452,8 @@ def main():
         time_diff = datetime.now()-start_time
         minutes = float(time_diff.total_seconds() / 60.0)
         # epoch   time   trn_loss   val_loss   accuracy     
-        print(f'{round(epoch,4)}\t{round(minutes,4)}\t\t{round(trn_loss,4)}\t\t{round(val_loss,4)}\t\t{round(val_top1,4)}')
+        metrics = [str(round(i, 4)) for i in [epoch, len(trn_loader), minutes, trn_loss, val_loss, val_top1]]
+        print('\t\t'.join(metrics))
 
 
 if __name__ == '__main__': 
