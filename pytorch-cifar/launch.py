@@ -41,12 +41,16 @@ parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
 parser.add_argument('--logdir-prefix', default='/efs/runs.cifar',
                     help='where to put logs')
+parser.add_argument('--spot', action="store_true",
+                    help='launch using spot requests')
+
+
 args = parser.parse_args()
 
 
 gpu_count = defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks):
-  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, placement_group=args.placement_group)
+  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, placement_group=args.placement_group, use_spot=args.spot)
   job.wait_until_ready()
 
   print(job.connect_instructions)
