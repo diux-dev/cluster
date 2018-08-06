@@ -40,10 +40,15 @@ class Run(backend.Run):
     self.name = name
     u.validate_name(name)
     
-    self.logdir = None   # set during setup_logdir()
+    self.logdir_ = None   # set during setup_logdir()
     self.kwargs = kwargs
     self.jobs = []
 
+  @property
+  def logdir(self):
+    assert self.logdir_ is not None, "logdir not yet initialized"
+    return self.logdir_
+  
   # TODO: get rid of linux type (only login username)
   # move everything into kwargs
   def make_job(self, role_name, num_tasks=1, skip_existing_job_validation=False, **kwargs):
@@ -182,10 +187,10 @@ class Run(backend.Run):
     counter = 0
     while new_logdir in logdir_ls:
       counter+=1
-      lll = '%s.%02d'%(self.logdir, counter)
+      lll = '%s.%02d'%(f"{backend.LOGDIR_PREFIX}/{self.name}", counter)
       self.log(f'Warning, logdir {new_logdir} exists, deduping to {lll}')
       new_logdir = lll
-    self.logdir = new_logdir
+    self.logdir_ = new_logdir
     head_task.run(f'sudo mkdir -p {self.logdir}')
     head_task.run(f'sudo chown `whoami` {self.logdir}')
     

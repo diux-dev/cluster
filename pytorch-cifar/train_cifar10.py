@@ -16,6 +16,14 @@ import argparse, os, shutil, time, warnings
 import torch.distributed as dist
 import torch.utils.data.distributed
 
+from tensorboardX import SummaryWriter
+
+def log_tb(tag, val):
+  """Log value to tensorboard (relies on global_example_count being set properly)"""
+  global global_example_count, event_writer
+  event_writer.add_scalar(tag, val, global_example_count)
+
+
 from fp16util import *
 from resnet import *
 from PIL import Image
@@ -24,6 +32,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('--data-path', default='/efs/data',
                         help='path to dataset')
+    parser.add_argument('--logdir', default='', help='path to dataset')
     parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
@@ -36,7 +45,7 @@ def get_parser():
                     help='Should be a string formatted like this: [(start_lr,end_lr,num_epochs),(phase2...)]')
     parser.add_argument('--verbose', action='store_true', help='Verbose logging')
 #     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
-    parser.add_argument('--print-freq', '-p', default=200, type=int,
+    parser.add_argument('--print-freq', '-p', default=20, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
 #     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
     parser.add_argument('--full-precision', action='store_true', help='Run model full precision mode. Default fp16')
@@ -59,6 +68,12 @@ global args
 args = get_parser().parse_args()
 torch.backends.cudnn.benchmark = True
 
+# no_op method/object that accept every signature
+def no_op(*args, **kwargs): pass
+class NoOp:
+  def __getattr__(self, *args):
+    return no_op
+  
 class DummyFile(object):
     def write(self, x): pass
     def flush(self): pass
@@ -266,6 +281,8 @@ def to_python_float(t):
     else: return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
+    global global_example_count
+    
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -325,7 +342,17 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         end = time.time()
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
-        if should_print: log_batch(epoch, batch_num, trn_len, batch_time, losses, top1)
+        if should_print:
+          log_batch(epoch, batch_num, trn_len, batch_time, losses, top1)
+          log_tb("batch_size", batch_total)
+          log_tb("times/step", 1000*batch_time.val) # step time in ms
+          log_tb("times/1gpu_images_per_sec", batch_total/batch_time.val)
+          log_tb("losses/train_xent", losses.val)
+          log_tb("losses/train_acc", top1.val)
+
+        global_example_count+=batch_total
+
+
     return top1.avg, losses.avg
 
 def validate(val_loader, model, criterion, epoch, start_time):
@@ -353,7 +380,8 @@ def validate(val_loader, model, criterion, epoch, start_time):
         end = time.time()
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==val_len)
-        if should_print: log_batch(epoch, batch_num, val_len, batch_time, losses, top1)
+        if should_print:
+          log_batch(epoch, batch_num, val_len, batch_time, losses, top1)
             
     return top1.avg, losses.avg
 
@@ -424,6 +452,16 @@ def main():
     model = ResNet18()
     model = model.cuda()
 
+    global global_example_count, is_chief, event_writer
+    global_example_count = 0
+    is_chief = (not args.distributed) or (int(os.environ['RANK'])==0)
+    if is_chief:
+      print(f"Logging to {args.logdir}")
+      event_writer = SummaryWriter(args.logdir)
+      log_tb("first", time.time())
+    else:
+      event_writer = NoOp()
+
     # AS: todo: don't copy over weights as it seems to help performance
 
     if not args.full_precision: model = network_to_half(model)
@@ -456,6 +494,9 @@ def main():
         minutes = float(time_diff.total_seconds() / 60.0)
         # epoch   time   trn_loss   val_loss   accuracy     
         metrics = [str(round(i, 4)) for i in [epoch, len(trn_loader), minutes, trn_loss, val_loss, val_top1]]
+        log_tb('losses/train_xent', trn_loss)
+        log_tb('losses/test_xent', val_loss)
+        log_tb('losses/test_acc', val_top1)
         print('\t\t'.join(metrics))
 
 

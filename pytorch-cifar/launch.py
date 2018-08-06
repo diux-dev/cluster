@@ -53,7 +53,7 @@ def create_job(run, job_name, num_tasks):
 
   backend.set_global_logdir_prefix(args.logdir_prefix)
   run.setup_logdir()
-#   run pytorch
+
   job.run('killall python || echo failed')  # kill previous run
 
   # upload files
@@ -63,12 +63,13 @@ def create_job(run, job_name, num_tasks):
 
   # setup env
   job.run('source activate pytorch_p36')
+  job.run('pip install tensorboardX')
 
 
   # single machine
   num_gpus = gpu_count[args.instance_type]
   if (num_tasks == 1) and (num_gpus == 1):
-    job.run_async('python train_cifar10.py') # single instance
+    job.run_async(f'python train_cifar10.py --logdir={run.logdir}') # single instance
     return
 
   # multi job
@@ -79,7 +80,7 @@ def create_job(run, job_name, num_tasks):
 
   for i,t in enumerate(job.tasks):
     # Pytorch distributed
-    training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2' # must tweak --scale-lr
+    training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={run.logdir}' # must tweak --scale-lr
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
 
