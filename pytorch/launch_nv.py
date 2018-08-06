@@ -43,7 +43,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use (deprecated, use ami-name)")
 parser.add_argument('--ami-name', type=str,
                     default='-1',
-                    #default='pytorch.imagenet.source.v4',
+                    #default='pytorch.imagenet.source.v5',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help=("name of placement group to use (depecated, name "
@@ -126,7 +126,7 @@ xar_args_pytorch = [
   '--num-tasks', 1,
   '--val-ar',
   '--lr-linear-scale',
-  '--ami-name', 'pytorch.imagenet.source.v4',
+  '--ami-name', 'pytorch.imagenet.source.v5',
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--env-name', 'pytorch_source',
   '--no-bn-wd',
@@ -163,7 +163,26 @@ x4ar_args = [
   # '--resume', 'sz128_checkpoint.path.tar'
 ]
 
-# Current benchmark for 4x p3
+
+# Faster benchmark for 4x p3 - 43 minutes
+x4ar_args_bench = [
+  '--lr-sched', '5,17,28,35',
+  '--batch-sched', '256,192,128',
+  '--resize-sched', '0,15,34',
+  '--epochs', 38,
+  '--lr', 0.47 * 4,
+  '--init-bn0',
+  '--num-tasks', 4,
+  '--no-bn-wd',
+  '--val-ar',
+  '--lr-linear-scale',
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--env-name', 'pytorch_source',
+  '--use-352-folder',
+  '--factorized-resnet',
+]
+
+# Current testing params 4x p3
 x4ar_args_test_sched = [
   '--lr-sched', '5,17,28,35',
   '--batch-sched', '256,192,128',
@@ -181,11 +200,12 @@ x4ar_args_test_sched = [
   '--val-ar',
   '--lr-linear-scale',
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v4',
+  '--ami-name', 'pytorch.imagenet.source.v5',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
   '--use-352-folder',
-  '--c10d'
+  '--factorized-resnet',
+  # '--c10d'
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min

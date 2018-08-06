@@ -21,7 +21,6 @@ from fp16util import *
 import gc
 
 import resnet
-# import resnet_sd as resnet
 
 from dataloader import *
 # from daliloader import HybridPipe

@@ -24,7 +24,6 @@ from fp16util import *
 import gc
 
 import resnet
-# import resnet_sd as resnet
 
 from dataloader import *
 
@@ -92,6 +91,7 @@ def get_parser():
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
+    parser.add_argument('--factorized-resnet', action='store_true', help='Speed up convolutions by factorizing - https://arxiv.org/pdf/1608.04337.pdf')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -300,7 +300,8 @@ def main():
     if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
     print("Loading model")
-    model = resnet.resnet50(pretrained=args.pretrained)
+    if args.factorized_resnet: model = resnet.resnet50factorized(pretrained=args.pretrained)
+    else: model = resnet.resnet50(pretrained=args.pretrained)
 
     model = model.cuda()
     if args.init_bn0: init_dist_weights(model) # Sets batchnorm std to 0
