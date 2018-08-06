@@ -41,7 +41,7 @@ def get_parser():
                         metavar='W', help='weight decay (default: 1e-4)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N', help='mini-batch size (default: 256)')
-    parser.add_argument('--phases', default='[(0,2e-1,16),(2e-1,1e-2,16),(1e-2,0,5)]', type=str,
+    parser.add_argument('--phases', default='[(0,2e-1,16),(2e-1,1e-2,16),(1e-2,0,50)]', type=str,
                     help='Should be a string formatted like this: [(start_lr,end_lr,num_epochs),(phase2...)]')
     parser.add_argument('--verbose', action='store_true', help='Verbose logging')
 #     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
@@ -268,6 +268,7 @@ class Scheduler():
 
         self.current_lr = lr
 
+        log_tb('lr', lr)
         for param_group in self.optimizer.param_groups:
             lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
@@ -344,7 +345,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
         if should_print:
           log_batch(epoch, batch_num, trn_len, batch_time, losses, top1)
-          log_tb("batch_size", batch_total)
+          log_tb("sizes/batch", batch_total)
+          if args.distributed:
+            log_tb("sizes/world", batch_total)
           log_tb("times/step", 1000*batch_time.val) # step time in ms
           log_tb("times/1gpu_images_per_sec", batch_total/batch_time.val)
           log_tb("losses/train_xent", losses.val)
