@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# python launch.py --instance-type p3.16xlarge --zone us-west-2c --name cifar00
 
 import torch
 from pathlib import Path
@@ -20,7 +22,8 @@ from PIL import Image
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-    parser.add_argument('data', metavar='DIR', help='path to dataset')
+    parser.add_argument('--data-path', default='/efs/data',
+                        help='path to dataset')
     parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
@@ -216,7 +219,7 @@ class DataPrefetcher():
 
 # ### Learning rate scheduler
 class Scheduler():
-    def __init__(self, optimizer, phases=[(0,2e-1,15),(2e-1,1e-2,15),(1e-2,0,5)]):
+    def __init__(self, optimizer, phases=[(0,2e-1,15),(2e-1,1e-2,15),(1e-2,0,50)]):
         self.optimizer = optimizer
         self.current_lr = None
         self.phases = phases
@@ -439,7 +442,7 @@ def main():
 
 
     sz = 32
-    trn_loader, val_loader = torch_loader(args.data, sz, args.batch_size, args.batch_size*2)
+    trn_loader, val_loader = torch_loader(args.data_path, sz, args.batch_size, args.batch_size*2)
 
     print(args)
     print('\n\n')
