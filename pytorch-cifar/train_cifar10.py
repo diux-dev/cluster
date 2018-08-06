@@ -349,7 +349,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
           if args.distributed:
             log_tb("sizes/world", batch_total)
           log_tb("times/step", 1000*batch_time.val) # step time in ms
-          log_tb("times/1gpu_images_per_sec", batch_total/batch_time.val)
+          log_tb("times/images_per_sec", batch_total/batch_time.val)
           log_tb("losses/train_xent", losses.val)
           log_tb("losses/train_acc", top1.val)
 
