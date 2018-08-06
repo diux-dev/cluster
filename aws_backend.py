@@ -38,10 +38,9 @@ class Run(backend.Run):
   
   def __init__(self, name, **kwargs):
     self.name = name
-
-    self.logdir = f'{backend.LOGDIR_PREFIX}/{self.name}'
     u.validate_name(name)
     
+    self.logdir = None   # set during setup_logdir()
     self.kwargs = kwargs
     self.jobs = []
 
@@ -161,6 +160,9 @@ class Run(backend.Run):
     return job
 
 
+  def set_global_logdir_prefix(self, logdir_prefix):
+    backend.set_global_logdir_prefix(logdir_prefix)
+    
   def setup_logdir(self):
     """Create logdir (using first task of first job).
 
@@ -176,7 +178,7 @@ class Run(backend.Run):
     # get list of all logdirs
     find_command = f'find {backend.LOGDIR_PREFIX} -type d -maxdepth 1'
     logdir_ls = head_task.run_and_capture_output(find_command)
-    new_logdir = self.logdir  # default logdir set in __init__
+    new_logdir = f"{backend.LOGDIR_PREFIX}/{self.name}"
     counter = 0
     while new_logdir in logdir_ls:
       counter+=1
@@ -186,7 +188,7 @@ class Run(backend.Run):
     self.logdir = new_logdir
     head_task.run(f'sudo mkdir -p {self.logdir}')
     head_task.run(f'sudo chown `whoami` {self.logdir}')
-
+    
 
 # TODO: refactor common fields like "linux_type", "user_data" to be
 # stored in job instead of task

@@ -34,6 +34,11 @@ To reconnect to existing job:
 
 """
 
+def set_global_logdir_prefix(logdir_prefix):
+  """Globally changes logdir prefix across all runs."""
+  global LOGDIR_PREFIX
+  LOGDIR_PREFIX = logdir_prefix
+
 # todo: rename to "start_run" instead of setup_run?
 def make_run(name):
   """Sets up "run" with given name, such as "training run"."""
