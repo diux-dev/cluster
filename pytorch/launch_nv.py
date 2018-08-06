@@ -258,7 +258,7 @@ def main():
                              skip_efs_mount=args.skip_efs_mount)
   
   job = create_job(run, 'worker', num_tasks, env_name)
-  run.setup_logdir()  # must happen after first job is created
+  run.setup_logdir()  # must happen after first job is created and ready
 
   # Define custom params for training or use a preset above
   # TODO: move "save_tag" into command-line parameter

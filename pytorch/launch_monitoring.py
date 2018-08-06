@@ -84,6 +84,14 @@ def main():
                  f"tensorboard --logdir {selected_logdir} --port=6007")
   print(f'Tensorboard selected will be at http://{job.public_ip}:6007')
 
+  cifar_logdir = backend_lib.LOGDIR_PREFIX+'.cifar'
+  job._run_raw("tmux kill-session -t cifar")
+  job._run_raw("tmux new-session -s cifar -n 0 -d")
+  run_tmux_async('cifar', 'source activate tensorflow_p36')
+  run_tmux_async('cifar',
+                 f"tensorboard --logdir {cifar_logdir} --port=6008")
+  print(f'Tensorboard cifar will be at http://{job.public_ip}:6008')
+
   # launch jupyter notebook server
   job._run_raw('tmux kill-session -t jupyter')
   job._run_raw('tmux new-session -s jupyter -n 0 -d')
