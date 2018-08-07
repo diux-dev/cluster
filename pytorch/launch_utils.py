@@ -134,6 +134,7 @@ def get_nccl_rings(num_tasks, num_gpus):
     ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
     ring_skip_rev = build_ring_order(reversed(skip_machine_order), skip_gpu_order)
     rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
+    # rings_arr = [ring, ring_rev, ring_skip]
   else:
     rings_arr = [ring, ring_rev]
   return ' | '.join(rings_arr)

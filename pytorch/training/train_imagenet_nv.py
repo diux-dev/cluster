@@ -122,6 +122,10 @@ class DataManager():
     def set_epoch(self, epoch):
         cur_phase = self.get_phase(epoch)
         if cur_phase: self.set_data(cur_phase)
+
+        # (AS) test:
+        # if epoch == 19: self.trn_dl.batch_sampler.batch_size = 192
+        
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
 
@@ -168,7 +172,10 @@ class DataManager():
 
     def preload_data(self, ep, sz, bs, trndir, valdir, **kwargs): # dummy ep var to prevent error
         """Pre-initializes data-loaders. Use set_data to start using it."""
-        return get_loaders(trndir, valdir, bs=bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
+        val_bs = bs
+        if sz == 128: val_bs = 512
+        if sz == 224: val_bs = 192
+        return get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
 # ### Learning rate scheduler
 class Scheduler():
@@ -310,7 +317,7 @@ def main():
 
     global model_params, master_params
     if args.fp16: model_params, master_params = prep_param_lists(model)
-    else: master_params = list(model.parameters())
+    else: model_params = master_params = model.parameters()
 
     optim_params = bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
 
@@ -329,6 +336,11 @@ def main():
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
+
+    if args.distributed:
+        print('Syncing machines before training')
+        sum_tensor(torch.tensor([1.0]).float().cuda())
+
     print("Begin training")
     estart = time.time()
     for epoch in range(args.start_epoch, scheduler.tot_epochs):
