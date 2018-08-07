@@ -97,7 +97,6 @@ x_args = [
     {'ep':41, 'sz':288, 'bs':128, 'min_scale':0.5},
     {'ep':(42,45),'lr':lr/1000}
   ],
-  '--no-autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
@@ -120,6 +119,7 @@ xar_args = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--env-name', 'pytorch_source'
@@ -140,6 +140,7 @@ xar_args_pytorch = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v5',
   # '--env-name', 'pytorch_p36',
@@ -164,6 +165,7 @@ x2ar_args = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--scale-lr', 2, # 2 = num tasksx
   '--num-tasks', 2,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
@@ -184,6 +186,7 @@ x4ar_args = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
@@ -206,6 +209,7 @@ x4ar_args_bench = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
   '--ami-name', 'pytorch.imagenet.source.v5',
@@ -230,7 +234,6 @@ x4ar_args_test_bench_2 = [
     {'ep':(35,38),'lr':lr/1000}
   ],
   '--init-bn0',
-  '--no-autoscale-lr2batch',
   '--no-bn-wd',
   '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
@@ -256,6 +259,7 @@ x8ar_args = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
@@ -278,7 +282,6 @@ x8ar_args_benchmark = [
     {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
-  '--no-autoscale-lr2batch',
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
@@ -306,7 +309,6 @@ x8ar_args_352_folder = [
     {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
-  '--no-autoscale-lr2batch',
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
@@ -335,7 +337,6 @@ x8ar_args_test_1 = [
     {'ep':35,     'lr':lr/100},
     {'ep':(36,40),'lr':lr/1000}
   ],
-  '--no-autoscale-lr2batch',
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
@@ -364,7 +365,6 @@ x8ar_args_test_2 = [
     {'ep':36,     'lr':lr/100},
     {'ep':(37,40),'lr':lr/1000}
   ],
-  '--no-autoscale-lr2batch',
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
@@ -393,6 +393,7 @@ x16ar_args = [
   ],
   '--init-bn0',
   '--no-bn-wd',
+  '--autoscale-lr2batch',
   '--scale-lr', 8, # 8 = num tasks / 2 (because 64 batch size)
   '--num-tasks', 16,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
@@ -417,7 +418,6 @@ x16ar_args_test = [
     {'ep':37,     'lr':lr/100/2},
     {'ep':(38,40),'lr':lr/1000/2}
   ],
-  '--no-autoscale-lr2batch',
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
