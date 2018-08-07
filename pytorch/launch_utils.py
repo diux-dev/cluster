@@ -21,6 +21,10 @@ def get_gpu_count(instance):
   gpu_count = collections.defaultdict(lambda:0, gpu_count)
   return gpu_count[instance.instance_type]
 
+def format_args(arg):
+  if isinstance(arg, list) or isinstance(arg, dict): return '\"'+str(arg)+'\"'
+  else: return str(arg)
+
 # EBS Utils
 ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):

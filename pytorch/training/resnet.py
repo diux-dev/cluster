@@ -1,6 +1,8 @@
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
+from torch.nn.parameter import Parameter
+import torch
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -210,6 +212,15 @@ class ResNet(nn.Module):
         x = self.fc(x)
 
         return x
+
+
+def init_dist_weights(model):
+    # https://arxiv.org/pdf/1706.02677.pdf
+    # https://github.com/pytorch/examples/pull/262
+    for m in model.modules():
+        if isinstance(m, BasicBlock): m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
+        if isinstance(m, Bottleneck): m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
+        if isinstance(m, nn.Linear): m.weight.data.normal_(0, 0.01)
 
 
 def resnet18(pretrained=False, **kwargs):

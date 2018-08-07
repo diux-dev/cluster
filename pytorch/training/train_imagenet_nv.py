@@ -5,10 +5,10 @@ import numpy as np
 import sys
 import os
 import math
+import collections
 
 import torch
 from torch.autograd import Variable
-from torch.nn.parameter import Parameter
 import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
@@ -65,28 +65,21 @@ class NoOp:
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
     parser.add_argument('data', metavar='DIR', help='path to dataset')
-    parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50')
+    parser.add_argument('--phases', type=str,
+                    help='Specify epoch order of data resize and learning rate schedule: [{"ep":0,"sz":128,"bs":64},{"ep":5,"lr":1e-2}]')
     parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('--epochs', default=45, type=int, metavar='N',
-                        help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
-    parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                        metavar='LR', help='initial learning rate')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
-    parser.add_argument('-b', '--batch-sched', default='192,192,128', type=str,
-                        metavar='N', help='mini-batch size (default: 256)')
     parser.add_argument('--resize-sched', default='0,18,41', type=str,
                         help='Scheduler to resize from 128 -> 224 -> 288')
-    parser.add_argument('--use-352-folder', action='store_true', help='Train images from 352 resized folder - faster at cost of accuracy')
-    parser.add_argument('--lr-sched', default='5,21,35,43', type=str,
-                        help='Learning rate scheduler warmup -> lr -> lr/10 -> lr/100 -> lr/1000')
-    parser.add_argument('--lr-linear-scale', action='store_true',
-                        help='Linear scale the learning rate if we change the batch size later on')
+    parser.add_argument('--no-autoscale-lr2batch', action='store_true',
+                        help='Currently automatically scaling the learning rate if the batch size changes midway through training. Enable flag to turn this off')
+    parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
@@ -101,7 +94,6 @@ def get_parser():
     parser.add_argument('--loss-scale', type=float, default=1,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
-    parser.add_argument('--val-ar', action='store_true', help='Do final validation by nearest aspect ratio')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
     parser.add_argument('--c10d', action='store_true', help='Run distributed training with c10d')
     parser.add_argument('--world-size', default=-1, type=int, 
@@ -125,127 +117,123 @@ if args.c10d:
     from torch.nn.parallel import distributed_c10d
 
 class DataManager():
-    def __init__(self, resize_sched, batch_sched):
-        self.resize_sched = resize_sched
-        self.batch_sched = batch_sched
-        if len(batch_sched) == 1: self.batch_sched = self.batch_sched * 3
-
-        self.data0 = self.load_data('-sz/160', '-sz/160', self.batch_sched[0], 128)
-        if args.use_352_folder: self.data1 = self.load_data('-sz/352', '', self.batch_sched[1], 224, min_scale=0.086) # faster loading at the cost of accuracy
-        else: self.data1 = self.load_data('', '', self.batch_sched[1], 224)
-        self.data2 = self.load_data('', '', self.batch_sched[2], 288, min_scale=0.5, use_ar=args.val_ar)
-        
+    def __init__(self, phases):
+        self.phases = self.preload_phase_data(phases)
     def set_epoch(self, epoch):
-        if epoch==self.resize_sched[0]: self.set_data(self.data0)
-        if epoch==self.resize_sched[1]:
-            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[1]/self.batch_sched[0]
-            self.set_data(self.data1)
-        if epoch==self.resize_sched[2]:
-            if args.lr_linear_scale: args.lr = args.lr * self.batch_sched[2]/self.batch_sched[1]
-            self.set_data(self.data2)
-
+        cur_phase = self.get_phase(epoch)
+        if cur_phase: self.set_data(cur_phase)
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
-    
+
+    def get_phase(self, epoch):
+        for p in self.phases: 
+            if (p['ep'] == epoch): return p
+        return None
+
     def get_trn_loader(self): return DataPrefetcher(self.trn_dl)
     def get_val_loader(self): return DataPrefetcher(self.val_dl)
 
-    def set_data(self, data):
+    def set_data(self, phase):
         """Initializes data loader."""
-        global last_batch_size, last_image_size
-        loaders, data_info = data
-        data_info_string = f'Dataset changed. \nImage size: {data_info["image_size"]} \nBatch size: {data_info["batch_size"]} \nTrain Directory: {data_info["traindir"]}\nValidation Directory: {data_info["valdir"]}'
-
-        print(data_info_string)
-        log_tb('sizes/image', data_info['image_size'])
-        log_tb('sizes/batch', data_info['batch_size'])
+        print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
+        log_tb('sizes/image', phase['sz'])
+        log_tb('sizes/batch', phase['bs'])
         log_tb('sizes/world', args.world_size)
-        last_batch_size = data_info['batch_size']
-        last_image_size = data_info['image_size']
-        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
+
+        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = phase['dl']
+        # (AS) Kind of a hacky way to autoscale learning rate if the batch size changes. TODO: don't modify args.scale_lr directly
+        if 'autoscale_lr' in phase: args.scale_lr *= phase['autoscale_lr']
+
         # clear memory
         gc.collect()
         torch.cuda.empty_cache()
         
+    def preload_phase_data(self, phases):
+        previous_bs = None
+        for phase in phases:
+            self.expand_directories(phase)
+            phase['dl'] = self.preload_data(**phase)
 
-    def load_data(self, dir_prefix, valdir_prefix, batch_size, image_size, **kwargs):
+            if args.no_autoscale_lr2batch: continue
+            if previous_bs: phase['autoscale_lr'] = phase['bs']/previous_bs
+            previous_bs = phase['bs']
+
+        return phases
+
+    def expand_directories(self, phase):
+        trndir = phase.get('trndir', '')
+        valdir = phase.get('valdir', trndir)
+        phase['trndir'] = args.data+trndir+'/train'
+        phase['valdir'] = args.data+valdir+'/validation'
+
+    def preload_data(self, ep, sz, bs, trndir, valdir, **kwargs): # dummy ep var to prevent error
         """Pre-initializes data-loaders. Use set_data to start using it."""
-        traindir = args.data+dir_prefix+'/train'
-        valdir = args.data+valdir_prefix+'/validation'
+        return get_loaders(trndir, valdir, bs=bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
-        data_info = {}
-        data_info['image_size'] = image_size
-        data_info['batch_size'] = batch_size
-        data_info['traindir'] = traindir
-        data_info['valdir'] = valdir
-        
-        return get_loaders(traindir, valdir, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs), data_info
-
+# ### Learning rate scheduler
 class Scheduler():
-    def __init__(self, optimizer, lr_sched):
+    def __init__(self, optimizer, phases, scale_lr):
         self.optimizer = optimizer
         self.current_lr = None
-        self.current_epoch = 0
-        self.lr_sched = lr_sched
+        self.phases = [self.format_phase(p, scale_lr) for p in phases]
+        self.tot_epochs = max([max(p['ep']) for p in self.phases])
 
-    def bn0_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
-        world_size = args.world_size
-        lr_step = args.lr / (epoch_tot * batch_tot)
-        lr = args.lr + (epoch * batch_tot + batch_num) * lr_step
-        if world_size >= 64: lr *= .75
-        return lr
+    def format_phase(self, phase, scale_lr):
+        phase['ep'] = listify(phase['ep'])
+        phase['lr'] = listify(phase['lr'])
+        if len(phase['lr']) == 2: 
+            assert (len(phase['ep']) == 2), 'Linear learning rates must contain end epoch'
+        return phase
 
-    def linear_lr_warmup(self, epoch, epoch_tot, batch_num, batch_tot):
-        starting_lr = args.lr/epoch_tot
-        ending_lr = args.lr
-        step_size = (ending_lr - starting_lr)/epoch_tot
-        batch_step_size = step_size/batch_tot
-        lr = step_size*(epoch+1) + batch_step_size*batch_num
+    def linear_phase_lr(self, phase, epoch, batch_curr, batch_tot):
+        lr_start, lr_end = phase['lr']
+        ep_start, ep_end = phase['ep']
+        if 'epoch_step' in phase: batch_curr = 0 # Optionally change learning rate through epoch step
+        ep_relative = epoch - ep_start
+        ep_tot = ep_end - ep_start
+        return self.calc_linear_lr(lr_start, lr_end, ep_relative, batch_curr, ep_tot, batch_tot)
 
-        if (args.world_size >= 32) and (epoch < epoch_tot):
-            starting_lr = starting_lr/(epoch_tot - epoch)
-        return lr
-
-    def get_lr(self, epoch, batch_num, batch_tot):
-        """Sets the learning rate to the initial LR decayed by 10 every few epochs"""
-        # faster lr schedule [0.14, 0.43, 0.73, 0.94]
-        # original lr schedule [0.1, 0.47, 0.78, 0.95]
-        if epoch<=self.lr_sched[0]:
-            if args.init_bn0: return self.bn0_lr_warmup(epoch, self.lr_sched[0], batch_num, batch_tot)
-            else:             return self.linear_lr_warmup(epoch, self.lr_sched[0], batch_num, batch_tot)
-        elif epoch<=self.lr_sched[1]: return args.lr/1
-        elif epoch<=self.lr_sched[2]: return args.lr/10
-        elif epoch<=self.lr_sched[3]: return args.lr/100
-        else                        : return args.lr/1000
+    def calc_linear_lr(self, lr_start, lr_end, epoch_curr, batch_curr, epoch_tot, batch_tot):
+        step_tot = epoch_tot * batch_tot
+        step_curr = epoch_curr * batch_tot + batch_curr 
+        step_size = (lr_end - lr_start)/step_tot
+        return lr_start + step_curr * step_size
+    
+    def get_current_phase(self, epoch):
+        for phase in reversed(self.phases): 
+            if (epoch >= phase['ep'][0]): return phase
+        raise Exception('Epoch out of range')
+            
+    def get_lr(self, epoch, batch_curr, batch_tot):
+        phase = self.get_current_phase(epoch)
+        if len(phase['lr']) == 1: return phase['lr'][0] # constant learning rate
+        return self.linear_phase_lr(phase, epoch, batch_curr, batch_tot)
 
     def update_lr(self, epoch, batch_num, batch_tot):
-        lr = self.get_lr(epoch, batch_num, batch_tot)
-        if (self.current_lr != lr) and ((batch_num == 1) or (batch_num == batch_tot)): 
+        # (AS) TODO: scale_lr should be factored in at init, otherwise resume from checkpointing will have wrong lr
+        # However, scale_lr is currently dynamically changed with --no-autoscale-lr2batch
+        lr = self.get_lr(epoch, batch_num, batch_tot) * args.scale_lr 
+        if self.current_lr == lr: return
+        if ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
-            log_tb('lr', lr)
 
         self.current_lr = lr
-        self.current_epoch = epoch
-        self.current_batch = batch_num
-
         for param_group in self.optimizer.param_groups:
             lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
 
-            # Trick 4: apply momentum correction when lr is updated
+            # Trick 4: apply momentum correction when lr is updated. (AS): Doesn't really work or help
             # https://github.com/pytorch/examples/pull/262
-            if lr > lr_old: param_group['momentum'] = lr / lr_old * args.momentum
+            # if lr > lr_old: param_group['momentum'] = lr / lr_old * args.momentum
+            if lr > lr_old: param_group['momentum'] = .92
             else: param_group['momentum'] = args.momentum
 
-
-def init_dist_weights(model):
-    # https://arxiv.org/pdf/1706.02677.pdf
-    # https://github.com/pytorch/examples/pull/262
-    if not args.arch.startswith('resnet'): return
-    for m in model.modules():
-        if isinstance(m, resnet.BasicBlock): m.bn2.weight = Parameter(torch.zeros_like(m.bn2.weight))
-        if isinstance(m, resnet.Bottleneck): m.bn3.weight = Parameter(torch.zeros_like(m.bn3.weight))
-        if isinstance(m, nn.Linear): m.weight.data.normal_(0, 0.01)
+def listify(p=None, q=None):
+    if p is None: p=[]
+    elif not isinstance(p, collections.Iterable): p=[p]
+    n = q if type(q)==int else 1 if q is None else len(q)
+    if len(p)==1: p = p * n
+    return p
 
 def log_tb(tag, val):
   """Log value to tensorboard (relies on global_example_count being set properly)"""
@@ -278,7 +266,7 @@ def main():
     print("~~epoch\thours\ttop1Accuracy\n")
 
     # need to index validation directory before we start counting the time
-    if args.val_ar: sort_ar(args.data+'/validation')
+    sort_ar(args.data+'/validation')
     
     global reduce_function
     if args.c10d:
@@ -304,7 +292,7 @@ def main():
     else: model = resnet.resnet50(pretrained=args.pretrained)
 
     model = model.cuda()
-    if args.init_bn0: init_dist_weights(model) # Sets batchnorm std to 0
+    if args.init_bn0: resnet.init_dist_weights(model) # Sets batchnorm std to 0
     if args.fp16: model = network_to_half(model)
     best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
 
@@ -328,21 +316,22 @@ def main():
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(optim_params, args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = Scheduler(optimizer, str_to_num_array(args.lr_sched))
-
-    if args.resume: # we must load optimizer params separately
+    optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
+    if args.resume: # we must resume optimizer params separately
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
         optimizer.load_state_dict(checkpoint['optimizer'])
 
+    # Load data data manager and lr scheduler from phases
+    phases = eval(args.phases)
     print("Creating data loaders (this could take 6-12 minutes)")
-    dm = DataManager(resize_sched=str_to_num_array(args.resize_sched), batch_sched=str_to_num_array(args.batch_sched))
+    dm = DataManager(list(filter(lambda p: 'sz' in p, phases)))
+    scheduler = Scheduler(optimizer, list(filter(lambda p: 'lr' in p, phases)), args.scale_lr)
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
     print("Begin training")
     estart = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, scheduler.tot_epochs):
         estart = time.time()
         dm.set_epoch(epoch)
         train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
@@ -353,10 +342,8 @@ def main():
         best_prec5 = max(prec5, best_prec5)
         if args.local_rank == 0:
             if is_best: save_checkpoint(epoch, model, best_prec5, optimizer, is_best=True, filename='model_best.pth.tar')
-            if (epoch+1)==int(args.epochs*dm.resize_sched[0]+0.5):
-                save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz128_checkpoint.path.tar')
-            elif (epoch+1)==int(args.epochs*dm.resize_sched[1]+0.5):
-                save_checkpoint(epoch, model, best_prec5, optimizer, filename='sz244_checkpoint.path.tar')
+            phase = dm.get_phase(epoch)
+            if phase:save_checkpoint(epoch, model, best_prec5, optimizer, filename=f'sz{phase["bs"]}_checkpoint.path.tar')
 
     event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
     event_writer.close()
@@ -368,6 +355,7 @@ def str_to_num_array(argstr, num_type=int):
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
     if isinstance(t, float): return t
+    if isinstance(t, int): return t
     if hasattr(t, 'item'): return t.item()
     else: return t[0]
 
@@ -406,7 +394,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         # measure data loading time
         data_time.update(time.time() - end)
         scheduler.update_lr(epoch, i+1, trn_len)
-
 
         # compute output
         output = model(input)
