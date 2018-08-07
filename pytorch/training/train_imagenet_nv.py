@@ -122,9 +122,6 @@ class DataManager():
     def set_epoch(self, epoch):
         cur_phase = self.get_phase(epoch)
         if cur_phase: self.set_data(cur_phase)
-
-        # (AS) test:
-        # if epoch == 19: self.trn_dl.batch_sampler.batch_size = 192
         
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
@@ -139,6 +136,11 @@ class DataManager():
 
     def set_data(self, phase):
         """Initializes data loader."""
+        if phase.get('keep_dl', False):
+            print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
+            self.trn_dl.batch_sampler.batch_size = phase['bs']
+            return
+        
         print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
         log_tb('sizes/image', phase['sz'])
         log_tb('sizes/batch', phase['bs'])
@@ -155,8 +157,9 @@ class DataManager():
     def preload_phase_data(self, phases):
         previous_bs = None
         for phase in phases:
-            self.expand_directories(phase)
-            phase['dl'] = self.preload_data(**phase)
+            if not phase.get('keep_dl', False):
+                self.expand_directories(phase)
+                phase['dl'] = self.preload_data(**phase)
 
             if args.no_autoscale_lr2batch: continue
             if previous_bs: phase['autoscale_lr'] = phase['bs']/previous_bs
@@ -331,7 +334,7 @@ def main():
     # Load data data manager and lr scheduler from phases
     phases = eval(args.phases)
     print("Creating data loaders (this could take 6-12 minutes)")
-    dm = DataManager(list(filter(lambda p: 'sz' in p, phases)))
+    dm = DataManager(list(filter(lambda p: 'bs' in p, phases)))
     scheduler = Scheduler(optimizer, list(filter(lambda p: 'lr' in p, phases)), args.scale_lr)
 
     start_time = datetime.now() # Loading start to after everything is loaded
