@@ -21,6 +21,10 @@ def get_gpu_count(instance):
   gpu_count = collections.defaultdict(lambda:0, gpu_count)
   return gpu_count[instance.instance_type]
 
+def format_args(arg):
+  if isinstance(arg, list) or isinstance(arg, dict): return '\"'+str(arg)+'\"'
+  else: return str(arg)
+
 # EBS Utils
 ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):
@@ -130,6 +134,7 @@ def get_nccl_rings(num_tasks, num_gpus):
     ring_skip = build_ring_order(skip_machine_order, rotated_gpu_order)
     ring_skip_rev = build_ring_order(reversed(skip_machine_order), skip_gpu_order)
     rings_arr = [ring, ring_rev, ring_skip, ring_skip_rev]
+    # rings_arr = [ring, ring_rev, ring_skip]
   else:
     rings_arr = [ring, ring_rev]
   return ' | '.join(rings_arr)

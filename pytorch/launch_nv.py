@@ -43,7 +43,7 @@ parser.add_argument('--ami', type=str, default='',
                      help="id of AMI to use (deprecated, use ami-name)")
 parser.add_argument('--ami-name', type=str,
                     default='-1',
-                    #default='pytorch.imagenet.source.v4',
+                    #default='pytorch.imagenet.source.v5',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='',
                      help=("name of placement group to use (depecated, name "
@@ -85,137 +85,344 @@ args = parser.parse_args()
 DEFAULT_ENV_NAME='pytorch_p36'
 
 # Original dawn entry
+lr = 4e-1
 x_args = [
-  '--lr-sched', '4,20,34,42',
-  '--batch-sched', '192,192,128',
-  '--resize-sched', '0,18,41',
-  '--epochs', 45,
-  '--lr', 0.4,
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--lr-phases', [
+    {'ep':0,  'sz':128, 'bs':192, 'trndir':'-sz/160'},
+    {'ep':(0,5),  'lr':(0,lr)},
+    {'ep':5,      'lr':lr},
+    {'ep':18, 'sz':224, 'bs':192},
+    {'ep':20,     'lr':lr/10},
+    {'ep':34,     'lr':lr/100},
+    {'ep':41, 'sz':288, 'bs':128, 'min_scale':0.5},
+    {'ep':(42,45),'lr':lr/1000}
+  ],
+  '--no-autoscale-lr2batch',
   '--num-tasks', 1,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
 ]
 
 
 # Current best settings
 # Current benchmark for 1x p3
+lr = 1.0
 xar_args = [
-  '--lr-sched', '4,15,26,32',
-  '--batch-sched', '512,192,128',
-  '--resize-sched', '0,14,32',
-  '--epochs', 35,
-  '--lr', 1.0,
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--lr-phases', [
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # custom lr warmup works better with init-bn0 flag
+    {'ep':5,      'lr':lr},
+    {'ep':14, 'sz':224, 'bs':192},
+    {'ep':16,     'lr':lr/10},
+    {'ep':27,     'lr':lr/100},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(33,35),'lr':lr/1000}
+  ],
   '--init-bn0',
+  '--no-bn-wd',
   '--num-tasks', 1,
-  '--val-ar',
-  '--lr-linear-scale',
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--no-bn-wd',
-  '--env-name', 'pytorch_source_tv'
-]
-
-xar_args_pytorch = [
-  '--lr-sched', '4,15,26,32',
-  '--resize-sched', '0,14,32',
-  '--batch-sched', '512,192,128',
-  '--epochs', 35,
-  '--lr', 1.0,
+  '--env-name', 'pytorch_source'
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-  '--init-bn0',
-  '--num-tasks', 1,
-  '--val-ar',
-  '--lr-linear-scale',
-  '--ami-name', 'pytorch.imagenet.source.v4',
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--env-name', 'pytorch_source',
-  '--no-bn-wd',
-  '--c10d'
 ]
 
-# 2x p3's - is this still being used?
-x2ar_args = [
-  '--lr-sched', '6,23,38,47',
-  '--resize-sched', '0,20,46',
-  '--batch-sched', '192,192,128',
-  '--epochs', 50,
-  '--lr', 0.4 * 2,
+lr = 1.0
+xar_args_pytorch = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':(0,5),  'lr':(lr,lr*2)},
+    {'ep':5,      'lr':lr},
+    {'ep':14, 'sz':224, 'bs':192},
+    {'ep':16,     'lr':lr/10},
+    {'ep':27,     'lr':lr/100},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(33,35),'lr':lr/1000}
+  ],
   '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  # '--env-name', 'pytorch_p36',
+  '--env-name', 'pytorch_source',
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  # '--c10d'
+]
+
+
+# 2x p3 for throughput benchmarking
+lr = 1.0
+x2ar_args = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':(0,5),  'lr':(lr,lr*2)},
+    {'ep':5,      'lr':lr},
+    {'ep':14, 'sz':224, 'bs':192},
+    {'ep':16,     'lr':lr/10},
+    {'ep':27,     'lr':lr/100},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(33,35),'lr':lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 2, # 2 = num tasksx
   '--num-tasks', 2,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--val-ar',
 ]
 
-
 # Current benchmark for 4x p3
+lr = 0.47
 x4ar_args = [
-  '--lr-sched', '5,18,30,37',
-  '--resize-sched', '0,16,37',
-  '--batch-sched', '256,192,128',
-  '--epochs', 40,
-  '--lr', 0.47 * 4,
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,      'lr':lr},
+    {'ep':16, 'sz':224, 'bs':192},
+    {'ep':19,     'lr':lr/10},
+    {'ep':31,     'lr':lr/100},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
   '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
-  '--no-bn-wd'
-  '--val-ar',
-  '--lr-linear-scale',
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   # '--resume', 'sz128_checkpoint.path.tar'
 ]
 
-# Current benchmark for 4x p3
-x4ar_args_test_sched = [
-  '--lr-sched', '5,17,28,35',
-  '--batch-sched', '256,192,128',
-  '--resize-sched', '0,15,34',
-  '--epochs', 38,
-  # '--lr-sched', '5,18,30,37',
-  # '--resize-sched', '0,16,36',
-  # '--batch-sched', '256,192,128',
-  # '--epochs', 40,
-  '--lr', 0.47 * 4,
+
+# Faster benchmark for 4x p3 - 43 minutes
+lr = 0.47
+x4ar_args_bench = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,      'lr':lr},
+    {'ep':15, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':18,     'lr':lr/10},
+    {'ep':29,     'lr':lr/100},
+    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(35,38),'lr':lr/1000}
+  ],
   '--init-bn0',
-  # '--batch-sched', '512,192,128', # (AS) TODO: try increasing batch size
-  '--num-tasks', 4,
   '--no-bn-wd',
-  '--val-ar',
-  '--lr-linear-scale',
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v4',
+  '--scale-lr', 4, # 4 = num tasks
+  '--num-tasks', 4,
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--env-name', 'pytorch_source',
+  '--factorized-resnet',
+]
+
+# Current testing params 4x p3
+lr = 0.47
+x4ar_args_test_bench_2 = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':6,      'lr':lr*2},
+    {'ep':15, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':15,      'lr':lr/1.5},
+    {'ep':18,     'lr':lr/10/1.5},
+    {'ep':29,     'lr':lr/100/1.5},
+    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':34,     'lr':lr/100},
+    {'ep':(35,38),'lr':lr/1000}
+  ],
+  '--init-bn0',
+  '--no-autoscale-lr2batch',
+  '--no-bn-wd',
+  '--scale-lr', 4, # 4 = num tasks
+  '--num-tasks', 4,
+  '--ami-name', 'pytorch.imagenet.source.v5',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
-  '--use-352-folder',
-  '--c10d'
+  # '--factorized-resnet',
+  # '--c10d'
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+lr = 0.235
 x8ar_args = [
-  '--lr-sched', '5,18,30,37',
-  '--resize-sched', '0,16,37',
-  '--batch-sched', 128,
-  '--epochs', 40,
-  '--lr', 0.23 * 8,
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,      'lr':lr},
+    {'ep':16, 'sz':224,'bs':128},
+    {'ep':19,     'lr':lr/10},
+    {'ep':31,     'lr':lr/100},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
   '--init-bn0',
-  '--val-ar',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--no-bn-wd'
+]
+
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+lr = 0.235
+x8ar_args_benchmark = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224,'bs':128},
+    {'ep':16,      'lr':lr},
+    {'ep':19,          'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/1.5)},
+    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
+  '--no-autoscale-lr2batch',
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+]
+
+# Also ~27 minutes. Faster per epoch, but takes one extra
+lr = 0.235
+x8ar_args_352_folder = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16,      'lr':lr},
+    {'ep':19,           'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/1.5)},
+    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
+  '--no-autoscale-lr2batch',
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+]
+
+
+# Trying faster training schedule with 352 folder
+lr = 0.238
+x8ar_args_test_1 = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':15, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'valdir':'', 'min_scale':0.088},
+    {'ep':15,      'lr':lr},
+    {'ep':18,           'bs':192, 'keep_dl':True},
+    {'ep':18,     'lr':lr/(10/1.5)},
+    {'ep':30,     'lr':lr/(100/1.5)},
+    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':35,     'lr':lr/100},
+    {'ep':(36,40),'lr':lr/1000}
+  ],
+  '--no-autoscale-lr2batch',
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+]
+
+
+# Trying faster training schedule with original size (original gets 93.1%) - also increasing batch size but doesn't work
+lr = 0.235
+x8ar_args_test_2 = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True}, # (AS) definitely diverges here - remove batch size
+    {'ep':6,      'lr':lr*4},
+    {'ep':16, 'sz':224, 'bs':128},
+    {'ep':16,     'lr':lr*1.5},
+    {'ep':19,           'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/1.5)},
+    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':36,     'lr':lr/100},
+    {'ep':(37,40),'lr':lr/1000}
+  ],
+  '--no-autoscale-lr2batch',
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v5',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
 # python launch_nv.py --name yaro-friday-16 --num-tasks 16 --zone us-east-1c --params x16ar_args
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validatoin
+# Current benchmark for 16x p3's - with Aspect Ratio Validatoin
+lr = 0.235
 x16ar_args = [
-  '--lr-sched', '5,18,30,37',
-  '--resize-sched', '0,16,37',
-  '--batch-sched', 64,
-  '--epochs', 40,
-  '--lr', 0.23 * 8,
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,      'lr':lr},
+    {'ep':16, 'sz':224, 'bs':64},
+    {'ep':19,     'lr':lr/10},
+    {'ep':31,     'lr':lr/100},
+    {'ep':37, 'sz':288, 'bs':64, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
   '--init-bn0',
-  '--val-ar',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks / 2 (because 64 batch size)
   '--num-tasks', 16,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0'
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+]
+
+
+# Untested results - based off of 8x machine benchmark
+lr = 0.235
+x16ar_args_test = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224,'bs':64},
+    # {'ep':16, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16,      'lr':lr},
+    {'ep':19,           'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/3)},
+    {'ep':31,     'lr':lr/(100/3)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100/2},
+    {'ep':(38,40),'lr':lr/1000/2}
+  ],
+  '--no-autoscale-lr2batch',
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 16,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
 ]
 
 # hacks to allow launcher level flags in worker params list
@@ -360,7 +567,7 @@ def start_training(job, params, save_tag):
   ]
   training_args = default_params + params
   training_args = training_args + ["--logdir", job.logdir]
-  training_args = ' '.join(map(str, training_args))
+  training_args = ' '.join(map(launch_utils_lib.format_args, training_args))
 
   # Run tasks
   task_cmds = []
