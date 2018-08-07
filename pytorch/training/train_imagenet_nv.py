@@ -76,8 +76,8 @@ def get_parser():
                         metavar='W', help='weight decay (default: 1e-4)')
     parser.add_argument('--resize-sched', default='0,18,41', type=str,
                         help='Scheduler to resize from 128 -> 224 -> 288')
-    parser.add_argument('--no-autoscale-lr2batch', action='store_true',
-                        help='Currently automatically scaling the learning rate if the batch size changes midway through training. Enable flag to turn this off')
+    parser.add_argument('--autoscale-lr2batch', action='store_true',
+                        help='Automatically scale the learning rate if the batch size changes midway through training.')
     parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
@@ -160,8 +160,8 @@ class DataManager():
                 self.expand_directories(phase)
                 phase['dl'] = self.preload_data(**phase)
 
-            if args.no_autoscale_lr2batch: continue
-            if previous_bs: phase['autoscale_lr'] = phase['bs']/previous_bs
+            if args.autoscale_lr2batch and previous_bs: 
+                phase['autoscale_lr'] = phase['bs']/previous_bs
             previous_bs = phase['bs']
 
         return phases
@@ -220,7 +220,7 @@ class Scheduler():
 
     def update_lr(self, epoch, batch_num, batch_tot):
         # (AS) TODO: scale_lr should be factored in at init, otherwise resume from checkpointing will have wrong lr
-        # However, scale_lr is currently dynamically changed with --no-autoscale-lr2batch
+        # However, scale_lr is currently dynamically changed with --autoscale-lr2batch
         lr = self.get_lr(epoch, batch_num, batch_tot) * args.scale_lr 
         if self.current_lr == lr: return
         if ((batch_num == 1) or (batch_num == batch_tot)): 
