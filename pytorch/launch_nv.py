@@ -246,7 +246,7 @@ lr = 0.235
 x8ar_args = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
+    {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,      'lr':lr},
     {'ep':16, 'sz':224,'bs':128},
     {'ep':19,     'lr':lr/10},
@@ -266,17 +266,16 @@ lr = 0.235
 x8ar_args_benchmark = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
-    {'ep':6,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':16,      'lr':lr},
     {'ep':16, 'sz':224,'bs':128},
-    # {'ep':16, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
-    {'ep':19, 'sz':224,'bs':192},
+    {'ep':16,      'lr':lr},
+    {'ep':19,          'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37,     'lr':lr/100},
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
   '--no-autoscale-lr2batch',
@@ -290,23 +289,21 @@ x8ar_args_benchmark = [
   '--env-name', 'pytorch_source',
 ]
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+# Also ~27 minutes. Faster per epoch, but takes one extra
 lr = 0.235
-x8ar_args_5 = [
+x8ar_args_352_folder = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':1,            'bs':256, 'keep_dl':True},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
+    {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,            'bs':256, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':16,      'lr':lr},
-    # {'ep':16, 'sz':224,'bs':128},
     {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16,      'lr':lr},
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37,     'lr':lr/100},
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
   '--no-autoscale-lr2batch',
@@ -321,22 +318,21 @@ x8ar_args_5 = [
 ]
 
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+# Trying faster training schedule with 352 folder
 lr = 0.238
-x8ar_args_6 = [
+x8ar_args_test_1 = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
+    {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,            'bs':256, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':15,      'lr':lr},
-    # {'ep':16, 'sz':224,'bs':128},
     {'ep':15, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'valdir':'', 'min_scale':0.088},
+    {'ep':15,      'lr':lr},
     {'ep':18,           'bs':192, 'keep_dl':True},
     {'ep':18,     'lr':lr/(10/1.5)},
     {'ep':30,     'lr':lr/(100/1.5)},
-    {'ep':35,     'lr':lr/100},
     {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':35,     'lr':lr/100},
     {'ep':(36,40),'lr':lr/1000}
   ],
   '--no-autoscale-lr2batch',
@@ -351,22 +347,21 @@ x8ar_args_6 = [
 ]
 
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+# Trying faster training schedule with original size (original gets 93.1%) - also increasing batch size but doesn't work
 lr = 0.235
-x8ar_args_7 = [
+x8ar_args_test_2 = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
-    {'ep':6,            'bs':512, 'keep_dl':True}, # (AS) definitely diverges here
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True}, # (AS) definitely diverges here - remove batch size
     {'ep':6,      'lr':lr*4},
+    {'ep':16, 'sz':224, 'bs':128},
     {'ep':16,     'lr':lr*1.5},
-    # {'ep':16, 'sz':224,'bs':128},
-    {'ep':16, 'sz':224, 'bs':192},
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':36,     'lr':lr/100},
     {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':36,     'lr':lr/100},
     {'ep':(37,40),'lr':lr/1000}
   ],
   '--no-autoscale-lr2batch',
@@ -383,12 +378,12 @@ x8ar_args_7 = [
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
 # python launch_nv.py --name yaro-friday-16 --num-tasks 16 --zone us-east-1c --params x16ar_args
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validatoin
+# Current benchmark for 16x p3's - with Aspect Ratio Validatoin
 lr = 0.235
 x16ar_args = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
+    {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,      'lr':lr},
     {'ep':16, 'sz':224, 'bs':64},
     {'ep':19,     'lr':lr/10},
@@ -404,18 +399,18 @@ x16ar_args = [
 ]
 
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+# Untested results - based off of 8x machine benchmark
 lr = 0.235
 x16ar_args_test = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # reducing lr by 0.75 for 8 machines works better
-    {'ep':6,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    # {'ep':16, 'sz':224,'bs':128},
-    {'ep':16, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16, 'sz':224,'bs':64},
+    # {'ep':16, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.086},
     {'ep':16,      'lr':lr},
-    {'ep':19, 'sz':224,'bs':192},
+    {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/3)},
     {'ep':31,     'lr':lr/(100/3)},
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},

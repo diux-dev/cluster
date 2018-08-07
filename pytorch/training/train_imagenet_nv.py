@@ -25,9 +25,8 @@ import gc
 
 import resnet
 
-from dataloader import *
-
-from experimental_utils import *
+import dataloader
+import experimental_utils
 
 ################################################################################
 # Generic utility methods, eventually refactor into separate file
@@ -131,8 +130,8 @@ class DataManager():
             if (p['ep'] == epoch): return p
         return None
 
-    def get_trn_loader(self): return DataPrefetcher(self.trn_dl)
-    def get_val_loader(self): return DataPrefetcher(self.val_dl)
+    def get_trn_loader(self): return dataloader.DataPrefetcher(self.trn_dl)
+    def get_val_loader(self): return dataloader.DataPrefetcher(self.val_dl)
 
     def set_data(self, phase):
         """Initializes data loader."""
@@ -178,7 +177,7 @@ class DataManager():
         val_bs = bs
         if sz == 128: val_bs = 512
         if sz == 224: val_bs = 192
-        return get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
+        return dataloader.get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
 # ### Learning rate scheduler
 class Scheduler():
@@ -276,7 +275,7 @@ def main():
     print("~~epoch\thours\ttop1Accuracy\n")
 
     # need to index validation directory before we start counting the time
-    sort_ar(args.data+'/validation')
+    dataloader.sort_ar(args.data+'/validation')
     
     global reduce_function
     if args.c10d:
@@ -322,7 +321,7 @@ def main():
     if args.fp16: model_params, master_params = prep_param_lists(model)
     else: model_params = master_params = model.parameters()
 
-    optim_params = bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
+    optim_params = experimental_utils.bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()

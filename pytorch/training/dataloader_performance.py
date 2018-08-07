@@ -22,8 +22,7 @@ import gc
 
 import resnet
 
-from dataloader import *
-# from daliloader import HybridPipe
+import dataloader
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -107,10 +106,10 @@ class DataManager():
     def load_data(self, dir_prefix, batch_size, image_size, **kwargs):
         print(f'Dataset changing. \nImage size: {image_size}. \nBatch size: {batch_size} \nDirectory: {dir_prefix}\n')
         estart = time.time()
-        loaders = get_loaders(args.data+dir_prefix, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs)
+        loaders = dataloader.get_loaders(args.data+dir_prefix, bs=batch_size, sz=image_size, workers=args.workers, distributed=args.distributed, **kwargs)
         self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = loaders
-        self.trn_dl = DataPrefetcher(self.trn_dl)
-        self.val_dl = DataPrefetcher(self.val_dl, prefetch=False)
+        self.trn_dl = dataloader.fetcher(self.trn_dl)
+        self.val_dl = dataloader.DataPrefetcher(self.val_dl, prefetch=False)
         self.trn_len = len(self.trn_dl)
         self.val_len = len(self.val_dl)
         # clear memory
@@ -148,7 +147,7 @@ class DataManager():
 
 def main():
     # need to index validation directory before we start counting the time
-    if args.val_ar: sort_ar(args.data+'/validation')
+    if args.val_ar: dataloader.sort_ar(args.data+'/validation')
 
     start_time = datetime.now()
 
