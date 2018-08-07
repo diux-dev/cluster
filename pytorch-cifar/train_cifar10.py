@@ -245,7 +245,7 @@ class Scheduler():
             start_lr *= args.scale_lr
             end_lr *= args.scale_lr
         step_tot = epoch_tot * batch_tot
-        step_curr = epoch_curr * batch_tot + epoch_curr
+        step_curr = epoch_curr * batch_tot + batch_curr
         step_size = (end_lr - start_lr)/step_tot
         return start_lr + step_curr * step_size
     
