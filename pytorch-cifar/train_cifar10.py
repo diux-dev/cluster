@@ -66,6 +66,7 @@ def get_parser():
 
 global args
 args = get_parser().parse_args()
+if args.full_precision: args.loss_scale = 1
 torch.backends.cudnn.benchmark = True
 
 # no_op method/object that accept every signature
@@ -245,7 +246,7 @@ class Scheduler():
             start_lr *= args.scale_lr
             end_lr *= args.scale_lr
         step_tot = epoch_tot * batch_tot
-        step_curr = epoch_curr * batch_tot + epoch_curr
+        step_curr = epoch_curr * batch_tot + batch_curr
         step_size = (end_lr - start_lr)/step_tot
         return start_lr + step_curr * step_size
     
@@ -468,7 +469,7 @@ def main():
     # AS: todo: don't copy over weights as it seems to help performance
 
     if not args.full_precision: model = network_to_half(model)
-    elif args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
 
     global model_params, master_params
