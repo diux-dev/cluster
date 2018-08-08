@@ -182,8 +182,17 @@ class Run(backend.Run):
 
     # get list of all logdirs
     find_command = f'find {backend.LOGDIR_PREFIX} -type d -maxdepth 1'
+    # TODO: get rid of find warning
+    #    find: warning: you have specified the -maxdepth option after a non-option argument -type, but options are not positional (-maxdepth affects tests specified befo
+    # re it as well as those specified after it).  Please specify options before other
+    # arguments.
+
     logdir_ls = head_task.run_and_capture_output(find_command)
     new_logdir = f"{backend.LOGDIR_PREFIX}/{self.name}"
+    # TODO: change logic to count backwards from 99 instead (with error
+    # checking). Otherwise run clean-up will cause insertion of new runs into
+    # unobvious position
+    
     counter = 0
     while new_logdir in logdir_ls:
       counter+=1
@@ -358,6 +367,7 @@ tmux a
 
 
 
+  # TODO: add "wait_for_file", that will help user-defined synchronization
   # todo: rename wait_until_ready to wait_until_initialized
   def wait_until_ready(self):
     if not self.initialize_called:
@@ -489,8 +499,10 @@ tmux a
     cmd = f'{cmd} | tee {cmd_stdout_fn}'
     self.run(cmd, sync, ignore_errors)
     return self.file_read(cmd_stdout_fn)
-    
+
+  # TODO: make run_tmux a proper first-class citizen
   def _run_raw(self, cmd):
+    print(f"_run_raw: {cmd}") 
     return self._run_ssh(cmd)
 
   # todo: transition to higher-level SshClient instead of paramiko.SSHClient
