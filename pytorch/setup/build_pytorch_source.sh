@@ -33,9 +33,10 @@ nvidia-smi
 # sudo cp -R cuda/include/* /usr/local/cuda-9.2/include
 # sudo cp -R cuda/lib64/* /usr/local/cuda-9.2/lib64
 
-# Install cudnn 7.1.3
-wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cudnn-9.1-linux-x64-v7.1.tgz
-tar -xf cudnn-9.1-linux-x64-v7.1.tgz
+
+# Install cudnn 7.2.1
+wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cudnn-9.2-linux-x64-v7.2.1.38.tgz
+tar -xf cudnn-9.2-linux-x64-v7.2.1.38.tgz
 sudo cp -R ~/cuda/include/* /usr/local/cuda-9.2/include
 sudo cp -R ~/cuda/lib64/* /usr/local/cuda-9.2/lib64
 
@@ -86,7 +87,8 @@ popd
 # https://github.com/pytorch/pytorch/pull/8958#issuecomment-410125932
 
 pushd ~/pytorch
-USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
+# USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
+USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda-9.2 NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
 popd
 
 # Move back older cuda version libraries
