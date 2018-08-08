@@ -58,7 +58,7 @@ def create_job(run, job_name, num_tasks):
   backend.set_global_logdir_prefix(args.logdir_prefix)
   run.setup_logdir()
 
-  job.run('killall python || echo failed')  # kill previous run
+  job.run('killall python || echo pass')  # kill previous run
 
   # upload files
   job.upload('resnet.py')
@@ -69,26 +69,49 @@ def create_job(run, job_name, num_tasks):
   job.run('source activate pytorch_p36')
   job.run('pip install tensorboardX')
 
+  launch_jupyter(job)
 
   # single machine
   num_gpus = gpu_count[args.instance_type]
   if (num_tasks == 1) and (num_gpus == 1):
     job.run_async(f'python train_cifar10.py --logdir={run.logdir}') # single instance
-    return
 
-  # multi job
-  world_0_ip = job.tasks[0].instance.private_ip_address
-  port = '6006' # 6006, 6007, 6008, 8890, 6379
-  job.run('ulimit -n 9000') # to prevent tcp too many files open error
-  world_size = num_gpus * num_tasks
+  else:
+    # multi job
+    world_0_ip = job.tasks[0].instance.private_ip_address
+    port = '6006' # 6006, 6007, 6008, 8890, 6379
+    job.run('ulimit -n 9000') # to prevent tcp too many files open error
+    world_size = num_gpus * num_tasks
 
-  for i,t in enumerate(job.tasks):
-    # Pytorch distributed
-    training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={run.logdir}' # must tweak --scale-lr
-    dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
+    for i,t in enumerate(job.tasks):
+      # Pytorch distributed
+      training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={run.logdir}' # must tweak --scale-lr
+      dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+      t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
 
 
+
+def launch_jupyter(job, sess='jupyter'):
+
+  def run_tmux_async(session, cmd):   # run command in "selected" tmux session
+    job._run_raw(f'tmux send-keys -t {session}:0 "{cmd}" Enter')
+
+  job._run_raw(f'tmux kill-session -t {sess}')
+  job._run_raw(f'tmux new-session -s {sess} -n 0 -d')
+
+  run_tmux_async(sess, 'source activate tensorflow_p36') # for TensorBoard/events
+  run_tmux_async(sess, 'conda install pytorch torchvision -c pytorch -y')
+  run_tmux_async(sess, 'conda install -c conda-forge jupyter_nbextensions_configurator -y')
+  run_tmux_async(sess, 'conda install -c conda-forge jupyter_contrib_nbextensions -y')
+  run_tmux_async(sess, 'conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
+  job.upload('../jupyter_notebook_config.py') # 2 step upload since don't know ~
+  run_tmux_async(sess, 'cp jupyter_notebook_config.py ~/.jupyter')
+  run_tmux_async(sess, 'mkdir -p /efs/notebooks')
+
+  run_tmux_async(sess, 'cd /efs/notebooks')
+  run_tmux_async(sess, 'jupyter notebook')
+  print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
+  
 
 def main():
   run = aws_backend.make_run(args.name, ami_name=args.ami_name,
