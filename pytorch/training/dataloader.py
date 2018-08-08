@@ -27,16 +27,8 @@ def get_rank():
 class DataBunch():
     def __init__(self, train_loader, val_loader, train_sampler, val_sampler, preload=False):
         self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = train_loader, val_loader, train_sampler, val_sampler
-        self.trn_prefetch = self.val_prefetch = None
-        if preload: self.preload()
-    def preload(self):
-        if not self.trn_prefetch: self.trn_prefetch = DataPrefetcher(self.trn_dl)
-        if not self.val_prefetch: self.val_prefetch = DataPrefetcher(self.val_dl)
-    def get_prefetchers(self):
-        if (not self.trn_prefetch) or (not self.val_prefetch): self.preload()
-        trn_prefetch, val_prefetch = self.trn_prefetch, self.val_prefetch
-        self.trn_prefetch = self.val_prefetch = None
-        return trn_prefetch, val_prefetch
+    def get_trn_loader(self): return DataPrefetcher(self.trn_dl)
+    def get_val_loader(self): return DataPrefetcher(self.val_dl)
     def set_sampler_epoch(self, epoch):
         if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
         if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)

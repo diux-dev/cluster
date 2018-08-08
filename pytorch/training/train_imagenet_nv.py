@@ -121,8 +121,6 @@ class DataManager():
     def set_epoch(self, epoch):
         cur_phase = self.get_phase(epoch)
         if cur_phase: self.set_data(cur_phase)
-    def get_prefetchers(self):
-        return self.curr_data.get_prefetchers()
 
     def get_phase(self, epoch):
         for p in self.phases: 
@@ -346,12 +344,11 @@ def main():
     for epoch in range(args.start_epoch, scheduler.tot_epochs):
         estart = time.time()
         dm.set_epoch(epoch)
-        trn_dl, val_dl = dm.get_prefetchers()
 
-        train(trn_dl, model, criterion, optimizer, scheduler, epoch)
+        train(dm.curr_data.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
         dm.curr_data.preload()
-        prec5 = validate(val_dl, model, criterion, epoch, start_time)
+        prec5 = validate(dm.curr_data.get_val_loader(), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
         best_prec5 = max(prec5, best_prec5)
