@@ -122,7 +122,6 @@ xar_args = [
   '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--env-name', 'pytorch_source'
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
 ]
 
@@ -142,13 +141,12 @@ xar_args_pytorch = [
   '--no-bn-wd',
   '--autoscale-lr2batch',
   '--num-tasks', 1,
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--env-name', 'pytorch_p36',
   '--env-name', 'pytorch_source',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   # '--c10d'
 ]
-
 
 # 2x p3 for throughput benchmarking
 lr = 1.0
@@ -212,7 +210,7 @@ x4ar_args_bench = [
   '--autoscale-lr2batch',
   '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
   '--factorized-resnet',
 ]
@@ -223,12 +221,12 @@ x4ar_args_test_bench_2 = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':15, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
-    {'ep':15,      'lr':lr/1.5},
-    {'ep':18,     'lr':lr/10/1.5},
-    {'ep':29,     'lr':lr/100/1.5},
+    {'ep':15, 'sz':224, 'bs':256, 'trndir':'-sz/352', 'min_scale':0.088},
+    {'ep':15,      'lr':lr/2},
+    {'ep':18,     'lr':lr/10/2},
+    {'ep':29,     'lr':lr/100/2},
     {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
     {'ep':34,     'lr':lr/100},
     {'ep':(35,38),'lr':lr/1000}
@@ -237,7 +235,7 @@ x4ar_args_test_bench_2 = [
   '--no-bn-wd',
   '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
   # '--factorized-resnet',
@@ -287,7 +285,7 @@ x8ar_args_benchmark = [
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
@@ -300,7 +298,7 @@ x8ar_args_352_folder = [
     {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,            'bs':256, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.088},
     {'ep':16,      'lr':lr},
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
@@ -314,7 +312,7 @@ x8ar_args_352_folder = [
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
@@ -342,7 +340,7 @@ x8ar_args_test_1 = [
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
@@ -358,9 +356,9 @@ x8ar_args_test_2 = [
     {'ep':6,      'lr':lr*4},
     {'ep':16, 'sz':224, 'bs':128},
     {'ep':16,     'lr':lr*1.5},
-    {'ep':19,           'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':lr/(10/1.5)},
-    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':19,           'bs':256, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/2)},
+    {'ep':31,     'lr':lr/(100/2)},
     {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
     {'ep':36,     'lr':lr/100},
     {'ep':(37,40),'lr':lr/1000}
@@ -370,7 +368,7 @@ x8ar_args_test_2 = [
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--ami-name', 'pytorch.imagenet.source.v5',
+  '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]

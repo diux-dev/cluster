@@ -121,23 +121,19 @@ class DataManager():
     def set_epoch(self, epoch):
         cur_phase = self.get_phase(epoch)
         if cur_phase: self.set_data(cur_phase)
-        
-        if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
-        if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
+    def get_prefetchers(self):
+        return self.curr_data.get_prefetchers()
 
     def get_phase(self, epoch):
         for p in self.phases: 
             if (p['ep'] == epoch): return p
         return None
 
-    def get_trn_loader(self): return dataloader.DataPrefetcher(self.trn_dl)
-    def get_val_loader(self): return dataloader.DataPrefetcher(self.val_dl)
-
     def set_data(self, phase):
         """Initializes data loader."""
         if phase.get('keep_dl', False):
             print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
-            self.trn_dl.batch_sampler.batch_size = phase['bs']
+            self.curr_data.change_batch_size(phase['bs'])
             return
         
         print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
@@ -145,20 +141,22 @@ class DataManager():
         log_tb('sizes/batch', phase['bs'])
         log_tb('sizes/world', args.world_size)
 
-        self.trn_dl,self.val_dl,self.trn_smp,self.val_smp = phase['dl']
-        # (AS) Kind of a hacky way to autoscale learning rate if the batch size changes. TODO: don't modify args.scale_lr directly
-        if 'autoscale_lr' in phase: args.scale_lr *= phase['autoscale_lr']
+        self.curr_data = phase['data']
+        self.phases.remove(phase)
 
-        # clear memory
+        # clear memory before we begin training
         gc.collect()
         torch.cuda.empty_cache()
+
+        # (AS) Kind of a hacky way to autoscale learning rate if the batch size changes. TODO: don't modify args.scale_lr directly
+        if 'autoscale_lr' in phase: args.scale_lr *= phase['autoscale_lr']
         
     def preload_phase_data(self, phases):
         previous_bs = None
         for phase in phases:
             if not phase.get('keep_dl', False):
                 self.expand_directories(phase)
-                phase['dl'] = self.preload_data(**phase)
+                phase['data'] = self.preload_data(**phase)
 
             if args.autoscale_lr2batch and previous_bs: 
                 phase['autoscale_lr'] = phase['bs']/previous_bs
@@ -174,9 +172,9 @@ class DataManager():
 
     def preload_data(self, ep, sz, bs, trndir, valdir, **kwargs): # dummy ep var to prevent error
         """Pre-initializes data-loaders. Use set_data to start using it."""
-        val_bs = bs
         if sz == 128: val_bs = 512
-        if sz == 224: val_bs = 192
+        elif sz == 224: val_bs = 192
+        else: val_bs = 128
         return dataloader.get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
 # ### Learning rate scheduler
@@ -333,8 +331,8 @@ def main():
     # Load data data manager and lr scheduler from phases
     phases = eval(args.phases)
     print("Creating data loaders (this could take 6-12 minutes)")
-    dm = DataManager(list(filter(lambda p: 'bs' in p, phases)))
-    scheduler = Scheduler(optimizer, list(filter(lambda p: 'lr' in p, phases)), args.scale_lr)
+    dm = DataManager([p for p in phases if 'bs' in p])
+    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p], args.scale_lr)
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
@@ -348,9 +346,12 @@ def main():
     for epoch in range(args.start_epoch, scheduler.tot_epochs):
         estart = time.time()
         dm.set_epoch(epoch)
-        train(dm.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
+        trn_dl, val_dl = dm.get_prefetchers()
+
+        train(trn_dl, model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
-        prec5 = validate(dm.get_val_loader(), model, criterion, epoch, start_time)
+        dm.curr_data.preload()
+        prec5 = validate(val_dl, model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
         best_prec5 = max(prec5, best_prec5)

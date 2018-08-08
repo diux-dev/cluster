@@ -24,6 +24,26 @@ def get_world_size():
 def get_rank():
     return int(os.environ['RANK'])
 
+class DataBunch():
+    def __init__(self, train_loader, val_loader, train_sampler, val_sampler, preload=False):
+        self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = train_loader, val_loader, train_sampler, val_sampler
+        self.trn_prefetch = self.val_prefetch = None
+        if preload: self.preload()
+    def preload(self):
+        if not self.trn_prefetch: self.trn_prefetch = DataPrefetcher(self.trn_dl)
+        if not self.val_prefetch: self.val_prefetch = DataPrefetcher(self.val_dl)
+    def get_prefetchers(self):
+        if (not self.trn_prefetch) or (not self.val_prefetch): self.preload()
+        trn_prefetch, val_prefetch = self.trn_prefetch, self.val_prefetch
+        self.trn_prefetch = self.val_prefetch = None
+        return trn_prefetch, val_prefetch
+    def set_sampler_epoch(self, epoch):
+        if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
+        if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
+    def change_batch_size(self, batch_size):
+        self.trn_dl.batch_sampler.batch_size = batch_size
+
+
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False, autoaugment=False):
     val_bs = val_bs or bs
     train_tfms = [
@@ -46,7 +66,8 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
         val_dataset,
         num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
         batch_sampler=val_sampler)
-    return train_loader,val_loader,train_sampler,val_sampler
+
+    return DataBunch(train_loader,val_loader,train_sampler,val_sampler)
 
 
 def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
@@ -67,7 +88,7 @@ def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
 
 # Seems to speed up training by ~2%
 class DataPrefetcher():
-    def __init__(self, loader, prefetch=True, fp16=False):
+    def __init__(self, loader, prefetch=True, fp16=True):
         self.loader = loader
         self.prefetch = prefetch
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
