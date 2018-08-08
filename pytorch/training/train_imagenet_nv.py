@@ -333,7 +333,7 @@ def main():
     scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p], args.scale_lr)
 
     start_time = datetime.now() # Loading start to after everything is loaded
-    if args.evaluate: return validate(dm.get_val_loader(), model, criterion, 0, start_time)
+    if args.evaluate: return validate(dm.val_dl, model, criterion, 0, start_time)
 
     if args.distributed:
         print('Syncing machines before training')
@@ -514,7 +514,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
     end = time.time()
     val_len = len(val_loader)
 
-    for i,(input,target) in enumerate(dataloader.DataPrefetcher(trn_loader, fp16=args.fp16)):
+    for i,(input,target) in enumerate(dataloader.DataPrefetcher(val_loader, fp16=args.fp16)):
         batch_num = i+1
         if args.distributed:
             prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)
