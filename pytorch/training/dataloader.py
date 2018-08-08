@@ -88,6 +88,7 @@ class DataPrefetcher():
         input = input.cuda(non_blocking=non_blocking)
         if self.fp16: input = input.half()
         else: input = input.float()
+        if len(input.shape) < 3: return input, target.cuda(non_blocking=non_blocking)
         return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
             
     def __iter__(self):
