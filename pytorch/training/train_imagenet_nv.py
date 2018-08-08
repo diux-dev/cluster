@@ -347,7 +347,6 @@ def main():
 
         train(dm.curr_data.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
-        dm.curr_data.preload()
         prec5 = validate(dm.curr_data.get_val_loader(), model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
