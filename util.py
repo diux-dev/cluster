@@ -701,11 +701,11 @@ def lookup_aws_instances(job_name, states=['running', 'stopped']):
   return result
 
 def lookup_volume(name):
-  """Looks up volume matching given name."""
+  """Looks up volume matching given name or id."""
   ec2 = u.create_ec2_resource()
   vols = []
   for v in ec2.volumes.all():
-    if u.get_name(v) == name:
+    if u.get_name(v) == name or v.id == name:
       vols.append(v)
   assert len(vols)>0, f"volume {name} not found"
   assert len(vols)<2, f"multiple volumes with name={name}"

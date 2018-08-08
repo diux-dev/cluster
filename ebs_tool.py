@@ -13,6 +13,14 @@ from operator import itemgetter
 
 import util as u
 
+import argparse
+parser = argparse.ArgumentParser(description='terminate')
+parser.add_argument('--io1', action='store_true', help='restrict to io1 type volumes')
+parser.add_argument('mode', nargs=1, help='ebs command')
+parser.add_argument('name', nargs='*', help='name/pattern of volume to modify')
+args = parser.parse_args()
+
+
 def list_ebss_by_instance():
   """Print list of instances with their attached volume id/size to console, ie
 master-us-east-1a.masters.df86c4e8-pachydermcluster.kubernetes.com: vol-0f0e841d0cc657002 (20),vol-06fb03280cf2598fb (20),vol-0e7ef0896b234db53 (64)
@@ -42,6 +50,8 @@ def list_ebss():
 
   volumes = list(ec2.volumes.all())
   for vol in volumes:
+    if args.io1 and vol.volume_type != 'io1':
+      continue
     vol_name = u.get_name(vol)
     if not vol_name:
       vol_name = vol.id
@@ -54,7 +64,7 @@ def list_ebss():
     else:
       attached_to.append('<unattached>')
 
-    print("%25s %s %s"%(vol_name, vol.availability_zone, attached_to))
+    print("%25s %s %s %s"%(vol_name, vol.availability_zone, attached_to, vol.id))
     
 def grow_ebs_for_task(task_fragment, target_size_gb):
   """Grows EBS volume for given task."""
@@ -90,11 +100,8 @@ def grow_ebs_for_task(task_fragment, target_size_gb):
   assert u.is_good_response(response)
 
 def main():
-  if len(sys.argv) < 2:
-    mode = 'list'
-  else:
-    mode = sys.argv[1]
 
+  mode = args.mode[0]
   if mode == 'list' or mode == 'ls':
     list_ebss()
   elif mode == 'grow':
@@ -103,7 +110,7 @@ def main():
   elif mode == 'detach':
     vol = u.lookup_volume(sys.argv[2])
     vol.detach_from_instance()
-  elif mode == 'delete':
+  elif mode == 'delete' or mode == 'rm':
     vol = u.lookup_volume(sys.argv[2])
     response = vol.delete()
     print(f"Deleting {vol.id}, success: {u.is_good_response(response)}")
