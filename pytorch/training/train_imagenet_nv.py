@@ -121,17 +121,17 @@ class DataManager():
     def set_epoch(self, epoch):
         cur_phase = self.get_phase(epoch)
         if cur_phase: self.set_data(cur_phase)
+        if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
+        if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
 
     def get_phase(self, epoch):
-        for p in self.phases: 
-            if (p['ep'] == epoch): return p
-        return None
+        return next((p for p in self.phases if p['ep'] == epoch), None)
 
     def set_data(self, phase):
         """Initializes data loader."""
         if phase.get('keep_dl', False):
             print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
-            self.curr_data.change_batch_size(phase['bs'])
+            self.trn_dl.batch_sampler.batch_size = phase['bs']
             return
         
         print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
@@ -139,7 +139,7 @@ class DataManager():
         log_tb('sizes/batch', phase['bs'])
         log_tb('sizes/world', args.world_size)
 
-        self.curr_data = phase['data']
+        self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = phase['data']
         self.phases.remove(phase)
 
         # clear memory before we begin training
@@ -345,9 +345,9 @@ def main():
         estart = time.time()
         dm.set_epoch(epoch)
 
-        train(dm.curr_data.get_trn_loader(), model, criterion, optimizer, scheduler, epoch)
+        train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
         if args.prof: break
-        prec5 = validate(dm.curr_data.get_val_loader(), model, criterion, epoch, start_time)
+        prec5 = validate(dm.val_dl, model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
         best_prec5 = max(prec5, best_prec5)
@@ -396,7 +396,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     trn_len = len(trn_loader)
 
     # print('Begin training loop:', st)
-    for i,(input,target) in enumerate(iter(trn_loader)):
+    for i,(input,target) in enumerate(dataloader.DataPrefetcher(trn_loader, fp16=args.fp16)):
         batch_size = input.size(0)
         batch_num = i+1
         # if i == 0: print('Received input:', time.time()-st)
@@ -514,7 +514,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
     end = time.time()
     val_len = len(val_loader)
 
-    for i,(input,target) in enumerate(iter(val_loader)):
+    for i,(input,target) in enumerate(dataloader.DataPrefetcher(trn_loader, fp16=args.fp16)):
         batch_num = i+1
         if args.distributed:
             prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)

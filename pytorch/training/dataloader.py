@@ -18,23 +18,8 @@ from tqdm import tqdm
 
 from autoaugment import ImageNetPolicy
 
-def get_world_size():
-    return int(os.environ['WORLD_SIZE'])
-
-def get_rank():
-    return int(os.environ['RANK'])
-
-class DataBunch():
-    def __init__(self, train_loader, val_loader, train_sampler, val_sampler, preload=False):
-        self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = train_loader, val_loader, train_sampler, val_sampler
-    def get_trn_loader(self): return DataPrefetcher(self.trn_dl)
-    def get_val_loader(self): return DataPrefetcher(self.val_dl)
-    def set_sampler_epoch(self, epoch):
-        if hasattr(self.trn_smp, 'set_epoch'): self.trn_smp.set_epoch(epoch)
-        if hasattr(self.val_smp, 'set_epoch'): self.val_smp.set_epoch(epoch)
-    def change_batch_size(self, batch_size):
-        self.trn_dl.batch_sampler.batch_size = batch_size
-
+def get_world_size(): return int(os.environ['WORLD_SIZE'])
+def get_rank(): return int(os.environ['RANK'])
 
 def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False, autoaugment=False):
     val_bs = val_bs or bs
@@ -44,8 +29,7 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
             transforms.RandomHorizontalFlip()
         ]
     if autoaugment: train_tfms.append(ImageNetPolicy())
-    train_dataset = datasets.ImageFolder(
-        traindir, transforms.Compose(train_tfms))
+    train_dataset = datasets.ImageFolder(traindir, transforms.Compose(train_tfms))
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
@@ -59,7 +43,7 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
         num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
         batch_sampler=val_sampler)
 
-    return DataBunch(train_loader,val_loader,train_sampler,val_sampler)
+    return train_loader, val_loader, train_sampler, val_sampler
 
 
 def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
@@ -87,13 +71,10 @@ class DataPrefetcher():
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
         self.fp16 = fp16
         self.loaditer = iter(self.loader)
-        if self.fp16:
-            self.mean = self.mean.half()
-            self.std = self.std.half()
+        if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
         if self.prefetch:
             self.stream = torch.cuda.Stream()
-            self.next_input = None
-            self.next_target = None
+            self.next_input = self.next_target = None
             self.preload()
 
     def __len__(self): return len(self.loader)
@@ -101,38 +82,26 @@ class DataPrefetcher():
     def preload(self):
         self.next_input, self.next_target = next(self.loaditer)
         with torch.cuda.stream(self.stream):
-            self.next_input = self.process_input(self.next_input)
-            self.next_target = self.next_target.cuda(non_blocking=True)
+            self.next_input, self.next_target = self.process_tensors(self.next_input, self.next_target, non_blocking=True)
     
-    def process_input(self, input, non_blocking=True):
+    def process_tensors(self, input, target, non_blocking=True):
         input = input.cuda(non_blocking=non_blocking)
         if self.fp16: input = input.half()
         else: input = input.float()
-        if len(input.shape) < 3: return input
-        return input.sub_(self.mean).div_(self.std)
+        return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
             
     def __iter__(self):
         if not self.prefetch:
-            for input, target in self.loaditer:
-                yield self.process_input(input), target.cuda()
+            for input, target in self.loaditer: yield self.process_tensors(input, target, non_blocking=False)
             return
         while True:
             torch.cuda.current_stream().wait_stream(self.stream)
-            input = self.next_input
-            target = self.next_target
+            input, target = self.next_input, self.next_target
             try: self.preload() # 0.5 fix
             except Exception as e:
                 yield input, target
                 break
             yield input, target
-
-# https://github.com/fastai/fastai_v1/blob/master/dev_nb/nb_002.py
-def pil2tensor(image):
-    arr = torch.ByteTensor(torch.ByteStorage.from_buffer(image.tobytes()))
-    arr = arr.view(image.size[1], image.size[0], -1)
-    arr = arr.permute(2,0,1)
-    return arr
-    # return arr.float().div_(255)
 
 def fast_collate(batch):
     if not batch: return torch.tensor([]), torch.tensor([])
@@ -148,10 +117,6 @@ def fast_collate(batch):
             nump_array = np.expand_dims(nump_array, axis=-1)
         nump_array = np.rollaxis(nump_array, 2)
         tensor[i] += torch.from_numpy(nump_array)
-
-        # Seems to be slower for our pipeline. Need to ask Sylvain
-        # tensor[i] += pil2tensor(img)
-        
     return tensor, targets
 
 import os.path
