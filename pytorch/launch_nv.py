@@ -84,6 +84,31 @@ args = parser.parse_args()
 
 DEFAULT_ENV_NAME='pytorch_p36'
 
+# temporary params for testing scheduler
+lr = 0.47
+event_test = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,3),  'lr':(lr,lr*2)},
+    {'ep':3,      'lr':lr},
+    {'ep':10, 'sz':224, 'bs':192},
+    {'ep':12,     'lr':lr/10},
+    {'ep':14,     'lr':lr/100},
+    {'ep':17, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':(17,38),'lr':lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--autoscale-lr2batch',
+  '--scale-lr', 4, # 4 = num tasks
+  '--num-tasks', 4,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+  '--factorized-resnet',
+]
+
+
+
 # Original dawn entry
 lr = 4e-1
 x_args = [

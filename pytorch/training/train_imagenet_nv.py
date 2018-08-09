@@ -223,6 +223,8 @@ class Scheduler():
             print(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
+        log_tb("sizes/lr", lr)
+        momentum = -1
         for param_group in self.optimizer.param_groups:
             lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
@@ -232,6 +234,8 @@ class Scheduler():
             # if lr > lr_old: param_group['momentum'] = lr / lr_old * args.momentum
             if lr > lr_old: param_group['momentum'] = .92
             else: param_group['momentum'] = args.momentum
+            momentum = param_group['momentum']
+        log_tb("sizes/momentum", momentum)
 
 def listify(p=None, q=None):
     if p is None: p=[]
@@ -423,9 +427,13 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
 
-        losses.update(to_python_float(reduced_loss), to_python_float(batch_total))
-        top1.update(to_python_float(prec1), to_python_float(batch_total))
-        top5.update(to_python_float(prec5), to_python_float(batch_total))
+        reduced_loss = to_python_float(reduced_loss)
+        batch_total = to_python_float(batch_total)
+        prec1 = to_python_float(prec1)
+        prec5 = to_python_float(prec5)
+        losses.update(reduced_loss, batch_total)
+        top1.update(prec1, batch_total)
+        top5.update(prec5, batch_total)
 
         loss = loss*args.loss_scale
         # compute gradient and do SGD step
@@ -454,6 +462,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             log_tb("times/step", 1000*batch_time.val)
             log_tb("times/data", 1000*data_time.val)
             log_tb("losses/xent", losses.val)
+            log_tb("sizes/batch_total", batch_total)
             log_tb("losses/train_1", top1.val)   # precision@1
             log_tb("losses/train_5", top5.val)   # precision@5
             images_per_sec = batch_size/batch_time.val
