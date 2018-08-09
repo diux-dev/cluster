@@ -313,6 +313,7 @@ x8ar_args_benchmark = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
+  '--lars'
 ]
 
 # Also ~27 minutes. Faster per epoch, but takes one extra
@@ -363,6 +364,35 @@ x8ar_args_test_2 = [
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+]
+
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+lr = 0.235
+x8ar_args_lars = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    # {'ep':(0,6),  'lr':(lr*4,lr*2*4)},
+    {'ep':(0,6),  'lr':(1e-1,lr*4)},
+    {'ep':6,            'bs':512, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2*2},
+    {'ep':16, 'sz':224,'bs':192},
+    {'ep':16,      'lr':lr*1.5},
+    {'ep':19,          'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/1.5)},
+    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--lars',
   # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
@@ -513,9 +543,8 @@ def create_job(run, job_name, num_tasks, env_name):
   # upload files
   job.upload_async('training/resnet.py')
   job.upload_async('training/fp16util.py')
-  job.upload_async('training/autoaugment.py')
+  job.upload_async('training/lars.py')
   job.upload_async('training/dataloader.py')
-  job.upload_async('training/dataloader_performance.py')
   job.upload_async('training/train_imagenet_nv.py')
   job.upload_async('training/experimental_utils.py')
 

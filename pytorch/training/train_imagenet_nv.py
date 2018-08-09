@@ -27,6 +27,7 @@ import resnet
 
 import dataloader
 import experimental_utils
+import lars
 
 ################################################################################
 # Generic utility methods, eventually refactor into separate file
@@ -80,6 +81,8 @@ def get_parser():
                         help='Automatically scale the learning rate if the batch size changes midway through training.')
     parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
+    parser.add_argument('--lars', action='store_true', help='Use lars optimizers')
+    parser.add_argument('--lars-params', default=None, type=str, help='Use lars optimizers')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
@@ -215,6 +218,17 @@ class Scheduler():
         if len(phase['lr']) == 1: return phase['lr'][0] # constant learning rate
         return self.linear_phase_lr(phase, epoch, batch_curr, batch_tot)
 
+    def update_lars(self, epoch, batch_num, batch_tot):
+        ep_start = 12
+        ep_end = 19
+        if epoch < ep_start: return
+        ratio = calc_linear_lr(0, 1, epoch-ep_start, batch_num, ep_end-ep_start, batch_tot)
+        ratio = max(min(ratio,1),0)
+        self.optimizer.sgd_lars_ratio = ratio
+        if (batch_num/100 == 0):
+            print(f'Changing LARS ratio to {ratio}')
+
+
     def update_lr(self, epoch, batch_num, batch_tot):
         # (AS) TODO: scale_lr should be factored in at init, otherwise resume from checkpointing will have wrong lr
         # However, scale_lr is currently dynamically changed with --autoscale-lr2batch
@@ -222,6 +236,8 @@ class Scheduler():
         if self.current_lr == lr: return
         if ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
+
+        self.update_lars(epoch, batch_num, batch_tot)
 
         self.current_lr = lr
         should_print = (batch_num%args.print_freq == 0)
@@ -328,7 +344,8 @@ def main():
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
+    # optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
+    optimizer = lars.LARS(optim_params, 0, eta=0.001, momentum=args.momentum, weight_decay=args.weight_decay, lars=args.lars) # start with 0 lr. Scheduler will change this later
     if args.resume: # we must resume optimizer params separately
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
         optimizer.load_state_dict(checkpoint['optimizer'])
