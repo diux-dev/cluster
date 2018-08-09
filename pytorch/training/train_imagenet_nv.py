@@ -131,6 +131,7 @@ class DataManager():
         """Initializes data loader."""
         if phase.get('keep_dl', False):
             print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
+            log_tb('sizes/batch', phase['bs'])
             self.trn_dl.batch_sampler.batch_size = phase['bs']
             return
         
@@ -418,7 +419,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
             corr1, corr5 = correct(output.data, target, topk=(1, 5))
             metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
-            batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics)
+            batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics).cpu().numpy()
             reduced_loss = reduced_loss/args.world_size
             prec1 = corr1*(100.0/batch_total)
             prec5 = corr5*(100.0/batch_total)
@@ -584,7 +585,7 @@ def distributed_predict(input, target, model, criterion):
         corr1, corr5 = correct(output.data, target, topk=(1, 5))
 
     metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
-    batch_total, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics)
+    batch_total, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics).cpu().numpy()
     reduced_loss = reduced_loss/valid_batches
 
     prec1 = corr1*(100.0/batch_total)
