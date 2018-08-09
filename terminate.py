@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description='terminate')
 parser.add_argument('--limit-to-key', type=int, default=1,
                     help=("ignores any jobs not launched by current user "
                           "(determined by examining instance private_key name"))
-parser.add_argument('--skip-stopped', type=int, default=1,
+parser.add_argument('--skip-stopped', type=int, default=0,
                      help="don't terminate any instances that are stopped")
 parser.add_argument('--skip-tensorboard', type=int, default=1,
                      help="don't terminate tensorboard jobs")
