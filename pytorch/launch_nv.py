@@ -398,7 +398,8 @@ x16ar_args = [
 ]
 
 
-# Untested results - based off of 8x machine benchmark
+# Ohio-sixteen base
+# 18:17 mins to 93.03, ohio-sixteen
 lr = 0.235
 x16ar_args_test = [
   '--phases', [
@@ -406,22 +407,23 @@ x16ar_args_test = [
     {'ep':(0,6),  'lr':(lr,lr*2)},
     {'ep':6,            'bs':128, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224,'bs':64},
-    # {'ep':16, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.086},
+    {'ep':16, 'sz':224,'bs':64}, # todo: increase this bs
     {'ep':16,      'lr':lr},
     {'ep':19,           'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':lr/(10/3)},
-    {'ep':31,     'lr':lr/(100/3)},
+    {'ep':19,     'lr':2*lr/(10/1.5)},
+    {'ep':31,     'lr':2*lr/(100/1.5)},
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':37,     'lr':lr/100/2},
-    {'ep':(38,40),'lr':lr/1000/2}
+    {'ep':37,     'lr':2*lr/100},
+    {'ep':(38,40),'lr':2*lr/1000}
   ],
   '--init-bn0',
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 16,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
 ]
+
 
 # hacks to allow launcher level flags in worker params list
 def _extract_param(params, name, strict=True):
