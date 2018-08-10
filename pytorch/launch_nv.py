@@ -394,6 +394,31 @@ x16ar_args = [
 ]
 
 
+# 24-machine run, forked from 16 run
+lr = 0.235
+x24ar_args_test = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224,'bs':64}, # todo: increase this bs
+    {'ep':16,      'lr':lr},
+    {'ep':19,           'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':2*lr/(10/1.5)},
+    {'ep':31,     'lr':2*lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':2*lr/100},
+    {'ep':(38,40),'lr':2*lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 16,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+]
+
 # Ohio-sixteen base
 # 18:17 mins to 93.03, ohio-sixteen
 lr = 0.235
