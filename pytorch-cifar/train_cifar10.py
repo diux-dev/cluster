@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 import argparse, os, shutil, time, warnings
 import torch.distributed as dist
 import torch.utils.data.distributed
+from functools import partial
 
 from tensorboardX import SummaryWriter
 
@@ -28,9 +29,12 @@ from fp16util import *
 from resnet import *
 from PIL import Image
 
+import resnet18
+import experimental_utils
+
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-    parser.add_argument('--data-path', default='/efs/data',
+    parser.add_argument('--data-path', default=Path.home()/'data/cifar10',
                         help='path to dataset')
     parser.add_argument('--logdir', default='', help='path to dataset')
     parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
@@ -41,14 +45,18 @@ def get_parser():
                         metavar='W', help='weight decay (default: 1e-4)')
     parser.add_argument('-b', '--batch-size', default=256, type=int,
                         metavar='N', help='mini-batch size (default: 256)')
-    parser.add_argument('--phases', default='[(0,2e-1,16),(2e-1,1e-2,16),(1e-2,0,50)]', type=str,
+    parser.add_argument('--phases', default='[(0,15,0,2e-1),(15,30,2e-1,1e-2),(30,35,1e-2,0)]', type=str,
                     help='Should be a string formatted like this: [(start_lr,end_lr,num_epochs),(phase2...)]')
     parser.add_argument('--verbose', action='store_true', help='Verbose logging')
+    parser.add_argument('--mixup', action='store_true', help='Use mixup')
 #     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
+    # parser.add_argument('--lars_params', default='{"eta":0.02, "fade":(15,21)}', help='Use lars optimizers')
+    parser.add_argument('--lars-params', default=None, type=str, help='Lars parameters')
     parser.add_argument('--print-freq', '-p', default=20, type=int,
                         metavar='N', help='print every this many steps (default: 5)')
-#     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
+    parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
     parser.add_argument('--full-precision', action='store_true', help='Run model full precision mode. Default fp16')
+    parser.add_argument('--no-grad-copy', action='store_true', help='Run model without copying gradients to full precision')
     parser.add_argument('--loss-scale', type=float, default=512,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training')
@@ -82,84 +90,13 @@ import sys
 if args.local_rank > 0: sys.stdout = DummyFile()
 
 
-# Model
-class PreActBlock(nn.Module):
-    
-    def __init__(self, in_channels, out_channels, stride=1):
-        super().__init__()
-        
-        self.bn1   = nn.BatchNorm2d(in_channels)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2   = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
-        
-        if stride != 1 or in_channels != out_channels:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)
-            )
-            
-    def forward(self, x):
-        out = F.relu(self.bn1(x))
-        shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
-        out = self.conv1(out)
-        out = self.conv2(F.relu(self.bn2(out)))
-        return out + shortcut
-
-
-class ResNet18(nn.Module):
-    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10):
-        super().__init__()
-        
-        self.in_channels = 64
-        
-        self.prep = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
-        
-        self.layers = nn.Sequential(
-            self._make_layer(64, 64, num_blocks[0], stride=1),
-            self._make_layer(64, 128, num_blocks[1], stride=2),
-            self._make_layer(128, 256, num_blocks[2], stride=2),
-            self._make_layer(256, 256, num_blocks[3], stride=2),
-        )
-        
-        self.classifier = nn.Linear(512, num_classes)
-        
-    def _make_layer(self, in_channels, out_channels, num_blocks, stride):
-        
-        strides = [stride] + [1] * (num_blocks-1)
-        layers = []
-        for stride in strides:
-            layers.append(PreActBlock(in_channels=in_channels, out_channels=out_channels, stride=stride))
-            in_channels = out_channels
-        
-        return nn.Sequential(*layers)
-    
-    def forward(self, x):
-        x = self.prep(x)
-        
-        x = self.layers(x)
-        
-        x_avg = F.adaptive_avg_pool2d(x, (1, 1))
-        x_avg = x_avg.view(x_avg.size(0), -1)
-        
-        x_max = F.adaptive_max_pool2d(x, (1, 1))
-        x_max = x_max.view(x_max.size(0), -1)
-        
-        x = torch.cat([x_avg, x_max], dim=-1)
-        
-        x = self.classifier(x)
-        
-        return x
-
-
 # ### Torch loader
 def pad(img, p=4, padding_mode='reflect'):
     return Image.fromarray(np.pad(np.asarray(img), ((p, p), (p, p), (0, 0)), padding_mode))
 
+## (AS) Use fast_collate?
 def torch_loader(data_path, size, bs, val_bs=None):
+    data_path = Path(data_path)
 
     val_bs = val_bs or bs
     # Data loading code
@@ -172,8 +109,9 @@ def torch_loader(data_path, size, bs, val_bs=None):
     ] + tfms)
     val_tfms = transforms.Compose(tfms)
 
-    train_dataset = datasets.CIFAR10(root=data_path, train=True, download=(args.local_rank==0), transform=train_tfms)
-    val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=(args.local_rank==0), transform=val_tfms)
+    download = (args.local_rank==0) and not (data_path/'train').exists()
+    train_dataset = datasets.CIFAR10(root=data_path, train=True, download=download, transform=train_tfms)
+    val_dataset  = datasets.CIFAR10(root=data_path, train=False, download=download, transform=val_tfms)
 
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset) if args.distributed else None)
     # val_sampler = (torch.utils.data.distributed.DistributedSampler(val_dataset) if args.distributed else None)
@@ -215,8 +153,8 @@ class DataPrefetcher():
             self.next_target = None
             return
         with torch.cuda.stream(self.stream):
-            self.next_input = self.next_input.cuda(async=True)
-            self.next_target = self.next_target.cuda(async=True)
+            self.next_input = self.next_input.cuda(non_blocking=True)
+            self.next_target = self.next_target.cuda(non_blocking=True)
 
     def __iter__(self):
         count = 0
@@ -233,39 +171,55 @@ class DataPrefetcher():
                 break
 
 
+
 # ### Learning rate scheduler
 class Scheduler():
-    def __init__(self, optimizer, phases=[(0,2e-1,15),(2e-1,1e-2,15),(1e-2,0,50)]):
+    def __init__(self, optimizer, phases):
         self.optimizer = optimizer
         self.current_lr = None
         self.phases = phases
-        self.tot_epochs = sum([p[2] for p in phases])
+        self.tot_epochs = max([max(p[:2]) for p in self.phases])
 
-    def linear_lr(self, start_lr, end_lr, epoch_curr, batch_curr, epoch_tot, batch_tot):
-        if args.scale_lr != 1:
-            start_lr *= args.scale_lr
-            end_lr *= args.scale_lr
+    def linear_phase_lr(self, phase, epoch, batch_curr, batch_tot):
+        ep_start, ep_end = phase[:2]
+        lr_start, lr_end = phase[2:]
+        ep_relative = epoch - ep_start
+        ep_tot = ep_end - ep_start
+        return self.calc_linear_lr(lr_start, lr_end, ep_relative, batch_curr, ep_tot, batch_tot)
+
+    def calc_linear_lr(self, lr_start, lr_end, epoch_curr, batch_curr, epoch_tot, batch_tot):
         step_tot = epoch_tot * batch_tot
-        step_curr = epoch_curr * batch_tot + batch_curr
-        step_size = (end_lr - start_lr)/step_tot
-        return start_lr + step_curr * step_size
+        step_curr = epoch_curr * batch_tot + batch_curr 
+        step_size = (lr_end - lr_start)/step_tot
+        return lr_start + step_curr * step_size
     
     def get_current_phase(self, epoch):
-        epoch_accum = 0
-        for phase in self.phases:
-            start_lr,end_lr,num_epochs = phase
-            if epoch <= epoch_accum+num_epochs: return start_lr, end_lr, num_epochs, epoch - epoch_accum
-            epoch_accum += num_epochs
+        for phase in reversed(self.phases): 
+            if (epoch >= phase[0]): return phase
         raise Exception('Epoch out of range')
             
     def get_lr(self, epoch, batch_curr, batch_tot):
-        start_lr, end_lr, num_epochs, relative_epoch = self.get_current_phase(epoch)
-        return self.linear_lr(start_lr, end_lr, relative_epoch, batch_curr, num_epochs, batch_tot)
+        phase = self.get_current_phase(epoch)
+        return self.linear_phase_lr(phase, epoch, batch_curr, batch_tot)
+
+    def update_lars(self, epoch, batch_num, batch_tot):
+        ep_start, ep_end = args.lars_params['fade']
+        # ep_start = 15
+        # ep_end = 21
+        if epoch < ep_start: return
+        ratio = self.calc_linear_lr(0, 1, epoch-ep_start, batch_num, ep_end-ep_start, batch_tot)
+        ratio = max(min(ratio,1),0)
+        self.optimizer.sgd_lars_ratio = ratio
+        if (batch_num/30 == 0):
+            print(f'Changing LARS ratio to {ratio}')
+
 
     def update_lr(self, epoch, batch_num, batch_tot):
-        lr = self.get_lr(epoch, batch_num, batch_tot)
+        lr = self.get_lr(epoch, batch_num, batch_tot) * args.scale_lr 
         if args.verbose and (self.current_lr != lr) and ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
+
+        self.update_lars(epoch, batch_num, batch_tot)
 
         self.current_lr = lr
 
@@ -273,7 +227,6 @@ class Scheduler():
         for param_group in self.optimizer.param_groups:
             lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
-
 
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
@@ -300,7 +253,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     for i,(input,target) in enumerate(trn_loader):
         batch_size = input.size(0)
         batch_num = i+1
-        # if i == 0: print('Received input:', time.time()-st)
 
         # measure data loading time
         scheduler.update_lr(epoch, i+1, trn_len)
@@ -311,26 +263,27 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         if args.distributed:
             # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
-            corr1 = correct(output.data, target)[0]
-            metrics = torch.tensor([batch_size, loss, corr1]).float().cuda()
-            batch_total, reduced_loss, corr1 = sum_tensor(metrics)
+            # corr1 = correct(output.data, target)[0]
+            # metrics = torch.tensor([batch_size, loss, corr1]).float().cuda()
+            # batch_total, reduced_loss, corr1 = sum_tensor(metrics)
+            metrics = torch.tensor([batch_size, loss]).float().cuda()
+            batch_total, reduced_loss = sum_tensor(metrics)
             reduced_loss = reduced_loss/dist.get_world_size()
-            prec1 = corr1*(100.0/batch_total)
+            # prec1 = corr1*(100.0/batch_total)
         else:
             reduced_loss = loss.data
             batch_total = input.size(0)
-            prec1 = accuracy(output.data, target)[0] # measure accuracy and record loss
+            # prec1 = accuracy(output.data, target)[0] # measure accuracy and record loss
         losses.update(to_python_float(reduced_loss), to_python_float(batch_total))
-        top1.update(to_python_float(prec1), to_python_float(batch_total))
-
-        loss = loss*args.loss_scale
+        # top1.update(to_python_float(prec1), to_python_float(batch_total))
         
         # compute gradient and do SGD step
-        if args.full_precision:
+        if args.full_precision or args.no_grad_copy:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
         else:
+            loss = loss*args.loss_scale
             model.zero_grad()
             loss.backward()
             model_grads_to_master_grads(model_params, master_params)
@@ -352,7 +305,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
           log_tb("times/step", 1000*batch_time.val) # step time in ms
           log_tb("times/images_per_sec", batch_total/batch_time.val)
           log_tb("losses/train_xent", losses.val)
-          log_tb("losses/train_acc", top1.val)
+        #   log_tb("losses/train_acc", top1.val)
 
         global_example_count+=batch_total
 
@@ -384,8 +337,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
         end = time.time()
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==val_len)
-        if should_print:
-          log_batch(epoch, batch_num, val_len, batch_time, losses, top1)
+        if should_print: log_batch(epoch, batch_num, val_len, batch_time, losses, top1)
             
     return top1.avg, losses.avg
 
@@ -453,7 +405,7 @@ def main():
         assert(args.world_size == dist.get_world_size())
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
 
-    model = ResNet18()
+    model = resnet18.ResNet18()
     model = model.cuda()
 
     global global_example_count, is_chief, event_writer
@@ -468,23 +420,33 @@ def main():
 
     # AS: todo: don't copy over weights as it seems to help performance
 
-    if not args.full_precision: model = network_to_half(model)
+    if args.no_grad_copy: model = nn.Sequential(tofp16(), model.half())
+    elif not args.full_precision: model = network_to_half(model)
+        
     if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
-
     global model_params, master_params
-    if args.full_precision: master_params = list(model.parameters())
+    if args.full_precision or args.no_grad_copy: model_params = master_params = list(model.parameters())
     else: model_params, master_params = prep_param_lists(model)
+
+
+    optim_params = experimental_utils.bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
 
     # define loss function (criterion) and optimizer
     # criterion = nn.CrossEntropyLoss().cuda()
-    criterion = F.cross_entropy
-    optimizer = torch.optim.SGD(master_params, lr=0, nesterov=True, momentum=args.momentum, weight_decay=args.weight_decay)
+    if args.mixup: criterion = experimental_utils.MixUpLoss(partial(nn.CrossEntropyLoss, reduce=False)).cuda()
+    else: criterion = F.cross_entropy
+
+    if args.lars_params is not None:
+        args.lars_params = eval(args.lars_params)
+        optimizer = experimental_utils.LARS(optim_params, 0, eta=args.lars_params['eta'], momentum=args.momentum, weight_decay=args.weight_decay, lars=True) # start with 0 lr. Scheduler will change this later
+    else: optimizer = torch.optim.SGD(optim_params, lr=0, nesterov=True, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = Scheduler(optimizer, phases=eval(args.phases))
 
 
     sz = 32
     trn_loader, val_loader = torch_loader(args.data_path, sz, args.batch_size, args.batch_size*2)
+    if args.mixup: trn_loader = experimental_utils.MixUpDataLoader(trn_loader, 0.6)
 
     print(args)
     print('\n\n')

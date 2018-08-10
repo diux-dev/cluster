@@ -41,7 +41,7 @@ class BasicBlock(nn.Module):
 def _make_group(N, ni, nf, block, stride, drop_p):
     return [block(ni if i == 0 else nf, nf, stride if i == 0 else 1, drop_p) for i in range(N)]
 
-class WideResNetDawn(nn.Module):
+class WideResNet(nn.Module):
     def __init__(self, num_groups, N, num_classes, k=1, drop_p=0.0, start_nf=16):
         super().__init__()
         n_channels = [start_nf]

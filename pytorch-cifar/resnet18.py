@@ -1,4 +1,6 @@
-
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 # --
 # Model definition
 # Derived from models in `https://github.com/kuangliu/pytorch-cifar`
@@ -58,7 +60,6 @@ class ResNet18(nn.Module):
         return nn.Sequential(*layers)
     
     def forward(self, x):
-        x = x.half()
         x = self.prep(x)
         
         x = self.layers(x)

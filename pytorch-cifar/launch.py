@@ -21,13 +21,14 @@ import backend
 
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami-name', type=str,
-                    default='Deep Learning AMI (Ubuntu) Version 12.0',
+                    # default='Deep Learning AMI (Ubuntu) Version 12.0',
+                    default='pytorch.imagenet.source.v6',
                     help="name of AMI to use")
 parser.add_argument('--placement-group', type=str, default='pytorch_cluster',
                      help="name of the current run")
 parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
-parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
+parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-west-2a',
                     help='which availability zone to use')
@@ -43,6 +44,8 @@ parser.add_argument('--logdir-prefix', default='/efs/runs.cifar',
                     help='where to put logs')
 parser.add_argument('--spot', action="store_true",
                     help='launch using spot requests')
+parser.add_argument('--params', type=str, default="xar_args",
+                    help='args to use, see "params = " line')
 
 
 args = parser.parse_args()
@@ -55,26 +58,56 @@ def create_job(run, job_name, num_tasks):
 
   print(job.connect_instructions)
 
-  backend.set_global_logdir_prefix(args.logdir_prefix)
-  run.setup_logdir()
+  # backend.set_global_logdir_prefix(args.logdir_prefix)
+  # run.setup_logdir()
 
   job.run('killall python || echo pass')  # kill previous run
 
   # upload files
   job.upload('resnet.py')
+  job.upload('resnet18.py')
+  job.upload('experimental_utils.py')
   job.upload('train_cifar10.py')
   job.upload('fp16util.py')
 
   # setup env
-  job.run('source activate pytorch_p36')
+  job.run('source activate pytorch_source')
   job.run('pip install tensorboardX')
 
-  launch_jupyter(job)
+  # launch_jupyter(job)
+
+
+  # params = eval(args.params)
+
+  # Dawn 
+  lr = 2e-1
+  dawn_params = [
+    '--phases', [(0,15,0,lr),(15,30,lr,lr/20),(30,35,lr/20,0)],
+    '--no-grad-copy',
+    # '--logdir', run.logdir
+  ]
+
+  # Experimental 
+  lr = 2e-1
+  scale = 6
+  exp_params = [
+    '--phases', [(0,15,lr/200,lr),(15,30,lr,lr/20),(30,35,lr/20,0)],
+    # '--no-bn-wd',
+    '--scale-lr', scale,
+    '--lars-params', {"eta":0.02, "fade":(15,21)},
+    '--batch-size', 256*scale,
+    # '--no-grad-copy',
+    # '--logdir', run.logdir
+    '--mixup',
+  ]
+
+  params = exp_params
 
   # single machine
   num_gpus = gpu_count[args.instance_type]
   if (num_tasks == 1) and (num_gpus == 1):
-    job.run_async(f'python train_cifar10.py --logdir={run.logdir}') # single instance
+    training_args = ' '.join(map(format_args, params))
+    job.run_async(f'python train_cifar10.py --data-path ~/data/cifar10 {training_args}') # single instance
 
   else:
     # multi job
@@ -83,9 +116,33 @@ def create_job(run, job_name, num_tasks):
     job.run('ulimit -n 9000') # to prevent tcp too many files open error
     world_size = num_gpus * num_tasks
 
+    
+    default_params = [
+      '--data-path', '~/data/cifar10',
+      '--world-size', world_size,
+      '--distributed',
+      '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+    ]
+
+    # Experimental 
+    lr = 2e-1
+    scale = 6
+    exp_params = [
+      '--phases', [(0,15,lr/200,lr),(15,30,lr,lr/20),(30,35,lr/20,0)],
+      # '--no-bn-wd',
+      '--scale-lr', scale * num_gpus,
+      '--lars-params', {"eta":0.02, "fade":(15,21)},
+      '--batch-size', 256*scale,
+      # '--no-grad-copy',
+      # '--logdir', run.logdir
+      '--mixup',
+    ]
+    params = exp_params
+
+
     for i,t in enumerate(job.tasks):
       # Pytorch distributed
-      training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={run.logdir}' # must tweak --scale-lr
+      training_args = ' '.join(map(format_args, default_params + params))
       dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
       t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
 
@@ -112,6 +169,10 @@ def launch_jupyter(job, sess='jupyter'):
   run_tmux_async(sess, 'jupyter notebook')
   print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
   
+
+def format_args(arg):
+  if isinstance(arg, list) or isinstance(arg, dict): return '\"'+str(arg)+'\"'
+  else: return str(arg)
 
 def main():
   run = aws_backend.make_run(args.name, ami_name=args.ami_name,
