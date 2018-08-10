@@ -223,6 +223,8 @@ class Scheduler():
             print(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
+        should_print = (batch_num%args.print_freq == 0)
+        
         log_tb("sizes/lr", lr)
         momentum = -1
         for param_group in self.optimizer.param_groups:
@@ -459,6 +461,12 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
         if args.local_rank == 0 and should_print:
+          
+            log_tb("memory/allocated_gb", torch.cuda.memory_allocated()/1e9)
+            log_tb("memory/max_allocated_gb", torch.cuda.max_memory_allocated()/1e9)
+            log_tb("memory/cached_gb", torch.cuda.memory_cached()/1e9)
+            log_tb("memory/max_cached_gb", torch.cuda.max_memory_cached()/1e9)
+            
             log_tb("times/step", 1000*batch_time.val)
             log_tb("times/data", 1000*data_time.val)
             log_tb("losses/xent", losses.val)
