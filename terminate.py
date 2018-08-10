@@ -82,7 +82,8 @@ def main():
     if state == 'terminated':
       continue
     instances_to_kill.append(i)
-    print(u.get_name(i), i.instance_type, i.key_name)
+    print(u.get_name(i), i.instance_type, i.key_name,
+          state if state=='stopped' else '')
 
 
   # print extra info if couldn't find anything to kill

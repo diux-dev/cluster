@@ -45,5 +45,9 @@ if __name__=='__main__':
     vol = vols[vol_name]
     assert vol.volume_type == 'io1', "Safety check to prevent killing XView volumes (they are gp2)"
     if not args.dryrun:
-      vol.delete()
-      print(f"   {vol.id} deleted")
+      try:
+        vol.delete()
+      except Exception as e:
+        print(f"Failed with {e}")
+      else:
+        print(f"   {vol.id} deleted")
