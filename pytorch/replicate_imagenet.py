@@ -56,8 +56,11 @@ def create_tags(name):
 def main():
   ec2 = u.create_ec2_resource()
   assert not args.snapshot, "Switched to snapshot_desc"
-  assert args.zone
-  
+
+  if not args.zone:
+    assert 'zone' in os.environ, 'must specify --zone or $zone'
+    args.zone = os.environ['zone']
+
   snapshots = []
   for snap in ec2.snapshots.filter(OwnerIds=['self']):
     if args.snapshot_desc in snap.description:
