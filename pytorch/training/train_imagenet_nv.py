@@ -105,6 +105,11 @@ def get_parser():
                         'or automatically set by using \'python -m multiproc\'.')
     parser.add_argument('--logdir', default='', type=str,
                         help='where logs go')
+    parser.add_argument('--skip-eval', action='store_true',
+                        help='disable evaluation during training')
+    parser.add_argument('--short-epoch', action='store_true',
+                        help='make epochs short (for debugging)')
+    parser.add_argument('--prefetch', default=True)
     return parser
 
 cudnn.benchmark = True
@@ -290,7 +295,7 @@ def main():
         process_group = c10d.ProcessGroupNCCL(store, rank, args.world_size) # (store, rank, size)
         reduce_function = lambda t: process_group.allreduce(t, c10d.AllreduceOptions().reduceOp)
     elif args.distributed:
-        print('Distributed: initializing process group')
+        print('Distributed initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
         assert(args.world_size == dist.get_world_size())
@@ -402,8 +407,11 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     st = time.time()
     trn_len = len(trn_loader)
 
-    # print('Begin training loop:', st)
-    for i,(input,target) in enumerate(dataloader.DataPrefetcher(trn_loader, fp16=args.fp16)):
+    input = dataloader.DataPrefetcher(trn_loader, fp16=args.fp16,
+                                      prefetch=args.prefetch)
+    for i,(input,target) in enumerate(input):
+        if args.short_epoch and i>10:
+          break
         batch_size = input.size(0)
         batch_num = i+1
         # if i == 0: print('Received input:', time.time()-st)
@@ -521,6 +529,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
     
 def validate(val_loader, model, criterion, epoch, start_time):
+    if args.skip_eval:
+      return 0
+    
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -657,7 +668,8 @@ def sum_tensor(tensor):
     reduce_function(rt)
     return rt
 
-if __name__ == '__main__': 
+if __name__ == '__main__':
+    print('hello world')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=UserWarning)
         main()
