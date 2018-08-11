@@ -14,8 +14,7 @@ import util as u
 parser = argparse.ArgumentParser(description='sync')
 parser.add_argument('-v', '--verbose', action='count', dest='verbosity',
                     default=0, help='Set verbosity.')
-parser.add_argument('--remote', type=str, default="asdf")
-parser.add_argument('--name', type=str, default='', help="name of instance to sync with")
+parser.add_argument('-n', '--name', type=str, default='', help="name of instance to sync with")
 args = parser.parse_args()
 
 logger = logging.getLogger()
@@ -116,7 +115,7 @@ def main():
     sync = [Sync(source='.', dest='.', copy_links=False),]
 
     # obtain ssh 
-    resyncd = Resyncd(args.remote, sync)
+    resyncd = Resyncd('asdf', sync)
     
     resyncd.run()
     return 0
