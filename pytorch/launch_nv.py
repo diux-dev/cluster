@@ -100,7 +100,7 @@ xar_throughput = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
   '--skip-eval',
-  '--prefetch', 'False'
+  '--prefetch', 'False',
   '--short-epoch'
 ]
 
