@@ -438,10 +438,10 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         top1.update(prec1, batch_total)
         top5.update(prec5, batch_total)
 
-        loss = loss*args.loss_scale
         # compute gradient and do SGD step
         # if i == 0: print('Evaluate and loss:', time.time()-st)
         if args.fp16:
+            loss = loss*args.loss_scale
             model.zero_grad()
             loss.backward()
             model_grads_to_master_grads(model_params, master_params)
