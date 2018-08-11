@@ -76,7 +76,7 @@ parser.add_argument('--attach-volume', type=str, default='imagenet',
 parser.add_argument('--use-local-conda', action='store_true',
                     help='use local conda installation (for initial setup, see recipes.md)')
 parser.add_argument('--volume-offset', type=int, default=0,
-                    help='Offset number for vollume attachment. If running multiple jobs')
+                    help='Offset number for volume attachment. If running multiple jobs')
 parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
 parser.add_argument('--params', type=str, default="xar_args",
