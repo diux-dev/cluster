@@ -60,8 +60,9 @@ parser.add_argument('--job-name', type=str, default='distributed',
                      help="name of the worker job (deprecated, use --name)")
 parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='us-west-2a',
-                    help='which availability zone to use')
+parser.add_argument('--zone', type=str, default='',
+                    help=('which availability zone to use (can also set '
+                          'through env var "zone"'))
 parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
@@ -70,7 +71,7 @@ parser.add_argument('--num-tasks', type=int, default=-1,
                     help='number of instances to create, deprecated, specify it in params')
 parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
-parser.add_argument('--attach-volume', type=str, default=None,
+parser.add_argument('--attach-volume', type=str, default='imagenet',
                     help='tag name of ebs volume to attach')
 parser.add_argument('--use-local-conda', action='store_true',
                     help='use local conda installation (for initial setup, see recipes.md)')
@@ -394,35 +395,10 @@ x16ar_args = [
 ]
 
 
-# 24-machine run, forked from 16 run
-lr = 0.235
-x24ar_args_test = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,            'bs':128, 'keep_dl':True},
-    {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224,'bs':64}, # todo: increase this bs
-    {'ep':16,      'lr':lr},
-    {'ep':19,           'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':2*lr/(10/1.5)},
-    {'ep':31,     'lr':2*lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':37,     'lr':2*lr/100},
-    {'ep':(38,40),'lr':2*lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
-  '--num-tasks', 16,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-]
-
 # Ohio-sixteen base
 # 18:17 mins to 93.03, ohio-sixteen
 lr = 0.235
-x16ar_args_test = [
+x16ar_args_benchmark = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)},
@@ -445,6 +421,31 @@ x16ar_args_test = [
   '--env-name', 'pytorch_source',
 ]
 
+
+# 24-machine run, forked from 16 benchmark
+lr = 0.235
+x24ar_args_test = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':32, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224,'bs':64},
+    {'ep':16,      'lr':lr},
+    {'ep':19,           'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':3*lr/(10/1.5)},
+    {'ep':31,     'lr':3*lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':3*lr/100},
+    {'ep':(38,50),'lr':3*lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 24,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+]
 
 # hacks to allow launcher level flags in worker params list
 def _extract_param(params, name, strict=True):
@@ -479,6 +480,11 @@ def main():
   num_tasks = _extract_num_tasks(params)
   env_name = _extract_env_name(params)
   
+  if not args.zone:
+    assert 'zone' in os.environ, 'must specify --zone or $zone'
+    args.zone = os.environ['zone']
+    
+
   run = aws_backend.make_run(args.name, ami=args.ami,
                              ami_name=ami_name,
                              availability_zone=args.zone,
