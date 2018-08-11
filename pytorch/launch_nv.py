@@ -85,77 +85,49 @@ args = parser.parse_args()
 
 DEFAULT_ENV_NAME='pytorch_p36'
 
-# temporary params for testing scheduler
-lr = 0.47
-event_test = [
+
+# throughput/batch-size testing
+lr = 1.0
+xar_throughput = [
   '--phases', [
-    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
-    {'ep':(0,3),  'lr':(lr,lr*2)},
-    {'ep':3,      'lr':lr},
-    {'ep':10, 'sz':224, 'bs':192},
-    {'ep':12,     'lr':lr/10},
-    {'ep':14,     'lr':lr/100},
-    {'ep':17, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':(17,38),'lr':lr/1000}
+    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':(5,100), 'lr': lr}
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--scale-lr', 4, # 4 = num tasks
-  '--num-tasks', 4,
+  '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-  '--factorized-resnet',
+  '--skip-eval',
+  '--prefetch', 'False'
+  '--short-epoch'
 ]
 
-
-
-# Original dawn entry
-lr = 4e-1
-x_args = [
-  '--lr-phases', [
-    {'ep':0,  'sz':128, 'bs':192, 'trndir':'-sz/160'},
-    {'ep':(0,5),  'lr':(0,lr)},
-    {'ep':5,      'lr':lr},
-    {'ep':18, 'sz':224, 'bs':192},
-    {'ep':20,     'lr':lr/10},
-    {'ep':34,     'lr':lr/100},
-    {'ep':41, 'sz':288, 'bs':128, 'min_scale':0.5},
-    {'ep':(42,45),'lr':lr/1000}
+# throughput/batch-size testing
+lr = 1.0
+xar_throughput_dlami = [
+  '--phases', [
+    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':(5,100), 'lr': lr}
   ],
+  '--init-bn0',
+  '--no-bn-wd',
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  '--env-name', 'pytorch_p36',
+  '--skip-eval',
 ]
 
 
 # Current best settings
 # Current benchmark for 1x p3
 lr = 1.0
-xar_args = [
-  '--lr-phases', [
-    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0,5),  'lr':(lr,lr*2)}, # custom lr warmup works better with init-bn0 flag
-    {'ep':5,      'lr':lr},
-    {'ep':14, 'sz':224, 'bs':192},
-    {'ep':16,     'lr':lr/10},
-    {'ep':27,     'lr':lr/100},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':(33,35),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--num-tasks', 1,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-]
-
-lr = 1.0
 xar_args_pytorch = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0,5),  'lr':(lr,lr*2)},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     {'ep':5,      'lr':lr},
     {'ep':14, 'sz':224, 'bs':192},
     {'ep':16,     'lr':lr/10},
@@ -168,32 +140,11 @@ xar_args_pytorch = [
   '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--env-name', 'pytorch_p36',
   '--env-name', 'pytorch_source',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
   # '--c10d'
 ]
 
-# 2x p3 for throughput benchmarking
-lr = 1.0
-x2ar_args = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0,5),  'lr':(lr,lr*2)},
-    {'ep':5,      'lr':lr},
-    {'ep':14, 'sz':224, 'bs':192},
-    {'ep':16,     'lr':lr/10},
-    {'ep':27,     'lr':lr/100},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':(33,35),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--scale-lr', 2, # 2 = num tasksx
-  '--num-tasks', 2,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-]
 
 # Current benchmark for 4x p3
 lr = 0.47
@@ -266,27 +217,6 @@ x4ar_args_test_bench_2 = [
   '--env-name', 'pytorch_source',
   # '--factorized-resnet',
   # '--c10d'
-]
-
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
-lr = 0.235
-x8ar_args = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,      'lr':lr},
-    {'ep':16, 'sz':224,'bs':128},
-    {'ep':19,     'lr':lr/10},
-    {'ep':31,     'lr':lr/100},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':(38,40),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--scale-lr', 8, # 8 = num tasks
-  '--num-tasks', 8,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
@@ -523,7 +453,7 @@ def create_job(run, job_name, num_tasks, env_name):
   job.wait_until_ready()
   print(job.connect_instructions)
 
-  job.run_async_join('killall python || echo failed')  # kill previous run
+  job.run_async_join('killall python || echo ignoring')  # kill previous run
 
   # mount_volume hardcoded to use data now
   # TODO: this should be global setting/constant instead
@@ -606,6 +536,8 @@ def start_training(job, params, save_tag):
 
   for t,cmd in zip(job.tasks, task_cmds):
     t.run_async(cmd)
+
+  print(f"Logging to {job.logdir}")
 
 if __name__=='__main__':
   main()
