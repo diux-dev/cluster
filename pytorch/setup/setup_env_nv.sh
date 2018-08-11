@@ -2,29 +2,11 @@
 
 # ImageNet training setup script for DLAMI + p3 instance
 # must be run after "source activate" to put things into current env
-# (tested on "Deep Learning AMI (Ubuntu) Version 12.0")
-# https://aws.amazon.com/marketplace/fulfillment?productId=17364a08-2d77-4969-8dbe-d46dcfea4d64&ref_=dtl_psb_continue
-echo 'Starting script'
-
-# echo '> update'
-# Turn off apt-get update for now, since using recent DLAMI 12
-# sudo apt-get update
-# sudo apt-get upgrade -y
-
-# echo '> gdb'
-# sudo apt install -y gdb
-# echo '> nload'
-# sudo apt install -y nload
-# echo '> htop'
-# sudo apt install -y htop
 
 # Change nccl to 9-1
 # sed -i -e 's/cuda-9.0/cuda-9.2/g' ~/.bashrc
 source ~/.bashrc
 
-# echo '>pytorch'
-# conda install pytorch torchvision cuda91 -c pytorch -y
-# echo '>tqdm'
 conda install tqdm -y
 pip install tensorboardX
 
@@ -61,25 +43,6 @@ cd ~/
 DATA_DIR=~/data
 if [ ! -d "$DATA_DIR" ]; then
     mkdir data
-fi
-
-if [ ! -d "$DATA_DIR/imagenet" ]; then
-    echo '>imagenet'
-    cd $DATA_DIR
-    # cat get those files from
-    # wget https://s3.amazonaws.com/yaroslavvb/imagenet-data-sorted.tar
-    rsync --progress /efs/data/imagenet-data-sorted.tar $DATA_DIR
-    tar -xvf $DATA_DIR/imagenet-data-sorted.tar
-    rm $DATA_DIR/imagenet-data-sorted.tar
-    mv $DATA_DIR/raw-data $DATA_DIR/imagenet
-
-    # can get those files from
-    # wget https://s3.amazonaws.com/yaroslavvb/imagenet-sz.tar
-    rsync --progress /efs/data/imagenet-sz.tar $DATA_DIR
-    tar -xvf $DATA_DIR/imagenet-sz.tar
-    rm $DATA_DIR/imagenet-sz.tar
-    
-    cd ~/
 fi
 
 echo ok > /tmp/nv_setup_complete
