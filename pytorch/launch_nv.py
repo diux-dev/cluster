@@ -86,9 +86,9 @@ args = parser.parse_args()
 DEFAULT_ENV_NAME='pytorch_p36'
 
 
-# throughput/batch-size testing
+# OOM after 1-10 seconds
 lr = 1.0
-xar_throughput = [
+quick_oom = [
   '--phases', [
     {'ep':0,  'sz':224, 'bs':256},
     {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
