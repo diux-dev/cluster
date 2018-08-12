@@ -11,6 +11,7 @@ import threading
 import time
 import os
 
+from collections import Iterable
 from collections import OrderedDict
 from collections import defaultdict
 from operator import itemgetter
@@ -58,18 +59,22 @@ def get_resource_name(default='nexus'):
     validate_resource_name(name)
   return name
                            
-def get_name(tags_or_instance):
-  """Helper utility to extract name out of tags dictionary or intance.
+def get_name(tags_or_instance_or_id):
+  """Helper utility to extract name out of tags dictionary or intancce.
       [{'Key': 'Name', 'Value': 'nexus'}] -> 'nexus'
  
      Assert fails if there's more than one name.
      Returns '' if there's less than one name.
   """
 
-  if hasattr(tags_or_instance, 'tags'):
-    tags = tags_or_instance.tags
+  ec2 = u.create_ec2_resource()
+  if hasattr(tags_or_instance_or_id, 'tags'):
+    tags = tags_or_instance_or_id.tags
+  elif isinstance(tags_or_instance_or_id, str):
+    tags = ec2.Instance(tags_or_instance_or_id).tags
   else:
-    tags = tags_or_instance
+    assert isinstance(tags_or_instance_or_id, Iterable), "expected iterable of tags"
+    tags = tags_or_instance_or_id
 
   if not tags:
     return EMPTY_NAME

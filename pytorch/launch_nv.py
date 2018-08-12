@@ -270,7 +270,7 @@ x8ar_args_benchmark_noprefetch = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
-  '--prefetch', 0
+  '--prefetch', 0,
 ]
 
 # Also ~27 minutes. Faster per epoch, but takes one extra

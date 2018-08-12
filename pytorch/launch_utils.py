@@ -67,19 +67,24 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}, {"Name":"availability-zone", 'Values':[os.environ['zone']]}]).all())
   assert(v), f"Volume {tag} not found."
   v = v[0]
+  volume_name = u.get_name(v)
   already_attached = v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id
+  instance_name = u.get_name(aws_instance)
   if already_attached:
-    print(f'volume {v} already attached')
+    print(f'volume {volume_name} ({v.id}) already attached to {instance_name}')
     return
-  if v.state != 'available': 
+  while v.state != 'available':
     response = v.detach_from_instance()
-    current_instance = v.attachments[0]['InstanceId']
-    print(f'Detaching from current instance {current_instance}: response={response.get("State", "none")}')
+    instance_id = v.attachments[0]['InstanceId']
+    instance_name = u.get_name(instance_id)
+    print(f'Volume {tag} is attached to {instance_name}, detaching, response={response.get("State", "none")}')
+    time.sleep(ATTACH_WAIT_INTERVAL_SEC)
+    v.reload()
   while True:
     try:
       response = v.attach_to_instance(InstanceId=aws_instance.id,
                                       Device=unix_device)
-      print(f'Attaching to current instance: response={response.get("State", "none")}')
+      print(f'Attaching {volume_name} to {instance_name}: response={response.get("State", "none")}')
 
     # sometimes have unrecoverable failure on brand new instance with
     # possibly because of https://forums.aws.amazon.com/thread.jspa?threadID=66192
