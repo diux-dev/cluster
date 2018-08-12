@@ -219,7 +219,7 @@ x4ar_args_test_bench_2 = [
   # '--c10d'
 ]
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
 lr = 0.235
 x8ar_args_benchmark = [
   '--phases', [
@@ -440,6 +440,9 @@ def main():
   if not args.zone:
     assert 'zone' in os.environ, 'must specify --zone or $zone'
     args.zone = os.environ['zone']
+  else:
+    print("Setting global zone to", args.zone)
+    os.environ['zone'] = args.zone  # global zone used by volume attachment
     
 
   run = aws_backend.make_run(args.name, ami=args.ami,
