@@ -42,9 +42,10 @@ class Resyncd(object):
           fswatch_output = r[0].read()
           output = fswatch_output.decode('ascii')
           files = output.strip().split("\n") 
-          print(files)
           # Ignore emacs swap files
-          files = [f for f in files if not re.search("^[.#]", os.path.basename(f))]
+          files = [f for f in files if not '#' in os.path.basename(f)]
+          if files:
+            print("changed: "+str(files))
           files = set(files)  # remove duplicates from fswatch_output
           if not files:
             continue
