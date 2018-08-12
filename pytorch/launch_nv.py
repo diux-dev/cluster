@@ -246,6 +246,33 @@ x8ar_args_benchmark = [
   '--env-name', 'pytorch_source',
 ]
 
+lr = 0.235
+x8ar_args_benchmark_noprefetch = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':256, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224,'bs':128},
+    {'ep':16,      'lr':lr},
+    {'ep':19,          'bs':192, 'keep_dl':True},
+    {'ep':19,     'lr':lr/(10/1.5)},
+    {'ep':31,     'lr':lr/(100/1.5)},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37,     'lr':lr/100},
+    {'ep':(38,40),'lr':lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--scale-lr', 8, # 8 = num tasks
+  '--num-tasks', 8,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  # '--resume', 'sz128_checkpoint.path.tar'
+  '--env-name', 'pytorch_source',
+  '--prefetch', 0
+]
+
 # Also ~27 minutes. Faster per epoch, but takes one extra
 lr = 0.235
 x8ar_args_352_folder = [

@@ -64,7 +64,7 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   """Attaches volume to instance. Will try to detach volume if it's already mounted somewhere else. Will retry indefinitely on error."""
   
   ec2 = u.create_ec2_resource()
-  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}]).all())
+  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}, {"Name":"availability-zone", 'Values':[os.environ['zone']]}]).all())
   assert(v), f"Volume {tag} not found."
   v = v[0]
   already_attached = v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id
@@ -73,7 +73,8 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
     return
   if v.state != 'available': 
     response = v.detach_from_instance()
-    print(f'Detaching from current instance: response={response.get("State", "none")}')
+    current_instance = v.attachments[0]['InstanceId']
+    print(f'Detaching from current instance {current_instance}: response={response.get("State", "none")}')
   while True:
     try:
       response = v.attach_to_instance(InstanceId=aws_instance.id,
