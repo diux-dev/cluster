@@ -106,6 +106,22 @@ quick_oom = [
 
 # throughput/batch-size testing
 lr = 1.0
+xar_throughput = [
+  '--phases', [
+    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':(5,100), 'lr': lr}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+  '--skip-eval',
+]
+
+# throughput/batch-size testing
+lr = 1.0
 xar_throughput_dlami = [
   '--phases', [
     {'ep':0,  'sz':224, 'bs':256},
@@ -403,6 +419,23 @@ x24ar_args_test = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
 ]
+
+# 32 machine throughput test, forked from xar_throughput
+lr = 0.235
+x32ar_throughput = [
+  '--phases', [
+    {'ep':0,  'sz':224, 'bs':192},
+    {'ep':(0,5),  'lr':(lr,lr*2)},
+    {'ep':(5,100), 'lr': lr}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 32,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+  '--skip-eval',
+]
+
 
 # hacks to allow launcher level flags in worker params list
 def _extract_param(params, name, strict=True):
