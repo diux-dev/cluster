@@ -104,6 +104,22 @@ quick_oom = [
   '--short-epoch'
 ]
 
+quick_oom_dlami = [
+  '--phases', [
+    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':(5,100), 'lr': lr}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--env-name', 'pytorch_p36',
+  '--skip-eval',
+  '--prefetch', 'False',
+  '--short-epoch'
+]
+
 # throughput/batch-size testing
 lr = 1.0
 xar_throughput_dlami = [

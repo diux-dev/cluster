@@ -109,7 +109,7 @@ def get_parser():
                         help='disable evaluation during training')
     parser.add_argument('--short-epoch', action='store_true',
                         help='make epochs short (for debugging)')
-    parser.add_argument('--prefetch', default=True)
+    parser.add_argument('--prefetch', default=1, type=int)
     return parser
 
 cudnn.benchmark = True
@@ -407,10 +407,15 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     st = time.time()
     trn_len = len(trn_loader)
 
+    print("before prefetch {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
+    print("Prefetch is", args.prefetch)
     input = dataloader.DataPrefetcher(trn_loader, fp16=args.fp16,
                                       prefetch=args.prefetch)
+    print("after prefetch {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
+    gc.collect()
+    torch.cuda.empty_cache()
     for i,(input,target) in enumerate(input):
-        if args.short_epoch and i>10:
+        if args.short_epoch and i>3:
           break
         batch_size = input.size(0)
         batch_num = i+1
@@ -422,7 +427,9 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         scheduler.update_lr(epoch, i+1, trn_len)
 
         # compute output
+        print("before fwd {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         output = model(input)
+        print("after fwd {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         loss = criterion(output, target)
 
         if args.distributed:

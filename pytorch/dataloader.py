@@ -26,22 +26,25 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
     train_tfms = [
             # AdaptiveRandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
-            transforms.RandomHorizontalFlip()
+#            transforms.RandomHorizontalFlip()
         ]
     if autoaugment: train_tfms.append(ImageNetPolicy())
     train_dataset = datasets.ImageFolder(traindir, transforms.Compose(train_tfms))
-    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
+    #    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
+
+    train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
-        num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
+        num_workers=workers, pin_memory=False, collate_fn=fast_collate, 
         sampler=train_sampler)
 
-    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_ar, distributed=distributed)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
-        batch_sampler=val_sampler)
+    # val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_ar, distributed=distributed)
+    # val_loader = torch.utils.data.DataLoader(
+    #     val_dataset,
+    #     num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
+    #     batch_sampler=val_sampler)
+    val_dataset, val_loader, val_sampler = None, None, None
 
     return train_loader, val_loader, train_sampler, val_sampler
 
@@ -65,17 +68,29 @@ def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
 # Seems to speed up training by ~2%
 class DataPrefetcher():
     def __init__(self, loader, prefetch=True, fp16=True):
+        print("1 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.loader = loader
+        print("2 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.prefetch = prefetch
+        print("3 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+        print("4 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+        print("5 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.fp16 = fp16
+        print("6 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         self.loaditer = iter(self.loader)
+        print("7 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
+        print("8 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
         if self.prefetch:
+            print("9 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
             self.stream = torch.cuda.Stream()
+            print("10 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
             self.next_input = self.next_target = None
+            print("11 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
             self.preload()
+            print("12 {:,}  {:,}".format(torch.cuda.memory_allocated(), torch.cuda.memory_cached()))
 
     def __len__(self): return len(self.loader)
 
