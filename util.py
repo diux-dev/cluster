@@ -72,6 +72,8 @@ def get_name(tags_or_instance_or_id):
     tags = tags_or_instance_or_id.tags
   elif isinstance(tags_or_instance_or_id, str):
     tags = ec2.Instance(tags_or_instance_or_id).tags
+  elif tags_or_instance_or_id is None:
+    return EMPTY_NAME
   else:
     assert isinstance(tags_or_instance_or_id, Iterable), "expected iterable of tags"
     tags = tags_or_instance_or_id
