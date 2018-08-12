@@ -472,20 +472,20 @@ def create_job(run, job_name, num_tasks, env_name):
   job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
 
   # upload files
-  job.upload_async('training/resnet.py')
-  job.upload_async('training/fp16util.py')
-  job.upload_async('training/autoaugment.py')
-  job.upload_async('training/dataloader.py')
-  job.upload_async('training/dataloader_performance.py')
-  job.upload_async('training/train_imagenet_nv.py')
-  job.upload_async('training/experimental_utils.py')
+  job.upload_async('resnet.py')
+  job.upload_async('fp16util.py')
+  job.upload_async('autoaugment.py')
+  job.upload_async('dataloader.py')
+  job.upload_async('dataloader_performance.py')
+  job.upload_async('train_imagenet_nv.py')
+  job.upload_async('experimental_utils.py')
 
   # Sometimes get SSH session not active or "connection reset by peer"
   # bad internet?
 
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
-    job.upload_async('setup/setup_env_nv.sh')
+    job.upload_async('setup_env_nv.sh')
     job.run_async_join('chmod +x setup_env_nv.sh')
     job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=5)
 
