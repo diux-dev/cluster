@@ -496,6 +496,9 @@ def wait_on_fulfillment(ec2c, reqs):
           print('Waiting on spot fullfillment...')
           time.sleep(5)
           reqs = ec2c.describe_spot_instance_requests(Filters=[{'Name': 'spot-instance-request-id', 'Values': [req['SpotInstanceRequestId']]}])
+          if not reqs['SpotInstanceRequests']:
+            print(f"SpotInstanceRequest for {req['SpotInstanceRequestId']} not found")
+            continue
           req = reqs['SpotInstanceRequests'][0]
           req_status = req['Status']
           if req_status['Code'] not in ['pending-evaluation', 'pending-fulfillment', 'fulfilled']:
