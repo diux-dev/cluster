@@ -109,7 +109,7 @@ def get_parser():
                         help='disable evaluation during training')
     parser.add_argument('--short-epoch', action='store_true',
                         help='make epochs short (for debugging)')
-    parser.add_argument('--prefetch', default=1, type=int)
+    parser.add_argument('--prefetch', default=0, type=int)
     return parser
 
 cudnn.benchmark = True
