@@ -12,7 +12,7 @@
 import argparse
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--zone', type=str, default='')
-parser.add_argument('--replicas', type=int, default=8)
+parser.add_argument('--replicas', type=int, default=32)
 parser.add_argument('--volume-offset', type=int, default=0, help='start numbering with this value')
 parser.add_argument('--dryrun', action='store_true')
 parser.add_argument('--iops', type=int, default=10000, help="unused")
@@ -28,8 +28,11 @@ import util as u
 
 if __name__=='__main__':
   ec2 = u.create_ec2_resource()
-  assert args.zone
-  
+
+  if not args.zone:
+    assert 'zone' in os.environ, 'must specify --zone or $zone'
+    args.zone = os.environ['zone']
+    
   vols = {}
   for vol in ec2.volumes.all():
     if vol.availability_zone == args.zone:
