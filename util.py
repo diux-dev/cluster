@@ -1,15 +1,15 @@
 # methods common to create_resources and delete_resources
-import os
 import argparse
-import random
-import string
 import boto3
-import shlex
+import os
+import os
+import random
 import re
+import shlex
+import string
 import sys
 import threading
 import time
-import os
 
 from collections import Iterable
 from collections import OrderedDict
@@ -24,6 +24,8 @@ import tensorflow as tf
 util = sys.modules[__name__]   
 u = util
 
+DEFAULT_RESOURCE_NAME = 'nexus'  # name used for all persistent resources
+                                 # (name of EFS, VPC, keypair prefixes)
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
@@ -36,24 +38,23 @@ def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
 
-# http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
 aws_regexp=re.compile('^[a-zA-Z0-9+-=._:/@.]*$')
 def validate_aws_name(name):
+  """Validate resource name using AWS name restrictions from # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions"""
   assert len(name)<=127
-  # disallow unicode names to avoid pain
+  # disallow unicode characters to avoid pain
   assert name == name.encode('ascii').decode('ascii')
   assert aws_regexp.match(name)
 
-
 resource_regexp=re.compile('^[a-z0-9]*$')
 def validate_resource_name(name):
-  """Check that resource name is valid. To be conservative allow 30 chars, lowercase only."""
+  """Check that name is valid as substitute for DEFAULT_RESOURCE_NAME. Since it's used in unix filenames, be more conservative than AWS requirements, just allow 30 chars, lowercase only."""
   assert len(name)<=30
-  # disallow unicode names to avoid pain
   assert resource_regexp.match(name)
+  validate_aws_name(name)
 
-def get_resource_name(default='nexus'):
-  """Gives global default name for singleton AWS resources (VPC name, keypair name, etc)."""
+def get_resource_name(default=DEFAULT_RESOURCE_NAME):
+  """Global default name for singleton AWS resources, see DEFAULT_RESOURCE_NAME."""
   name =os.environ.get('RESOURCE_NAME', default)
   if name != default:
     validate_resource_name(name)
@@ -105,9 +106,13 @@ def parse_job_name(name):
     task_id = -1
   return task_id, role+'.'+run
 
+def get_session():
+  # in future can add profiles with Session(profile_name=...)
+  return boto3.Session()
 
 def get_parsed_job_name(tags):
-  """Return jobname,task_id for given aws instance tags."""
+  """Return jobname,task_id for given aws instance tags. IE, for
+  0.worker.somerun you get '0' and 'worker.somerun'"""
   return parse_job_name(get_name(tags))
 
 def format_job_name(role, run):
@@ -121,21 +126,25 @@ def format_task_name(task_id, role, run):
 def make_name(name):
   return [{'Key': 'Name', 'Value': name}]
 
-def get_session(profile_name='diux'):
-  return boto3.Session(profile_name=profile_name)
-
 def get_region():
-  # assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
-  # return os.environ['AWS_DEFAULT_REGION']
   return get_session().region_name
+
+def get_zone():
+  assert 'ZONE' in os.environ, "Must specify ZONE environment variable"
+  zone = os.environ['ZONE']
+  region = get_region()
+  assert zone.startswith(region), "Availability zone %s must be in default region %s. Default region is taken from environment variable AWS_DEFAULT_REGION, default zone is taken from environment variable ZONE" %(zone, region)
+  return zone
 
 def get_keypair_name():
   """Returns keypair name to use for current region and user."""
+  # https://docs.google.com/document/d/14-zpee6HMRYtEfQ_H_UN9V92bBQOt0pGuRKcEJsxLEA/edit#
   assert 'USER' in os.environ, "why isn't USER defined?"
   username = os.environ['USER']
   validate_aws_name(username) # if this fails, override USER with something nice
   assert len(username)<30     # to avoid exceeding AWS 127 char limit
-  return u.get_resource_name() +'-'+username
+  account = str(boto3.client('sts').get_caller_identity()['Account'])
+  return u.get_resource_name() +'-'+account+'-'+username
 
 def create_ec2_client():
   return get_session().client('ec2')
@@ -686,7 +695,8 @@ def _StreamOutputToStdout(fd):  # todo: pep convention
   
   return t
 
-def lookup_aws_instances(job_name, states=['running', 'stopped']):
+def lookup_aws_instances(job_name, states=['running', 'stopped'],
+                         instance_type=None):
   """Returns all AWS instances for given AWS job name, like
    simple.worker"""
 
@@ -705,6 +715,8 @@ def lookup_aws_instances(job_name, states=['running', 'stopped']):
     # print("Obtained job name", current_job_name, "task", task_id)
 
     if current_job_name == job_name:
+      if instance_type:
+        assert i.instance_type == instance_type, f"Found existing instance for job {job_name} but different instance type ({i.instance_type}) than requested ({instance_type}), terminate {job_name} first or use new job name."
       result.append(i)
 
 

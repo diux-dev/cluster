@@ -58,12 +58,14 @@ class Run(backend.Run):
 
     # TODO: document launch parameters
     job_name = u.format_job_name(role_name, self.name)
-    instances = u.lookup_aws_instances(job_name)
+    instance_type = kwargs['instance_type']
+    instances = u.lookup_aws_instances(job_name, instance_type=instance_type)
     kwargs = u.merge_kwargs(kwargs, self.kwargs)
     ami = kwargs.get('ami', '')
     ami_name = kwargs.get('ami_name', '')
-    instance_type = kwargs['instance_type']
-    availability_zone = kwargs['availability_zone']
+    availability_zone = kwargs.get('availability_zone', '')
+    if not availability_zone:
+      availability_zone = os.environ['ZONE']
     placement_group = kwargs.get('placement_group', '')
     install_script = kwargs.get('install_script','')
     skip_efs_mount = kwargs.get('skip_efs_mount', False)
@@ -91,7 +93,7 @@ class Run(backend.Run):
 
       print("Found existing job "+job_name)
       for i in instances:
-            if i.state['Name'] == 'stopped': i.start()
+        if i.state['Name'] == 'stopped': i.start()
       print(instances)
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
