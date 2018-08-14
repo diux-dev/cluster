@@ -414,7 +414,7 @@ tmux a
     self.upload(source, target)
     
 
-  def upload(self, local_fn, remote_fn=None, skip_existing=False):
+  def upload(self, local_fn, remote_fn=None, dont_overwrite=False):
     """Uploads file to remote instance. If location not specified, dumps it
     in default directory."""
     # TODO: self.ssh_client is sometimes None
@@ -423,7 +423,7 @@ tmux a
     
     if remote_fn is None:
       remote_fn = os.path.basename(local_fn)
-    if skip_existing and self.file_exists(remote_fn):
+    if dont_overwrite and self.file_exists(remote_fn):
       self.log("Remote file %s exists, skipping"%(remote_fn,))
       return
 

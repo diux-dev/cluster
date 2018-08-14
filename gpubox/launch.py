@@ -69,7 +69,8 @@ def main():
                    f"c.NotebookApp.password = '{sha}'")
     job.upload(config_fn, f'/home/ubuntu/.jupyter/{config_fn}')
     job.run('mkdir -p /efs/notebooks')
-    job.upload('sample.ipynb', '/efs/notebooks/sample.ipynb')
+    job.upload('sample.ipynb', '/efs/notebooks/sample.ipynb',
+               dont_overwrite=True)
     job.run('cd /efs/notebooks')
     job.run_async('jupyter notebook')
     print(f'Jupyter notebook will be at http://{job.public_ip}:8888')

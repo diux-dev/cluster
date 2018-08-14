@@ -218,7 +218,7 @@ class Task:
       self.upload(fn)
 
 
-  def upload(self, local_fn, remote_fn=None, skip_existing=False):
+  def upload(self, local_fn, remote_fn=None, dont_overwrite=False):
     """Uploads given file to the task. If remote_fn is not specified, dumps it
     into task current directory with the same name."""
     raise NotImplementedError()    

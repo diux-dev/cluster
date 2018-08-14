@@ -30,7 +30,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -62,7 +110,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -126,7 +222,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The date format used by logging formatters for %(asctime)s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -174,7 +318,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The Logging format template
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -222,7 +414,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Set the log level by value or name.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -270,7 +510,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -302,7 +590,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -366,7 +702,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Answer yes to any prompts.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -414,7 +798,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Full path of a config file.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -462,7 +894,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Specify a config file to load.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -510,7 +990,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Generate default config file.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -558,7 +1086,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -590,7 +1166,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -638,7 +1262,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #c.NotebookApp.allow_credentials = False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -686,7 +1358,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -718,6 +1422,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -734,7 +1454,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Takes precedence over allow_origin_pat.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -782,6 +1534,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Use a regular expression for the Access-Control-Allow-Origin header
 
 
@@ -798,7 +1582,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -830,7 +1646,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -862,7 +1710,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -894,6 +1774,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -910,7 +1806,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Ignored if allow_origin is set.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -958,6 +1886,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allow password to be changed at login for the notebook server.
 
 
@@ -974,7 +1934,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1006,7 +1998,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  to the user to enter a new password at the same time that will replace the
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1038,6 +2062,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -1054,7 +2094,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  This can be set to false to prevent changing password from the UI/API.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1102,6 +2174,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allow requests where the Host header doesn't point to a local server
 
 
@@ -1118,7 +2222,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1150,7 +2286,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  that the browser thinks it's on a non-local domain. Setting this option to
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1182,7 +2350,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1214,7 +2414,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  serves you a page and then changes its DNS to send later requests to a local
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1246,7 +2478,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1278,7 +2542,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  with hostnames configured in local_hostnames.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1326,7 +2622,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to allow the user to run the notebook as root.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1374,7 +2718,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DEPRECATED use base_url
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1422,7 +2814,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The base URL for the notebook server.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1454,7 +2894,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Leading and trailing slashes can be omitted, and will automatically be added.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1502,7 +2974,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Specify what command to use to invoke a web browser when opening the notebook.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1534,6 +3054,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  standard library module, which allows setting of the BROWSER environment
 
 
@@ -1550,7 +3086,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  variable to override it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1598,7 +3166,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The full path to an SSL/TLS certificate file.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1646,6 +3262,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The full path to a certificate authority certificate for SSL/TLS client
 
 
@@ -1662,7 +3310,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  authentication.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1710,7 +3390,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The config manager class to use
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1758,7 +3486,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The notebook manager class to use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1806,6 +3582,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Extra keyword arguments to pass to `set_secure_cookie`. See tornado's
 
 
@@ -1822,7 +3630,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  set_secure_cookie docs for details.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1870,7 +3710,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The random bytes used to secure cookies. By default this is a new random
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1902,7 +3790,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  to enable logins to persist across server sessions.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1934,6 +3854,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Note: Cookie secrets should be kept private, do not share config files with
 
 
@@ -1950,7 +3886,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  cookie_secret stored in plaintext (you can read the value from a file).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1998,7 +3966,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The file where the cookie secret is stored.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2046,6 +4062,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Override URL shown to users.
 
 
@@ -2062,7 +4110,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2094,7 +4174,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  given value when displaying URL to the users. Do not change the actual
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2126,7 +4238,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  custom URL automatically.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2158,7 +4302,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  This option is intended to be used when the URL to display to the user cannot
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2190,7 +4366,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  containerized setups for example).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2238,7 +4446,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The default URL to redirect to from `/`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2286,6 +4542,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Disable cross-site-request-forgery protection
 
 
@@ -2302,7 +4590,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2334,6 +4654,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  forgeries, requiring API requests to either:
 
 
@@ -2350,7 +4686,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2382,7 +4750,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  token), or - authenticate with a token
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2414,7 +4814,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Some anonymous compute resources still desire the ability to run code,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2446,6 +4878,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  authentication and security checks, with the full knowledge of what that
 
 
@@ -2462,7 +4910,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  implies.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2510,6 +4990,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to enable MathJax for typesetting math/TeX
 
 
@@ -2526,7 +5038,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2558,7 +5102,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  very large, so you may want to disable it if you have a slow internet
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2590,6 +5166,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -2606,7 +5198,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  When disabled, equations etc. will appear as their untransformed TeX source.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2654,7 +5278,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## extra paths to look for Javascript notebook extensions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2702,7 +5374,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## handlers that should be loaded at higher priority than the default services
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2750,7 +5470,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Extra paths to search for serving static files.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2782,6 +5550,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  This allows adding javascript/css to be available from the notebook server
 
 
@@ -2798,7 +5582,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  machine, or overriding individual files in the IPython
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2846,7 +5662,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Extra paths to search for serving jinja templates.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2878,7 +5742,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Can be used to override templates from notebook.templates.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2926,7 +5822,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2974,6 +5918,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Deprecated: Use minified JS file or not, mainly use during dev to avoid JS
 
 
@@ -2990,7 +5966,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  recompilation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3038,6 +6046,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## (bytes/sec) Maximum rate at which stream output can be sent on iopub before
 
 
@@ -3054,7 +6094,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  they are limited.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3102,6 +6174,38 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## (msgs/sec) Maximum rate at which messages can be sent on iopub before they are
 
 
@@ -3118,7 +6222,39 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  limited.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3166,7 +6302,55 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The IP address the notebook server will listen on.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3214,7 +6398,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Supply extra arguments that will be passed to Jinja environment.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3262,7 +6494,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Extra variables to supply to jinja templates when rendering.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3310,7 +6590,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The kernel manager class to use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3358,7 +6686,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The kernel spec manager class to use. Should be a subclass of
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3390,7 +6766,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3422,7 +6830,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  between this version of Jupyter and the next stable one.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3470,7 +6910,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The full path to a private key file for usage with SSL/TLS.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3518,7 +7006,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Hostnames to allow as local when allow_remote_access is False.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3550,6 +7086,22 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Local IP addresses (such as 127.0.0.1 and ::1) are automatically accepted as
 
 
@@ -3566,7 +7118,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  local as well.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3614,7 +7198,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The login handler class to use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3662,7 +7294,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The logout handler class to use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3710,7 +7390,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The MathJax.js configuration file that is to be used.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3758,6 +7486,38 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## A custom url for MathJax.js. Should be in the form of a case-sensitive url to
 
 
@@ -3774,7 +7534,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  MathJax, for example:  /static/components/MathJax/MathJax.js
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3822,7 +7614,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Dict of Python modules to load as notebook server extensions.Entry values can
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3854,7 +7694,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  will be loaded in alphabetical order.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3902,7 +7774,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The directory to use for notebooks and kernels.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3950,7 +7870,55 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to open in a browser after starting. The specific browser used is
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3982,6 +7950,22 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  module, unless it is overridden using the --browser (NotebookApp.browser)
 
 
@@ -3998,7 +7982,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  configuration option.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4046,6 +8062,38 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Hashed password to use for web authentication.
 
 
@@ -4062,7 +8110,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4094,7 +8174,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4126,7 +8238,39 @@ c.NotebookApp.ip = '*'
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4158,8 +8302,56 @@ c.NotebookApp.ip = '*'
 
 
 
-c.NotebookApp.password = 'sha1:625e0eb97aac:49523772b4d127f3f4fac92ddcd52fb20ba93ff0'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+c.NotebookApp.password = 'sha1:354b4a71198e:3f1e792c4e9d4f181ac24521cda8dda18a48cbb4'
 c.NotebookApp.open_browser = False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4207,7 +8399,39 @@ c.NotebookApp.open_browser = False
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  multi user environment, for instance when everybody in the LAN can access each
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4239,7 +8463,39 @@ c.NotebookApp.open_browser = False
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4271,7 +8527,39 @@ c.NotebookApp.open_browser = False
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  any user can connect to the notebook server via ssh.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4319,7 +8607,55 @@ c.NotebookApp.open_browser = False
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The port the notebook server will listen on.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4367,7 +8703,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The number of additional ports to try if the specified port is not available.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4415,7 +8799,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DISABLED: use %pylab or %matplotlib in the notebook to enable matplotlib.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4463,6 +8895,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## If True, display a button in the dashboard to quit (shutdown the notebook
 
 
@@ -4479,7 +8943,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  server).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4527,7 +9023,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## (sec) Time window used to  check the message and data rate limits.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4575,7 +9119,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Reraise exceptions encountered loading server extensions?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4623,7 +9215,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DEPRECATED use the nbserver_extensions dict instead
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4671,7 +9311,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The session manager class to use.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4719,7 +9407,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Shut down the server after N seconds with no kernels or terminals running and
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4751,7 +9487,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  (MappingKernelManager.cull_idle_timeout) to shutdown the notebook server when
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4783,7 +9551,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  later. 0 (the default) disables this automatic shutdown.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4831,6 +9631,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Supply SSL options for the tornado HTTPServer. See the tornado docs for
 
 
@@ -4847,7 +9679,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  details.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4895,7 +9759,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Supply overrides for terminado. Currently only supports "shell_command".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4943,6 +9855,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Set to False to disable terminals.
 
 
@@ -4959,7 +9903,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4991,7 +9967,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  user can in a terminal, they can also do in a notebook.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5023,6 +10031,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Terminals may also be automatically disabled if the terminado package is not
 
 
@@ -5039,7 +10063,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  available.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5087,6 +10143,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Token used for authenticating first-time connections to the server.
 
 
@@ -5103,7 +10191,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5135,7 +10255,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5167,7 +10319,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  RECOMMENDED.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5215,6 +10399,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Supply overrides for the tornado.web.Application that the Jupyter notebook
 
 
@@ -5231,7 +10447,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  uses.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5279,7 +10527,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to trust or not X-Scheme/X-Forwarded-Proto and X-Real-Ip/X-Forwarded-
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5311,7 +10607,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  SSL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5359,7 +10687,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DEPRECATED, use tornado_settings
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5407,7 +10783,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Specify Where to open the notebook on startup. This is the `new` argument
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5439,6 +10863,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  guaranteed, but depends on browser support. Valid values are:
 
 
@@ -5455,7 +10895,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5487,7 +10959,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #   - 1 opens a new window,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5519,6 +11023,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -5535,7 +11055,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  See the `webbrowser.open` documentation for details.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5583,6 +11135,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Set the tornado compression options for websocket connections.
 
 
@@ -5599,7 +11183,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5631,7 +11247,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  :meth:`WebSocketHandler.get_compression_options`. None (default) will disable
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5663,6 +11311,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -5679,7 +11343,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  See the tornado docs for WebSocketHandler.get_compression_options for details.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5727,7 +11423,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The base URL for websockets, if it differs from the HTTP server (hint: it
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5759,6 +11503,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
 
 
@@ -5775,7 +11535,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Should be in the form of an HTTP origin: ws[s]://hostname[:port]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5823,7 +11615,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5855,7 +11695,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5919,7 +11807,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## JSON file in which to store connection info [default: kernel-<pid>.json]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5951,7 +11887,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  This file will contain the IP, ports, and authentication key needed to connect
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5983,7 +11951,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  dir of the current profile, but can be specified by absolute path.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6031,7 +12031,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## set the control (ROUTER) port [default: random]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6079,7 +12127,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## set the heartbeat port [default: random]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6127,7 +12223,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## set the iopub (PUB) port [default: random]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6175,7 +12319,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Set the kernel's IP address [default localhost]. If the IP address is
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6207,7 +12399,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  to connect to the Kernel, so be careful!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6255,7 +12479,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## set the shell (ROUTER) port [default: random]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6303,7 +12575,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## set the stdin (ROUTER) port [default: random]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6351,7 +12671,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6399,7 +12767,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6431,7 +12847,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6479,7 +12943,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6527,7 +13023,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Should we autorestart the kernel if it dies.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6575,7 +13119,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DEPRECATED: Use kernel_name instead.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6607,7 +13199,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  The Popen Command to launch the kernel. Override this if you have a custom
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6639,7 +13263,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  pass any arguments to the kernel, because it cannot make any assumptions about
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6671,6 +13327,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  kernel does not receive the option --debug if it given on the Jupyter command
 
 
@@ -6687,7 +13359,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  line.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6735,7 +13439,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Time to wait for a kernel to terminate before killing it, in seconds.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6783,7 +13535,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6815,7 +13615,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6863,7 +13711,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6895,7 +13775,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  or ZMQStream objects.  Objects can communicate with each other over the
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6927,7 +13839,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  message spec. The Session will handle serialization/deserialization, security,
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6959,7 +13903,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6991,6 +13967,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  signing with HMAC digests via the key/keyfile traits.
 
 
@@ -7007,7 +13999,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7039,7 +14063,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7071,7 +14127,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      whether to trigger extra debugging statements
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7103,7 +14191,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      importstrings for methods to serialize message parts.  If just
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7135,6 +14255,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      Otherwise, the entire importstring must be used.
 
 
@@ -7151,7 +14287,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7183,7 +14351,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7215,7 +14415,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      packer = 'msgpack.packb', unpacker='msgpack.unpackb'
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7247,7 +14479,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      You can also set the pack/unpack callables for serialization directly.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7279,7 +14543,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      the ID of this Session object.  The default is to generate a new UUID.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7311,7 +14607,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      username added to message headers.  The default is to ask the OS.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7343,7 +14671,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      The key used to initialize an HMAC signature.  If unset, messages
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7375,6 +14735,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  keyfile : filepath
 
 
@@ -7391,7 +14767,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      The file containing a key.  If this is set, `key` will be initialized
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7439,6 +14847,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Threshold (in bytes) beyond which an object's buffer should be extracted to
 
 
@@ -7455,7 +14895,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  avoid pickling.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7503,7 +14975,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to check PID to protect against calls after fork.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7535,7 +15055,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  This check can be disabled if fork-safety is handled elsewhere.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7583,7 +15135,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Threshold (in bytes) beyond which a buffer should be sent without copying.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7631,7 +15231,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Debug output in the Session
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7679,7 +15327,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The maximum number of digests to remember.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7711,7 +15407,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  The digest history will be culled when it exceeds this value.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7759,6 +15487,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The maximum number of items for a container to be introspected for custom
 
 
@@ -7775,7 +15535,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  serialization. Containers larger than this are pickled outright.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7823,7 +15615,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## execution key, for signing messages.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7871,7 +15711,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## path to file containing execution key.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7919,6 +15807,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Metadata dictionary, which serves as the default top-level metadata dict for
 
 
@@ -7935,7 +15855,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  each message.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7983,6 +15935,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The name of the packer for serializing messages. Should be one of 'json',
 
 
@@ -7999,7 +15983,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  'pickle', or an import name for a custom callable serializer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8047,7 +16063,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The UUID identifying this session.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8095,6 +16159,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The digest scheme used to construct the message signatures. Must have the form
 
 
@@ -8111,7 +16207,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  'hmac-HASH'.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8159,6 +16287,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The name of the unpacker for unserializing messages. Only used with custom
 
 
@@ -8175,7 +16335,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  functions for `packer`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8223,7 +16415,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Username for the Session. Default is your system username.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8271,7 +16511,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8303,7 +16591,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8367,7 +16703,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The name of the default kernel to start
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8415,6 +16799,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The kernel manager class.  This is configurable to allow subclassing of the
 
 
@@ -8431,7 +16847,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  KernelManager for customized behavior.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8479,7 +16927,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8511,7 +17007,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8575,7 +17119,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether messages from kernels whose frontends have disconnected should be
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8607,7 +17199,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8639,7 +17263,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  lost messages due to interrupted connectivity.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8671,6 +17327,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Disable if long-running kernels will produce too much output while no
 
 
@@ -8687,7 +17359,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  frontends are connected.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8735,6 +17439,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to consider culling kernels which are busy. Only effective if
 
 
@@ -8751,7 +17487,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  cull_idle_timeout > 0.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8799,6 +17567,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whether to consider culling kernels which have one or more connections. Only
 
 
@@ -8815,7 +17615,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  effective if cull_idle_timeout > 0.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8863,7 +17695,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Timeout (in seconds) after which a kernel is considered idle and ready to be
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8895,7 +17775,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  in kernels being culled for users with poor network connections.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8943,6 +17855,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The interval (in seconds) on which to check for idle kernels exceeding the
 
 
@@ -8959,7 +17903,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  cull timeout value.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9007,7 +17983,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Timeout for giving up on a kernel (in seconds).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9039,7 +18063,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  On starting and restarting kernels, we check whether the kernel is running and
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9071,7 +18127,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  for how long the kernel can take before being presumed dead.  This affects the
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9103,7 +18191,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  ZMQChannelsHandler (which handles the startup).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9151,7 +18271,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9199,7 +18367,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9231,7 +18447,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9279,7 +18543,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9311,6 +18607,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  handling for JSON notebook documents.
 
 
@@ -9327,7 +18639,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9359,7 +18703,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  always refers to a directory.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9391,7 +18767,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  - unicode, not url-escaped
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9423,6 +18831,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  - leading and trailing '/' will be stripped
 
 
@@ -9439,7 +18863,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  - if unspecified, path defaults to '',
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9487,7 +18943,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Allow access to hidden files
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9535,7 +19039,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9583,7 +19135,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9631,7 +19231,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9679,6 +19327,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## handler class to use when serving raw file requests.
 
 
@@ -9695,7 +19375,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9727,6 +19439,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  inefficient, especially for large files.
 
 
@@ -9743,7 +19471,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9775,7 +19535,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  will be much more efficient.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9807,7 +19599,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  Access to these files should be Authenticated.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9855,7 +19679,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Extra parameters to pass to files_handler_class.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9887,6 +19759,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  For example, StaticFileHandlers generally expect a `path` argument specifying
 
 
@@ -9903,7 +19791,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  the root directory from which to serve files.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9951,7 +19871,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Glob patterns to hide in file and directory listings.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -9999,6 +19967,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Python callable or importstring thereof
 
 
@@ -10015,7 +20015,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10047,7 +20079,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10079,6 +20143,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  or other side effects that should not be saved.
 
 
@@ -10095,7 +20175,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10127,7 +20239,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10159,7 +20303,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10191,7 +20367,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #    Modifying this dict will affect the file that is stored.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10223,7 +20431,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  - contents_manager: this ContentsManager instance
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10271,7 +20511,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10319,7 +20607,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The base name used when creating untitled directories.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10367,7 +20703,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The base name used when creating untitled files.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10415,7 +20799,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The base name used when creating untitled notebooks.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10463,7 +20895,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10495,7 +20975,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10543,7 +21071,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10575,6 +21135,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  generic files.
 
 
@@ -10591,7 +21167,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10623,7 +21231,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10655,7 +21295,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10687,6 +21359,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #      A directory against against which API-style paths are to be resolved.
 
 
@@ -10703,7 +21391,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10751,7 +21471,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## By default notebooks are saved on disk on a temporary file and then if
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10783,7 +21551,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  'atomic_writing', causes some bugs on file system whitout operation order
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10815,6 +21615,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  written directly on the old one which could fail (eg: full filesystem or quota
 
 
@@ -10831,7 +21647,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10879,7 +21727,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10911,7 +21807,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -10959,6 +21903,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  trash/recycle bin, where they can be recovered. If False, deleting files
 
 
@@ -10975,7 +21935,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  really deletes them.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11023,6 +22015,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Python callable or importstring thereof
 
 
@@ -11039,7 +22063,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11071,7 +22127,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11103,6 +22191,22 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  to a script or HTML via nbconvert.
 
 
@@ -11119,7 +22223,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11151,7 +22287,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11183,7 +22351,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11215,7 +22415,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  representing the file - contents_manager: this ContentsManager instance
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11263,7 +22495,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11311,7 +22591,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## DEPRECATED, use post_save_hook. Will be removed in Notebook 5.0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11359,7 +22687,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11391,7 +22767,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11455,7 +22879,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The hashing algorithm used to sign notebooks.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11503,7 +22975,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The sqlite file in which to store notebook signatures. By default, this will
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11535,7 +23055,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  sqlite writing to the filesystem.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11583,7 +23135,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The secret key with which notebooks are signed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11631,7 +23231,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The file where the secret key is stored.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11679,6 +23327,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## A callable returning the storage backend for notebook signatures. The default
 
 
@@ -11695,7 +23375,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  uses an SQLite database.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11743,7 +23455,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11775,7 +23535,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11823,7 +23631,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  available, ensure it is added to the spec list.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11871,6 +23711,38 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## The kernel spec class.  This is configurable to allow subclassing of the
 
 
@@ -11887,7 +23759,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  KernelSpecManager for customized behavior.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11935,7 +23839,55 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Whitelist of allowed kernel names.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -11967,7 +23919,39 @@ c.NotebookApp.port = 8888
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #  By default, all installed kernels are allowed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
