@@ -274,7 +274,7 @@ def create_resources():
         # errors like this:
         # Creating efs mount target for us-east-1f ... Failed with An error occurred (IncorrectFileSystemLifeCycleState) when calling the CreateMountTarget operation: None, retrying in 1 sec
 
-        print("Failed with %s, retrying in %s sec"%(str(e), RETRY_INTERVAL_SEC))
+        print("Got %s, retrying in %s sec"%(str(e), RETRY_INTERVAL_SEC))
         time.sleep(RETRY_INTERVAL_SEC)
     else:
       print("Giving up.")

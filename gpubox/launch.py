@@ -42,11 +42,10 @@ def main():
   sys.path.append(module_path+'/..')
   import tmux_backend
   import aws_backend
-  import create_resources as create_resources_lib
   import util as u
 
-  if args.create_resources:
-    create_resources_lib.create_resources()
+  u.maybe_create_resources(args)
+  
   run = aws_backend.make_run(args.name, ami_name=args.ami_name)
   job = run.make_job('worker', instance_type=args.instance_type,
                      use_spot=args.spot)
