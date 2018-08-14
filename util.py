@@ -134,6 +134,9 @@ def get_zone():
   assert zone.startswith(region), "Availability zone %s must be in default region %s. Default region is taken from environment variable AWS_DEFAULT_REGION, default zone is taken from environment variable ZONE" %(zone, region)
   return zone
 
+def get_account_number():
+  return str(boto3.client('sts').get_caller_identity()['Account'])
+
 def get_keypair_name():
   """Returns keypair name to use for current region and user."""
   # https://docs.google.com/document/d/14-zpee6HMRYtEfQ_H_UN9V92bBQOt0pGuRKcEJsxLEA/edit#
@@ -141,9 +144,10 @@ def get_keypair_name():
   username = os.environ['USER']
   validate_aws_name(username) # if this fails, override USER with something nice
   assert len(username)<30     # to avoid exceeding AWS 127 char limit
-  account = str(boto3.client('sts').get_caller_identity()['Account'])
+  account = u.get_account_number()
   return u.get_resource_name() +'-'+account+'-'+username
 
+  
 def create_ec2_client():
   return get_session().client('ec2')
 
@@ -1036,3 +1040,14 @@ def mount_volume(volume, task, mount_directory, device=DEFAULT_UNIX_DEVICE):
     else:
       print(f'Mount successful')
       break
+
+def maybe_create_resources(args):
+  """Use heuristics to decide to possibly create resources"""
+  if hasattr(args, 'create_resources'):
+    do_create_resources = args.create_resources
+  else:
+    do_create_resources = False  # todo: decide more smartly
+
+  if do_create_resources:
+    import create_resources as create_resources_lib
+    create_resources_lib.create_resources()
