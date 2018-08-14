@@ -61,16 +61,20 @@ def main():
   print()
 
   if args.mode == 'jupyter':
+    # upload notebook config with provided password
     from notebook.auth import passwd
     sha = passwd(args.password)
-    config_fn = 'jupyter_notebook_config.py'
-    config_fn2 = '/tmp/'+config_fn
-    os.system(f'cp {config_fn} {config_fn2}')
-    _replace_lines(config_fn2, 'c.NotebookApp.password',
+    local_config_fn = f'{module_path}/jupyter_notebook_config.py'
+    temp_config_fn = '/tmp/'+os.path.basename(local_config_fn)
+    remote_config_fn = f'/home/ubuntu/.jupyter/{os.path.basename(local_config_fn)}'
+    os.system(f'cp {local_config_fn} {temp_config_fn}')
+    _replace_lines(temp_config_fn, 'c.NotebookApp.password',
                    f"c.NotebookApp.password = '{sha}'")
-    job.upload(config_fn2, f'/home/ubuntu/.jupyter/{config_fn}')
+    job.upload(temp_config_fn, remote_config_fn)
+
+    # upload sample notebook and start server
     job.run('mkdir -p /efs/notebooks')
-    job.upload('sample.ipynb', '/efs/notebooks/sample.ipynb',
+    job.upload(f'{module_path}/sample.ipynb', '/efs/notebooks/sample.ipynb',
                dont_overwrite=True)
     job.run('cd /efs/notebooks')
     job.run_async('jupyter notebook')
