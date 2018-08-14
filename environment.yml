@@ -1,4 +1,4 @@
-name: gpubox
+name: nexus
 channels:
 - conda-forge
 - anaconda

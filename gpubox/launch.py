@@ -21,21 +21,23 @@ parser.add_argument('--ami-name', type=str,
                     help="name of AMI to use ")
 parser.add_argument('--instance-type', type=str, default='g3.4xlarge',
                      help="type of instance")
-parser.add_argument('--benchmark', default=0,
-                    help='launch simple addition benchmark')
-parser.add_argument('--jupyter', default=0,
-                    help='launch jupyter notebook')
-parser.add_argument('--jupyter-password',
-                    default='DefaultNexusPasswordPleaseChange',
+parser.add_argument('--tf-benchmark', default=0,
+                    help='launch simple TensorFlow addition benchmark')
+parser.add_argument('--mode', default='jupyter',
+                    help='either jupyter or tf-benchmark')
+parser.add_argument('--password',
+                    default='DefaultNotebookPasswordPleaseChange',
                     help='password to use for jupyter notebook')
-parser.add_argument('--role', type=str, default='launcher',
-                    help='internal flag, launcher or worker')
+parser.add_argument('--create-resources', type=int, default=1,
+                    help='first-time run, create EFS/VPC/security groups/etc')
 parser.add_argument('--spot', type=int, default=0,
                     help='use spot instances')
+parser.add_argument('--internal-role', type=str, default='launcher',
+                    help='internal flag for tf benchmark, launcher or worker')
 args = parser.parse_args()
 
 
-def launcher():
+def main():
   module_path=os.path.dirname(os.path.abspath(__file__))
   sys.path.append(module_path+'/..')
   import tmux_backend
@@ -43,7 +45,8 @@ def launcher():
   import create_resources as create_resources_lib
   import util as u
 
-  create_resources_lib.create_resources()
+  if args.create_resources:
+    create_resources_lib.create_resources()
   run = aws_backend.make_run(args.name, ami_name=args.ami_name)
   job = run.make_job('worker', instance_type=args.instance_type,
                      use_spot=args.spot)
@@ -58,19 +61,40 @@ def launcher():
   print()
   print()
 
-  if args.jupyter:
-    job.upload('jupyter_notebook_config.py') # 2 step upload since don't know ~
-    run_tmux_async(sess, 'cp jupyter_notebook_config.py ~/.jupyter')
-    run_tmux_async(sess, 'mkdir -p /efs/notebooks')
-    
-  if args.benchmark:
+  if args.mode == 'jupyter':
+    from notebook.auth import passwd
+    sha = passwd(args.password)
+    config_fn = 'jupyter_notebook_config.py'
+    _replace_lines(config_fn, 'c.NotebookApp.password',
+                   f"c.NotebookApp.password = '{sha}'")
+    job.upload(config_fn, f'/home/ubuntu/.jupyter/{config_fn}')
+    job.run('mkdir -p /efs/notebooks')
+    job.upload('sample.ipynb', '/efs/notebooks/sample.ipynb')
+    job.run('cd /efs/notebooks')
+    job.run_async('jupyter notebook')
+    print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
+  elif args.mode == 'tf-benchmark':
     job.run('source activate tensorflow_p36')
     job.upload(__file__)
     job.run('killall python || echo pass')  # kill previous run
-    job.run_async('python launch.py --role=worker')
+    job.run_async('python launch.py --internal-role=worker')
+  else:
+    assert False, "Unknown --mode, must be jupyter or tf-benchmark."
+
+def _replace_lines(fn, startswith, new_line):
+  """Replace lines starting with starts_with in fn with new_line."""
+  new_lines = []
+  for line in open(fn):
+    if line.startswith(startswith):
+      new_lines.append(new_line)
+    else:
+      new_lines.append(line)
+  with open(fn, 'w') as f:
+    f.write('\n'.join(new_lines))
+  
 
 def worker():
-  """Worker script that runs on AWS machine. Adds vectors of ones forever,
+  """tf worker script that runs on AWS machine. Adds vectors of ones forever,
   prints MB/s."""
 
   import tensorflow as tf
@@ -103,13 +127,13 @@ def worker():
     rate = float(iters_per_step)*data_mb/elapsed_time
     print('%.2f MB/s'%(rate,))    
 
-def main():
-  if args.role == "launcher":
-    launcher()
-  elif args.role == "worker":
+def main_root():
+  if args.internal_role == "launcher":
+    main()
+  elif args.internal_role == "worker":
     worker()
   else:
     assert False, "Unknown role "+FLAGS.role
 
 if __name__=='__main__':
-  main()
+  main_root()
