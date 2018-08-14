@@ -141,6 +141,14 @@ class Run(backend.Run):
 
       if use_spot: instances = u.create_spot_instances(args)
       else: instances = ec2.create_instances(**args)
+      else:
+        try:
+          instances = ec2.create_instances(**args)
+        except Exception as e:
+          print(f"Instance creation failed with ({e})")
+          print("Account number: ", u.get_account_number())
+          print("Region: ", u.get_region())
+          sys.exit()
       assert instances
       assert len(instances) == num_tasks
 
