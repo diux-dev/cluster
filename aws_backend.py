@@ -13,7 +13,7 @@ import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-TIMEOUT_SEC=5  # todo: rename to RETRY_SEC
+TIMEOUT_SEC=5  # todo: rename to RETRY_INTERVAL_SEC
 MAX_RETRIES = 10
 DEFAULT_PORT=3000  # port used for task internal communication
 TENSORBOARD_PORT=6006  # port used for external HTTP communication
