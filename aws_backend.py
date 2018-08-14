@@ -293,7 +293,7 @@ class Task(backend.Task):
 
     # todo: create taskdir
     self.connect_instructions = "waiting for initialize()"
-    self.keypair_fn = u.get_keypair_fn(u.get_keypair_name())
+    self.keypair_fn = u.get_keypair_fn()
 
     # username to use to ssh into instances
     # ec2-user or ubuntu
@@ -331,17 +331,16 @@ class Task(backend.Task):
     efs_id = u.get_efs_dict()[u.get_resource_name()]
     dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
     self.run('sudo mkdir -p /efs')
-    self.run('sudo chmod 777 /efs')
+    
+    # ignore error on remount (efs already mounted)
+    self.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,), ignore_errors=True) 
 
-    # sometimes previous command has no effect, retry until permissions are
-    # correct
+    # make sure chmod is successful, hack to fix occasional permission errors
+    self.run('sudo chmod 777 /efs')
     while 'drwxrwxrwx' not in self.run_and_capture_output('ls -ld /efs'):
       print(f"chmod 777 /efs didn't take, retrying in {TIMEOUT_SEC}")
       time.sleep(TIMEOUT_SEC)
       self.run('sudo chmod 777 /efs')
-    
-    # ignore error on remount
-    self.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,), ignore_errors=True) 
 
   def _initialize(self):
     """Tries to initialize the task."""
