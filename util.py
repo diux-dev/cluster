@@ -17,8 +17,6 @@ from collections import defaultdict
 from operator import itemgetter
 
 
-import tensorflow as tf
-
 # shortcuts to refer to util module, this lets move external code into
 # this module unmodified
 util = sys.modules[__name__]   
