@@ -64,9 +64,11 @@ def main():
     from notebook.auth import passwd
     sha = passwd(args.password)
     config_fn = 'jupyter_notebook_config.py'
-    _replace_lines(config_fn, 'c.NotebookApp.password',
+    config_fn2 = '/tmp/'+config_fn
+    os.system(f'cp {config_fn} {config_fn2}')
+    _replace_lines(config_fn2, 'c.NotebookApp.password',
                    f"c.NotebookApp.password = '{sha}'")
-    job.upload(config_fn, f'/home/ubuntu/.jupyter/{config_fn}')
+    job.upload(config_fn2, f'/home/ubuntu/.jupyter/{config_fn}')
     job.run('mkdir -p /efs/notebooks')
     job.upload('sample.ipynb', '/efs/notebooks/sample.ipynb',
                dont_overwrite=True)
