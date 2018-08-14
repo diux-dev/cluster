@@ -13,7 +13,7 @@ import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-TIMEOUT_SEC=5
+TIMEOUT_SEC=5  # todo: rename to RETRY_SEC
 MAX_RETRIES = 10
 DEFAULT_PORT=3000  # port used for task internal communication
 TENSORBOARD_PORT=6006  # port used for external HTTP communication
@@ -43,6 +43,7 @@ class Run(backend.Run):
     self.logdir_ = None   # set during setup_logdir()
     self.kwargs = kwargs
     self.jobs = []
+    self.placement_group_name = self.name+'-'+u.random_id()
 
   @property
   def logdir(self):
@@ -67,6 +68,14 @@ class Run(backend.Run):
     if not availability_zone:
       availability_zone = os.environ['ZONE']
     placement_group = kwargs.get('placement_group', '')
+
+    # automatically generated placement_group_name
+    use_placement_group = kwargs.get('use_placement_group', False)
+    assert use_placement_group == False or placement_group == ''
+    if use_placement_group:
+      placement_group = self.placement_group_name
+
+    
     install_script = kwargs.get('install_script','')
     skip_efs_mount = kwargs.get('skip_efs_mount', False)
     linux_type = kwargs.get('linux_type', 'ubuntu')
@@ -140,7 +149,6 @@ class Run(backend.Run):
       args['UserData'] = user_data
 
       if use_spot: instances = u.create_spot_instances(args)
-      else: instances = ec2.create_instances(**args)
       else:
         try:
           instances = ec2.create_instances(**args)
@@ -149,6 +157,7 @@ class Run(backend.Run):
           print("Account number: ", u.get_account_number())
           print("Region: ", u.get_region())
           sys.exit()
+          
       assert instances
       assert len(instances) == num_tasks
 
