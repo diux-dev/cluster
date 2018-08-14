@@ -85,7 +85,7 @@ def main():
   print("Connecting to ", u.get_name(instance),
         " launched ", instance.launch_time.astimezone(get_localzone()))
   cmd = ''
-  keypair_fn = u.get_keypair_fn(instance.key_name)
+  keypair_fn = u.get_keypair_fn()
   cmd = make_cmd(keypair_fn, username, instance.public_ip_address)
 
   print(cmd)

@@ -1,4 +1,4 @@
-# methods common to create_resources and delete_resources
+
 import argparse
 import boto3
 import os
@@ -17,20 +17,26 @@ from collections import defaultdict
 from operator import itemgetter
 
 
-# shortcuts to refer to util module, this lets move external code into
-# this module unmodified
+# shortcuts to refer to util module, this lets move external code referencing
+# util or u into this module unmodified
 util = sys.modules[__name__]   
 u = util
 
+PRIVATE_KEY_LOCATION = os.environ['HOME']+'/.nexus' # location for pem files,
+                                                    # this should be permanent
+                                                    
 DEFAULT_RESOURCE_NAME = 'nexus'  # name used for all persistent resources
                                  # (name of EFS, VPC, keypair prefixes)
+                                 # can be changed through $RESOURCE_NAME for
+                                 # debugging purposes
+
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 
 # name to use for mounting external drive
 DEFAULT_UNIX_DEVICE='/dev/xvdq' # used to be /dev/xvdf
 
-EMPTY_NAME="noname"
+EMPTY_NAME="noname"   # name to use when name attribute is missing
 
 def now_micros():
   """Return current micros since epoch as integer."""
@@ -137,15 +143,32 @@ def get_zone():
 def get_account_number():
   return str(boto3.client('sts').get_caller_identity()['Account'])
 
+
+# keypairs:
+# keypair name: nexus-yaroslav
+# keypair filename: ~/.nexus/nexus-yaroslav-12395924-us-east-1.pem
+# keypair name: nexus2-yaroslav
+# keypair filename: ~/.nexus/nexus2-yaroslav-12395924-us-east-1.pem
+# https://docs.google.com/document/d/14-zpee6HMRYtEfQ_H_UN9V92bBQOt0pGuRKcEJsxLEA/edit#
+
 def get_keypair_name():
-  """Returns keypair name to use for current region and user."""
-  # https://docs.google.com/document/d/14-zpee6HMRYtEfQ_H_UN9V92bBQOt0pGuRKcEJsxLEA/edit#
+  """Returns keypair name to use for current resource, region and user."""
+  
   assert 'USER' in os.environ, "why isn't USER defined?"
   username = os.environ['USER']
   validate_aws_name(username) # if this fails, override USER with something nice
   assert len(username)<30     # to avoid exceeding AWS 127 char limit
+  return u.get_resource_name() +'-'+username
+
+
+def get_keypair_fn():
+  """Location of .pem file for current keypair"""
+
+  keypair_name = get_keypair_name()
   account = u.get_account_number()
-  return u.get_resource_name() +'-'+account+'-'+username
+  region = u.get_region()
+  fn = f'{PRIVATE_KEY_LOCATION}/{keypair_name}-{account}-{region}.pem'
+  return fn
 
   
 def create_ec2_client():
@@ -577,18 +600,8 @@ def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
     return instances
 
 
-def get_keypair_fn(keypair_name_or_instance):
-  """Generate canonical location for .pem file for given keypair and
-  default region."""
-  if hasattr(keypair_name_or_instance, "key_name"):
-    keypair_name = keypair_name_or_instance.key_name
-  else:
-    keypair_name = keypair_name_or_instance
-  return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
-                           get_region(),)
-
 def make_ssh_command(instance):
-  keypair_fn = u.get_keypair_fn(instance)
+  keypair_fn = u.get_keypair_fn()
   username = u.get_username(instance)
   ip = instance.public_ip_address
   cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username,
@@ -935,7 +948,7 @@ def get_instances(fragment, verbose=True, filter_by_key=True):
   vprint("Using region ", region)
   for (ts, instance) in sorted_instance_list:
     if filter_by_key and instance.key_name != u.get_keypair_name():
-      vprint("Got key %s, expected %s, skipping"%(instance.key_name, u.get_keypair_name()))
+      vprint(f"Got key {instance.key_name}, expected {u.get_keypair_name()}")
       continue
     filtered_instance_list.append(instance)
   return filtered_instance_list

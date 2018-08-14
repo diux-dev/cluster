@@ -53,7 +53,7 @@ def main():
 
       print("Uninitializing %s %s %s"%(name, instance.public_ip_address, instance.private_ip_address))
 
-      key_file = u.get_keypair_fn(instance.key_name)
+      key_file = u.get_keypair_fn()
       ssh_client = u.SshClient(hostname=instance.public_ip_address,
                                ssh_key=key_file,
                                username=username)

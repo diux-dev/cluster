@@ -136,7 +136,7 @@ def main():
       sys.stdout.write('failed\n')
       u.loge(str(e)+'\n')
 
-  keypair_fn = u.get_keypair_fn(KEYPAIR_NAME)
+  keypair_fn = u.get_keypair_fn()
   if os.path.exists(keypair_fn):
     print("Deleting local keypair file %s" % (keypair_fn,))
     os.system('rm -f '+keypair_fn)
