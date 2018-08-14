@@ -1,12 +1,12 @@
 name: nexus
 channels:
-- conda-forge
 - anaconda
+- conda-forge
 dependencies:
 - python=3.6
 - awscli
 - boto3
+- jupyter
 - paramiko
 - portpicker
 - tzlocal
-  
