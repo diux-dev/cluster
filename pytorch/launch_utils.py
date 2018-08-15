@@ -70,6 +70,8 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   volume_name = u.get_name(v)
   already_attached = v.attachments and v.attachments[0]['InstanceId'] == aws_instance.id
   instance_name = u.get_name(aws_instance)
+  # TODO: still have edge case when it doesn't report as already attached
+  # and keeps trying to attach to an instance that has data mounted already
   if already_attached:
     print(f'volume {volume_name} ({v.id}) already attached to {instance_name}')
     return
