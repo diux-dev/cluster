@@ -94,7 +94,7 @@ class Sync(object):
 
         # todo, rename no_strict_checking to ssh_command
 
-        keypair_fn = u.get_keypair_fn(instance)
+        keypair_fn = u.get_keypair_fn()
         username = u.get_username(instance)
         ip = instance.public_ip_address
 

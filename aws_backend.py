@@ -13,7 +13,7 @@ import backend
 import util as u
 
 TASKDIR_PREFIX='/tmp/tasklogs'
-TIMEOUT_SEC=5
+TIMEOUT_SEC=5  # todo: rename to RETRY_INTERVAL_SEC
 MAX_RETRIES = 10
 DEFAULT_PORT=3000  # port used for task internal communication
 TENSORBOARD_PORT=6006  # port used for external HTTP communication
@@ -43,6 +43,7 @@ class Run(backend.Run):
     self.logdir_ = None   # set during setup_logdir()
     self.kwargs = kwargs
     self.jobs = []
+    self.placement_group_name = self.name+'-'+u.random_id()
 
   @property
   def logdir(self):
@@ -58,13 +59,23 @@ class Run(backend.Run):
 
     # TODO: document launch parameters
     job_name = u.format_job_name(role_name, self.name)
-    instances = u.lookup_aws_instances(job_name)
+    instance_type = kwargs['instance_type']
+    instances = u.lookup_aws_instances(job_name, instance_type=instance_type)
     kwargs = u.merge_kwargs(kwargs, self.kwargs)
     ami = kwargs.get('ami', '')
     ami_name = kwargs.get('ami_name', '')
-    instance_type = kwargs['instance_type']
-    availability_zone = kwargs['availability_zone']
+    availability_zone = kwargs.get('availability_zone', '')
+    if not availability_zone:
+      availability_zone = os.environ['ZONE']
     placement_group = kwargs.get('placement_group', '')
+
+    # automatically generated placement_group_name
+    use_placement_group = kwargs.get('use_placement_group', False)
+    assert use_placement_group == False or placement_group == ''
+    if use_placement_group:
+      placement_group = self.placement_group_name
+
+    
     install_script = kwargs.get('install_script','')
     skip_efs_mount = kwargs.get('skip_efs_mount', False)
     linux_type = kwargs.get('linux_type', 'ubuntu')
@@ -91,7 +102,7 @@ class Run(backend.Run):
 
       print("Found existing job "+job_name)
       for i in instances:
-            if i.state['Name'] == 'stopped': i.start()
+        if i.state['Name'] == 'stopped': i.start()
       print(instances)
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
@@ -138,7 +149,15 @@ class Run(backend.Run):
       args['UserData'] = user_data
 
       if use_spot: instances = u.create_spot_instances(args)
-      else: instances = ec2.create_instances(**args)
+      else:
+        try:
+          instances = ec2.create_instances(**args)
+        except Exception as e:
+          print(f"Instance creation failed with ({e})")
+          print("Account number: ", u.get_account_number())
+          print("Region: ", u.get_region())
+          sys.exit()
+          
       assert instances
       assert len(instances) == num_tasks
 
@@ -274,7 +293,7 @@ class Task(backend.Task):
 
     # todo: create taskdir
     self.connect_instructions = "waiting for initialize()"
-    self.keypair_fn = u.get_keypair_fn(u.get_keypair_name())
+    self.keypair_fn = u.get_keypair_fn()
 
     # username to use to ssh into instances
     # ec2-user or ubuntu
@@ -312,9 +331,16 @@ class Task(backend.Task):
     efs_id = u.get_efs_dict()[u.get_resource_name()]
     dns = "{efs_id}.efs.{region}.amazonaws.com".format(**locals())
     self.run('sudo mkdir -p /efs')
-    self.run('sudo chmod 777 /efs')
-    # ignore error on remount
+    
+    # ignore error on remount (efs already mounted)
     self.run("sudo mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 %s:/ /efs"%(dns,), ignore_errors=True) 
+
+    # make sure chmod is successful, hack to fix occasional permission errors
+    self.run('sudo chmod 777 /efs')
+    while 'drwxrwxrwx' not in self.run_and_capture_output('ls -ld /efs'):
+      print(f"chmod 777 /efs didn't take, retrying in {TIMEOUT_SEC}")
+      time.sleep(TIMEOUT_SEC)
+      self.run('sudo chmod 777 /efs')
 
   def _initialize(self):
     """Tries to initialize the task."""
@@ -412,7 +438,7 @@ tmux a
     self.upload(source, target)
     
 
-  def upload(self, local_fn, remote_fn=None, skip_existing=False):
+  def upload(self, local_fn, remote_fn=None, dont_overwrite=False):
     """Uploads file to remote instance. If location not specified, dumps it
     in default directory."""
     # TODO: self.ssh_client is sometimes None
@@ -421,7 +447,7 @@ tmux a
     
     if remote_fn is None:
       remote_fn = os.path.basename(local_fn)
-    if skip_existing and self.file_exists(remote_fn):
+    if dont_overwrite and self.file_exists(remote_fn):
       self.log("Remote file %s exists, skipping"%(remote_fn,))
       return
 

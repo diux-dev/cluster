@@ -1,15 +1,15 @@
-# methods common to create_resources and delete_resources
-import os
+
 import argparse
-import random
-import string
 import boto3
-import shlex
+import os
+import os
+import random
 import re
+import shlex
+import string
 import sys
 import threading
 import time
-import os
 
 from collections import Iterable
 from collections import OrderedDict
@@ -17,12 +17,18 @@ from collections import defaultdict
 from operator import itemgetter
 
 
-import tensorflow as tf
-
-# shortcuts to refer to util module, this lets move external code into
-# this module unmodified
+# shortcuts to refer to util module, this lets move external code referencing
+# util or u into this module unmodified
 util = sys.modules[__name__]   
 u = util
+
+PRIVATE_KEY_LOCATION = os.environ['HOME']+'/.nexus' # location for pem files,
+                                                    # this should be permanent
+                                                    
+DEFAULT_RESOURCE_NAME = 'nexus'  # name used for all persistent resources
+                                 # (name of EFS, VPC, keypair prefixes)
+                                 # can be changed through $RESOURCE_NAME for
+                                 # debugging purposes
 
 WAIT_INTERVAL_SEC=1  # how long to use for wait period
 WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
@@ -30,35 +36,34 @@ WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
 # name to use for mounting external drive
 DEFAULT_UNIX_DEVICE='/dev/xvdq' # used to be /dev/xvdf
 
-EMPTY_NAME="noname"
+EMPTY_NAME="noname"   # name to use when name attribute is missing
 
 def now_micros():
   """Return current micros since epoch as integer."""
   return int(time.time()*1e6)
 
-# http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions
 aws_regexp=re.compile('^[a-zA-Z0-9+-=._:/@.]*$')
 def validate_aws_name(name):
+  """Validate resource name using AWS name restrictions from # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions"""
   assert len(name)<=127
-  # disallow unicode names to avoid pain
+  # disallow unicode characters to avoid pain
   assert name == name.encode('ascii').decode('ascii')
   assert aws_regexp.match(name)
 
-
-resource_regexp=re.compile('^[a-z0-9]*$')
+resource_regexp=re.compile('^[a-z0-9]+$')
 def validate_resource_name(name):
-  """Check that resource name is valid. To be conservative allow 30 chars, lowercase only."""
+  """Check that name is valid as substitute for DEFAULT_RESOURCE_NAME. Since it's used in unix filenames, be more conservative than AWS requirements, just allow 30 chars, lowercase only."""
   assert len(name)<=30
-  # disallow unicode names to avoid pain
   assert resource_regexp.match(name)
+  validate_aws_name(name)
 
-def get_resource_name(default='nexus'):
-  """Gives global default name for singleton AWS resources (VPC name, keypair name, etc)."""
+def get_resource_name(default=DEFAULT_RESOURCE_NAME):
+  """Global default name for singleton AWS resources, see DEFAULT_RESOURCE_NAME."""
   name =os.environ.get('RESOURCE_NAME', default)
   if name != default:
     validate_resource_name(name)
   return name
-                           
+
 def get_name(tags_or_instance_or_id):
   """Helper utility to extract name out of tags dictionary or intancce.
       [{'Key': 'Name', 'Value': 'nexus'}] -> 'nexus'
@@ -105,9 +110,13 @@ def parse_job_name(name):
     task_id = -1
   return task_id, role+'.'+run
 
+def get_session():
+  # in future can add profiles with Session(profile_name=...)
+  return boto3.Session()
 
 def get_parsed_job_name(tags):
-  """Return jobname,task_id for given aws instance tags."""
+  """Return jobname,task_id for given aws instance tags. IE, for
+  0.worker.somerun you get '0' and 'worker.somerun'"""
   return parse_job_name(get_name(tags))
 
 def format_job_name(role, run):
@@ -121,22 +130,48 @@ def format_task_name(task_id, role, run):
 def make_name(name):
   return [{'Key': 'Name', 'Value': name}]
 
-def get_session(profile_name='diux'):
-  return boto3.Session(profile_name=profile_name)
-
 def get_region():
-  # assert 'AWS_DEFAULT_REGION' in os.environ, "Must specify AWS_DEFAULT_REGION environment variable, ie 'export AWS_DEFAULT_REGION=us-west-2'"
-  # return os.environ['AWS_DEFAULT_REGION']
   return get_session().region_name
 
+def get_zone():
+  assert 'ZONE' in os.environ, "Must specify ZONE environment variable"
+  zone = os.environ['ZONE']
+  region = get_region()
+  assert zone.startswith(region), "Availability zone %s must be in default region %s. Default region is taken from environment variable AWS_DEFAULT_REGION, default zone is taken from environment variable ZONE" %(zone, region)
+  return zone
+
+def get_account_number():
+  return str(boto3.client('sts').get_caller_identity()['Account'])
+
+
+# keypairs:
+# keypair name: nexus-yaroslav
+# keypair filename: ~/.nexus/nexus-yaroslav-12395924-us-east-1.pem
+# keypair name: nexus2-yaroslav
+# keypair filename: ~/.nexus/nexus2-yaroslav-12395924-us-east-1.pem
+# https://docs.google.com/document/d/14-zpee6HMRYtEfQ_H_UN9V92bBQOt0pGuRKcEJsxLEA/edit#
+
 def get_keypair_name():
-  """Returns keypair name to use for current region and user."""
+  """Returns keypair name to use for current resource, region and user."""
+  
   assert 'USER' in os.environ, "why isn't USER defined?"
   username = os.environ['USER']
+  assert '-' not in username, "username must not contain -, change $USER"
   validate_aws_name(username) # if this fails, override USER with something nice
   assert len(username)<30     # to avoid exceeding AWS 127 char limit
   return u.get_resource_name() +'-'+username
 
+
+def get_keypair_fn():
+  """Location of .pem file for current keypair"""
+
+  keypair_name = get_keypair_name()
+  account = u.get_account_number()
+  region = u.get_region()
+  fn = f'{PRIVATE_KEY_LOCATION}/{keypair_name}-{account}-{region}.pem'
+  return fn
+
+  
 def create_ec2_client():
   return get_session().client('ec2')
 
@@ -566,18 +601,8 @@ def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
     return instances
 
 
-def get_keypair_fn(keypair_name_or_instance):
-  """Generate canonical location for .pem file for given keypair and
-  default region."""
-  if hasattr(keypair_name_or_instance, "key_name"):
-    keypair_name = keypair_name_or_instance.key_name
-  else:
-    keypair_name = keypair_name_or_instance
-  return "%s/%s-%s.pem" % (os.environ["HOME"], keypair_name,
-                           get_region(),)
-
 def make_ssh_command(instance):
-  keypair_fn = u.get_keypair_fn(instance)
+  keypair_fn = u.get_keypair_fn()
   username = u.get_username(instance)
   ip = instance.public_ip_address
   cmd = "ssh -i %s -o StrictHostKeyChecking=no %s@%s" % (keypair_fn, username,
@@ -587,7 +612,7 @@ def make_ssh_command(instance):
 class SshClient:
   def __init__(self,
                hostname,
-               ssh_key=None,
+               ssh_key_fn=None,
                username=None,
                retry=1):
     """Create ssh connection to host
@@ -597,7 +622,7 @@ class SshClient:
     Args:
       hostname: host name or ip address of the system to connect to.
       retry: number of time to retry.
-      ssh_key: full path to the ssk hey to use to connect.
+      ssh_key_fn: full path to the ssk hey to use to connect.
       username: username to connect with.
 
     returns SSH client connected to host.
@@ -605,7 +630,7 @@ class SshClient:
     import paramiko
 
     print("ssh_to_host %s@%s"%(username, hostname))
-    k = paramiko.RSAKey.from_private_key_file(ssh_key)
+    k = paramiko.RSAKey.from_private_key_file(ssh_key_fn)
 
     self.ssh_client = paramiko.SSHClient()
     self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -686,7 +711,18 @@ def _StreamOutputToStdout(fd):  # todo: pep convention
   
   return t
 
-def lookup_aws_instances(job_name, states=['running', 'stopped']):
+def _parse_key_name(keyname):
+  """keyname => resource, username"""
+  # Relies on resource name not containing -, validated in
+  # validate_resource_name
+  toks = keyname.split('-')
+  if len(toks)!=2:
+    return None, None       # some other keyname not launched by nexus
+  else:
+    return toks
+  
+def lookup_aws_instances(job_name, states=['running', 'stopped'],
+                         instance_type=None):
   """Returns all AWS instances for given AWS job name, like
    simple.worker"""
 
@@ -700,12 +736,27 @@ def lookup_aws_instances(job_name, states=['running', 'stopped']):
     Filters=[{'Name': 'instance-state-name', 'Values': states}])
 
   result = []
+  resource = u.get_resource_name()
+  username = os.environ['USER']
+  
+
+  # look for an existing instance matching job, ignore instances launched
+  # by different user or under different resource name
   for i in instances.all():
     task_id, current_job_name = u.get_parsed_job_name(i.tags)
-    # print("Obtained job name", current_job_name, "task", task_id)
+    if current_job_name != job_name: continue
+    
+    target_resource, target_username = _parse_key_name(i.key_name)
+    if resource != target_resource:
+      print(f"Found {current_job_name} launched by {resource}, ignoring")
+      continue
+    if username != target_username:
+      print(f"Found {current_job_name} launched by {username}, ignoring")
+      continue
 
-    if current_job_name == job_name:
-      result.append(i)
+    if instance_type:
+      assert i.instance_type == instance_type, f"Found existing instance for job {job_name} but different instance type ({i.instance_type}) than requested ({instance_type}), terminate {job_name} first or use new job name."
+    result.append(i)
 
 
   return result
@@ -777,7 +828,7 @@ def install_pdb_handler():
 
 # TODO: merge with u.SshClient
 def ssh_to_host(hostname,
-                ssh_key=None,
+                ssh_key_fn=None,
                 username=None,
                 retry=1):
 
@@ -788,7 +839,7 @@ def ssh_to_host(hostname,
   Args:
     hostname: host name or ip address of the system to connect to.
     retry: number of time to retry.
-    ssh_key: full path to the ssk hey to use to connect.
+    ssh_key_fn: full path to the ssh key to use to connect.
     username: username to connect with.
 
   returns Paramiko SSH client connected to host.
@@ -796,8 +847,8 @@ def ssh_to_host(hostname,
   """
   import paramiko
 
-  print("ssh_to_host %s@%s" % (username, hostname))
-  k = paramiko.RSAKey.from_private_key_file(ssh_key)
+  print(f"ssh -i {ssh_key_fn} {username}@{hostname}")
+  k = paramiko.RSAKey.from_private_key_file(ssh_key_fn)
   
   ssh_client = paramiko.SSHClient()
   ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -921,7 +972,7 @@ def get_instances(fragment, verbose=True, filter_by_key=True):
   vprint("Using region ", region)
   for (ts, instance) in sorted_instance_list:
     if filter_by_key and instance.key_name != u.get_keypair_name():
-      vprint("Got key %s, expected %s, skipping"%(instance.key_name, u.get_keypair_name()))
+      vprint(f"Got key {instance.key_name}, expected {u.get_keypair_name()}")
       continue
     filtered_instance_list.append(instance)
   return filtered_instance_list
@@ -1026,3 +1077,14 @@ def mount_volume(volume, task, mount_directory, device=DEFAULT_UNIX_DEVICE):
     else:
       print(f'Mount successful')
       break
+
+def maybe_create_resources(args):
+  """Use heuristics to decide to possibly create resources"""
+  if hasattr(args, 'create_resources'):
+    do_create_resources = args.create_resources
+  else:
+    do_create_resources = False  # todo: decide more smartly
+
+  if do_create_resources:
+    import create_resources as create_resources_lib
+    create_resources_lib.create_resources()

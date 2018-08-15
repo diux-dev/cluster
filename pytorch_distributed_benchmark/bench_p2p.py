@@ -6,31 +6,29 @@
 import os
 import sys
 import time
-import torch
-import torch.distributed as dist
-from torch.multiprocessing import Process
 
 import argparse
 
 parser = argparse.ArgumentParser(description='launch')
 
 # launcher flags
-parser.add_argument('--zone', type=str, default='', help=("which AWS zone to use leave blank to run locally"))
-parser.add_argument('--placement', action='store_true',
-                    help=("whether to launch instances inside a placement "
-                          "group"))
 parser.add_argument('--backend', type=str, default='tcp',
                     help='which PyTorch communication backend to use')
-parser.add_argument('--role', type=str, default='launcher',
-                    help='launcher or worker')
 parser.add_argument('--name', type=str, default='p2p',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='t2.large',
                      help="type of instance to use")
 parser.add_argument('--data-size-mb', type=int, default=100,
                     help='size of data to send')
-parser.add_argument('--ami', type=str, default='',
-                     help="name of AMI to use ")
+parser.add_argument('--ami-name', type=str,
+                    default='Deep Learning AMI (Ubuntu) Version 12.0',
+                    help="name of AMI to use ")
+parser.add_argument('--run-locally', action='store_true')
+parser.add_argument('--placement', default=0)
+parser.add_argument('--create-resources', type=int, default=1,
+                    help='first-time run, create EFS/VPC/security groups/etc')
+parser.add_argument('--internal-role', type=str, default='launcher',
+                    help='internal flag, launcher or worker')
 
 
 # mpi flags
@@ -46,15 +44,13 @@ parser.add_argument('--master-port', type=int, default=6006,
 
 args = parser.parse_args()
 
-ami_dict_ubuntu = {
-  "us-east-1": "ami-6d720012",
-  "us-east-2": "ami-23c4fb46",
-  "us-west-2": "ami-e580c79d",
-}
-ami_dict = ami_dict_ubuntu
-
 def worker():
   """ Initialize the distributed environment. """
+
+  import torch
+  import torch.distributed as dist
+  from torch.multiprocessing import Process
+
   print("Initializing distributed pytorch")
   os.environ['MASTER_ADDR'] = str(args.master_addr)
   os.environ['MASTER_PORT'] = str(args.master_port)
@@ -82,69 +78,38 @@ def launcher():
   sys.path.append(module_path+'/..')
   import tmux_backend
   import aws_backend
-  import create_resources as create_resources_lib
   import util as u
 
-  if args.placement:
-    placement_group = args.name
-  else:
-    placement_group = ''
-
-
-  if not args.zone:
+  if args.run_locally:
     backend = tmux_backend
-    run = backend.make_run(args.name)
   else:
-    region = u.get_region()
-    print("Using region", region)
-    assert args.zone.startswith(region), "Availability zone %s must be in default region %s. Default region is taken from environment variable AWS_DEFAULT_REGION" %(args.zone, region)
-
-    if args.ami:
-      print("Warning, using provided AMI, make sure that --linux-type argument "
-            "is set correctly")
-      ami = args.ami
-    else:
-      assert region in ami_dict, "Define proper AMI mapping for this region."
-      ami = ami_dict[region]
-
-    create_resources_lib.create_resources()
-    region = u.get_region()
-    backend = aws_backend  
-    run = backend.make_run(args.name, ami=ami, availability_zone=args.zone)
+    u.maybe_create_resources(args)
+    backend = aws_backend
     
-
-
-  job = run.make_job('worker', instance_type=args.instance_type, num_tasks=2,
-                     placement_group=placement_group)
-  
+  run = backend.make_run(args.name, ami_name=args.ami_name)
+  job = run.make_job('worker', instance_type=args.instance_type, num_tasks=2, use_placement_group=args.placement)
   job.wait_until_ready()
 
-  print("Job ready for connection, to connect to most recent task, run the following:")
+  print("Job ready for connection, to connect to most recent task:")
   print("../connect "+args.name)
   print("Alternatively run")
   print(job.connect_instructions)
   print()
-  print()
-  print()
-  print()
 
-  print("Task internal IPs")
-  for task in job.tasks:
-    print(task.ip)
-  
   job.upload(__file__)
-  if args.zone:
+  if not args.run_locally: 
     job.run('killall python || echo failed')  # kill previous run
-    job.run('source activate pytorch_p36')
-
+    
+  
+  job.run('source activate pytorch_p36')
   script_name = os.path.basename(__file__)
-  job.tasks[0].run('python '+script_name+' --role=worker --rank=0 --size=2 --master-addr='+job.tasks[0].ip, sync=False)
-  job.tasks[1].run('python '+script_name+' --role=worker --rank=1 --size=2 --master-addr='+job.tasks[0].ip, sync=False)
+  job.tasks[0].run_async(f'python {script_name} --internal-role=worker --rank=0 --size=2 --master-addr={job.tasks[0].ip} --backend={args.backend}')
+  job.tasks[1].run_async(f'python {script_name} --internal-role=worker --rank=1 --size=2 --master-addr={job.tasks[0].ip} --backend={args.backend}')
 
 def main():
-  if args.role == "launcher":
+  if args.internal_role == "launcher":
     launcher()
-  elif args.role == "worker":
+  elif args.internal_role == "worker":
     worker()
   else:
     assert False, "Unknown role "+FLAGS.role
