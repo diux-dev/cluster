@@ -50,7 +50,7 @@ def validate_aws_name(name):
   assert name == name.encode('ascii').decode('ascii')
   assert aws_regexp.match(name)
 
-resource_regexp=re.compile('^[a-z0-9]*$')
+resource_regexp=re.compile('^[a-z0-9]+$')
 def validate_resource_name(name):
   """Check that name is valid as substitute for DEFAULT_RESOURCE_NAME. Since it's used in unix filenames, be more conservative than AWS requirements, just allow 30 chars, lowercase only."""
   assert len(name)<=30
@@ -63,7 +63,7 @@ def get_resource_name(default=DEFAULT_RESOURCE_NAME):
   if name != default:
     validate_resource_name(name)
   return name
-                           
+
 def get_name(tags_or_instance_or_id):
   """Helper utility to extract name out of tags dictionary or intancce.
       [{'Key': 'Name', 'Value': 'nexus'}] -> 'nexus'
@@ -156,6 +156,7 @@ def get_keypair_name():
   
   assert 'USER' in os.environ, "why isn't USER defined?"
   username = os.environ['USER']
+  assert '-' not in username, "username must not contain -, change $USER"
   validate_aws_name(username) # if this fails, override USER with something nice
   assert len(username)<30     # to avoid exceeding AWS 127 char limit
   return u.get_resource_name() +'-'+username
@@ -611,7 +612,7 @@ def make_ssh_command(instance):
 class SshClient:
   def __init__(self,
                hostname,
-               ssh_key=None,
+               ssh_key_fn=None,
                username=None,
                retry=1):
     """Create ssh connection to host
@@ -621,7 +622,7 @@ class SshClient:
     Args:
       hostname: host name or ip address of the system to connect to.
       retry: number of time to retry.
-      ssh_key: full path to the ssk hey to use to connect.
+      ssh_key_fn: full path to the ssk hey to use to connect.
       username: username to connect with.
 
     returns SSH client connected to host.
@@ -629,7 +630,7 @@ class SshClient:
     import paramiko
 
     print("ssh_to_host %s@%s"%(username, hostname))
-    k = paramiko.RSAKey.from_private_key_file(ssh_key)
+    k = paramiko.RSAKey.from_private_key_file(ssh_key_fn)
 
     self.ssh_client = paramiko.SSHClient()
     self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -710,6 +711,16 @@ def _StreamOutputToStdout(fd):  # todo: pep convention
   
   return t
 
+def _parse_key_name(keyname):
+  """keyname => resource, username"""
+  # Relies on resource name not containing -, validated in
+  # validate_resource_name
+  toks = keyname.split('-')
+  if len(toks)!=2:
+    return None, None       # some other keyname not launched by nexus
+  else:
+    return toks
+  
 def lookup_aws_instances(job_name, states=['running', 'stopped'],
                          instance_type=None):
   """Returns all AWS instances for given AWS job name, like
@@ -725,14 +736,27 @@ def lookup_aws_instances(job_name, states=['running', 'stopped'],
     Filters=[{'Name': 'instance-state-name', 'Values': states}])
 
   result = []
+  resource = u.get_resource_name()
+  username = os.environ['USER']
+  
+
+  # look for an existing instance matching job, ignore instances launched
+  # by different user or under different resource name
   for i in instances.all():
     task_id, current_job_name = u.get_parsed_job_name(i.tags)
-    # print("Obtained job name", current_job_name, "task", task_id)
+    if current_job_name != job_name: continue
+    
+    target_resource, target_username = _parse_key_name(i.key_name)
+    if resource != target_resource:
+      print(f"Found {current_job_name} launched by {resource}, ignoring")
+      continue
+    if username != target_username:
+      print(f"Found {current_job_name} launched by {username}, ignoring")
+      continue
 
-    if current_job_name == job_name:
-      if instance_type:
-        assert i.instance_type == instance_type, f"Found existing instance for job {job_name} but different instance type ({i.instance_type}) than requested ({instance_type}), terminate {job_name} first or use new job name."
-      result.append(i)
+    if instance_type:
+      assert i.instance_type == instance_type, f"Found existing instance for job {job_name} but different instance type ({i.instance_type}) than requested ({instance_type}), terminate {job_name} first or use new job name."
+    result.append(i)
 
 
   return result
@@ -804,7 +828,7 @@ def install_pdb_handler():
 
 # TODO: merge with u.SshClient
 def ssh_to_host(hostname,
-                ssh_key=None,
+                ssh_key_fn=None,
                 username=None,
                 retry=1):
 
@@ -815,7 +839,7 @@ def ssh_to_host(hostname,
   Args:
     hostname: host name or ip address of the system to connect to.
     retry: number of time to retry.
-    ssh_key: full path to the ssk hey to use to connect.
+    ssh_key_fn: full path to the ssh key to use to connect.
     username: username to connect with.
 
   returns Paramiko SSH client connected to host.
@@ -823,8 +847,8 @@ def ssh_to_host(hostname,
   """
   import paramiko
 
-  print("ssh_to_host %s@%s" % (username, hostname))
-  k = paramiko.RSAKey.from_private_key_file(ssh_key)
+  print(f"ssh -i {ssh_key_fn} {username}@{hostname}")
+  k = paramiko.RSAKey.from_private_key_file(ssh_key_fn)
   
   ssh_client = paramiko.SSHClient()
   ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
