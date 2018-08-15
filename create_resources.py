@@ -27,6 +27,7 @@ KEYPAIR_NAME=u.get_keypair_name()
 EFS_NAME=u.get_resource_name()
 
 PUBLIC_TCP_PORTS = [
+  22, # ssh 
   # ipython notebook ports
   8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895, 8896, 8897,
   # redis port
@@ -34,6 +35,8 @@ PUBLIC_TCP_PORTS = [
    # tensorboard ports
   6006, 6007, 6008, 6009, 6010, 6011, 6012, 6013, 6014, 6015,
 ]
+
+PUBLIC_UDP_PORTS = [ 60000+i for i in range(100)] # mosh ports
 
 # region is taken from environment variable AWS_DEFAULT_REGION
 # assert 'AWS_DEFAULT_REGION' in os.environ
@@ -141,10 +144,17 @@ def network_setup():
 
     # open public ports
     # always include SSH port which is required for basic functionality
-    for port in PUBLIC_TCP_PORTS+[22]:
+    assert 22 in PUBLIC_TCP_PORTS, "Must enable SSH access"
+    for port in PUBLIC_TCP_PORTS:
       response = security_group.authorize_ingress(IpProtocol="tcp",
                                                   CidrIp="0.0.0.0/0",
-                                                  FromPort=port,ToPort=port)
+                                                  FromPort=port, ToPort=port)
+      assert u.is_good_response(response)
+
+    for port in PUBLIC_UDP_PORTS:
+      response = security_group.authorize_ingress(IpProtocol="udp",
+                                                  CidrIp="0.0.0.0/0",
+                                                  FromPort=port, ToPort=port)
       assert u.is_good_response(response)
 
     # allow ingress within security group
