@@ -21,10 +21,9 @@ from collections import OrderedDict
 
 import util as u
 
-parser = argparse.ArgumentParser(description='launch simple')
-parser.add_argument('--instance_type', type=str, default='t2.micro',
-                     help="type of instance")
+parser = argparse.ArgumentParser()
 args = parser.parse_args()
+
 DEFAULT_NAME=u.get_resource_name()
 VPC_NAME=u.get_resource_name()
 SECURITY_GROUP_NAME=u.get_resource_name()
@@ -33,7 +32,7 @@ KEYPAIR_NAME=u.get_keypair_name()
 EFS_NAME=u.get_resource_name()
 
 
-def main():
+def delete_resources():
   # TODO: also bring down all the instances and wait for them to come down
   region = os.environ['AWS_DEFAULT_REGION']
   if DEFAULT_NAME == 'nexus':
@@ -41,6 +40,7 @@ def main():
     sys.exit()
     
   print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
+  print("Make sure all instances are terminated or this will fail.")
   existing_vpcs = u.get_vpc_dict()
   client = u.create_ec2_client()
   ec2 = u.create_ec2_resource()
@@ -144,4 +144,4 @@ def main():
 
 
 if __name__=='__main__':
-  main()
+  delete_resources()

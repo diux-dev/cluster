@@ -281,5 +281,5 @@ def create_resources():
       print("Giving up.")
 
 if __name__=='__main__':
-  print("Call create_resources_main.py instead")
+  create_resources()
 
