@@ -108,7 +108,7 @@ quick_oom = [
 lr = 1.0
 xar_throughput = [
   '--phases', [
-    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':0,  'sz':224, 'bs':192},
     {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     {'ep':(5,100), 'lr': lr}
   ],
