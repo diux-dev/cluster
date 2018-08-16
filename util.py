@@ -114,10 +114,27 @@ def get_session():
   # in future can add profiles with Session(profile_name=...)
   return boto3.Session()
 
-def get_parsed_job_name(tags):
+def get_parsed_job_name(tags_or_instance):
   """Return jobname,task_id for given aws instance tags. IE, for
   0.worker.somerun you get '0' and 'worker.somerun'"""
+  if hasattr(tags_or_instance, 'tags'):
+    tags = retrieve_tags_with_retries(tags_or_instance)
+  else:
+    tags = tags_or_instance
   return parse_job_name(get_name(tags))
+
+def retrieve_tags_with_retries(instance):
+  WAIT_INTERVAL_SEC=1  # how long to use for wait period
+  WAIT_TIMEOUT_SEC=20 # timeout after this many seconds
+  while True:
+    try:
+      tags = instance.tags
+      break
+    except Exception as e:
+      print("instance.tags failed with %s, retrying in %d seconds"%(str(e),
+                                                                    WAIT_INTERVAL_SEC))
+      time.sleep(WAIT_INTERVAL_SEC)
+  return tags
 
 def format_job_name(role, run):
   return "{}.{}".format(role, run)
