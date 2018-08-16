@@ -503,6 +503,7 @@ def main():
         log_tb('losses/test_acc', val_top1)
         print('\t\t'.join(metrics))
 
+    os.system('sudo shutdown -h -P 0') # shutdown after 0 minutes
 
 if __name__ == '__main__': 
     with warnings.catch_warnings():
