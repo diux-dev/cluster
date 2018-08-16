@@ -29,7 +29,7 @@ parser.add_argument('--force-delete-efs', action='store_true',
 
 args = parser.parse_args()
 
-DEFAULT_NAME=u.get_resource_name()
+EFS_NAME=u.get_resource_name()
 VPC_NAME=u.get_resource_name()
 SECURITY_GROUP_NAME=u.get_resource_name()
 ROUTE_TABLE_NAME=u.get_resource_name()
@@ -44,12 +44,12 @@ def response_type(response):
 
 def delete_efs():
   efss = u.get_efs_dict()
-  efs_id = efss.get(DEFAULT_NAME, '')
+  efs_id = efss.get(EFS_NAME, '')
   efs_client = u.create_efs_client()
   if efs_id:
     try:
       # delete mount targets first
-      print("About to delete %s (%s)" % (efs_id, DEFAULT_NAME))
+      print("About to delete %s (%s)" % (efs_id, EFS_NAME))
       response = efs_client.describe_mount_targets(FileSystemId=efs_id)
       assert u.is_good_response(response)
       for mount_response in response['MountTargets']:
@@ -64,7 +64,7 @@ def delete_efs():
         print(response_type(response))
 
 
-      sys.stdout.write('Deleting EFS %s (%s)... ' %(efs_id, DEFAULT_NAME))
+      sys.stdout.write('Deleting EFS %s (%s)... ' %(efs_id, EFS_NAME))
       sys.stdout.flush()
       u.delete_efs_id(efs_id)
 
@@ -126,11 +126,11 @@ def delete_network():
   
 def delete_keypair():
   keypairs = u.get_keypair_dict()
-  keypair = keypairs.get(DEFAULT_NAME, '')
+  keypair = keypairs.get(KEYPAIR_NAME, '')
   if keypair:
     try:
       sys.stdout.write("Deleting keypair %s (%s) ... " % (keypair.key_name,
-                                                     DEFAULT_NAME))
+                                                          KEYPAIR_NAME))
       sys.stdout.write(response_type(keypair.delete())+'\n')
     except Exception as e:
       sys.stdout.write('failed\n')
@@ -144,18 +144,19 @@ def delete_keypair():
 def delete_resources():
   # TODO: also bring down all the instances and wait for them to come down
   region = os.environ['AWS_DEFAULT_REGION']
-    
-  print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
-  print("Make sure all instances are terminated or this will fail.")
+
+  resource = u.get_resource_name()
+  print("Deleting %s resources in region %s"%(resource, region,))
+  print("Make sure all connected instances are terminated or this will fail.")
   
   if 'efs' in args.kind or 'all' in args.kind:
-    if DEFAULT_NAME == 'nexus' and not args.force_delete_efs:
+    if EFS_NAME == u.DEFAULT_RESOURCE_NAME and not args.force_delete_efs:
+      # this is default EFS, likely has stuff, require extra flag to delete it
       print("Nexus EFS has useful stuff in it, not deleting it")
     else:
       delete_efs()
   if 'network' in args.kind or 'all' in args.kind:
     delete_network()
-
   if 'keypair' in args.kind or 'all' in args.kind:
     delete_keypair()
 
