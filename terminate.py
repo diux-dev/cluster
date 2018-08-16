@@ -28,8 +28,6 @@ parser.add_argument('--limit-to-key', type=int, default=1,
                           "(determined by examining instance private_key name"))
 parser.add_argument('--skip-stopped', type=int, default=0,
                      help="don't terminate any instances that are stopped")
-parser.add_argument('--skip-tensorboard', type=int, default=1,
-                     help="don't terminate tensorboard jobs")
 parser.add_argument('--soft', type=int, default=0,
                      help="use 'soft terminate', ie stop")
 parser.add_argument('-d', '--delay', type=int, default=0,
@@ -37,6 +35,8 @@ parser.add_argument('-d', '--delay', type=int, default=0,
 # todo: add -n version
 parser.add_argument('-n', '--name', type=str, default="",
                      help="name of tasks to kill, can be fragment of name")
+parser.add_argument('-a', '--all', action='store_true', default="",
+                     help="kill all instances, even tensorboard")
 parser.add_argument('-y', '--yes', action='store_true', default="",
                      help="skip confirmation")
 parser.add_argument('name2', nargs='*')
@@ -73,7 +73,7 @@ def main():
     state = i.state['Name']
     if not fragment in name:
       continue
-    if args.skip_tensorboard and '.tb.' in name:
+    if not args.all and '.tb.' in name:
       continue
     if args.skip_stopped and state == 'stopped':
       continue
@@ -95,7 +95,7 @@ def main():
     pp(valid_names)
     print("No running instances found for: Name '%s', key '%s'"%
           (fragment, USER_KEY_NAME))
-    if args.skip_tensorboard:
+    if not args.all:
       print("skipping tensorboard")
     return
 
