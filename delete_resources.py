@@ -24,6 +24,9 @@ import util as u
 parser = argparse.ArgumentParser()
 parser.add_argument('--kind', type=str, default='all',
                     help=("which resources to delete, all/network/keypair/efs"))
+parser.add_argument('--force-delete-efs', action='store_true',
+                    help="force deleting main EFS")
+
 args = parser.parse_args()
 
 DEFAULT_NAME=u.get_resource_name()
@@ -146,11 +149,10 @@ def delete_resources():
   print("Make sure all instances are terminated or this will fail.")
   
   if 'efs' in args.kind or 'all' in args.kind:
-    if DEFAULT_NAME == 'nexus':
+    if DEFAULT_NAME == 'nexus' and not args.force_delete_efs:
       print("Nexus EFS has useful stuff in it, not deleting it")
     else:
-      # delete_efs()
-      pass
+      delete_efs()
   if 'network' in args.kind or 'all' in args.kind:
     delete_network()
 
