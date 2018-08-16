@@ -110,6 +110,8 @@ def get_parser():
     parser.add_argument('--short-epoch', action='store_true',
                         help='make epochs short (for debugging)')
     parser.add_argument('--prefetch', default=0, type=int)
+    parser.add_argument('--auto-shutdown', default=1, type=int,
+                        help='shutdown instance at the end of training')
     return parser
 
 cudnn.benchmark = True
@@ -370,6 +372,9 @@ def main():
 
     event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
     event_writer.close()
+    if args.auto_shutdown:
+      os.system('sudo shutdown -h now')  # stop the instance
+
 
     
 def str_to_num_array(argstr, num_type=int):
