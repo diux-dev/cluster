@@ -38,7 +38,7 @@ class Run(backend.Run):
   
   def __init__(self, name, **kwargs):
     self.name = name
-    u.validate_name(name)
+    u.validate_runname(name)
     
     self.logdir_ = None   # set during setup_logdir()
     self.kwargs = kwargs
@@ -325,9 +325,9 @@ class Task(backend.Task):
     if self.linux_type == 'amazon':
       self._run_ssh('sudo yum install tmux -y')
     self._run_ssh('tmux kill-session -t '+self._tmux_session_name)
-    self._run_ssh('tmux set-option -g history-limit 50000 \; new-session -s %s -n 0 -d'%(self._tmux_session_name,))
+    self._run_ssh('tmux set-option -g history-limit 50000 \; set-option -g mouse on \; new-session -s %s -n 0 -d'%(self._tmux_session_name,))
     self._run_command_available = True
-
+    
   def _mount_efs(self):
     self.log("Mounting EFS")
     region = u.get_region()
