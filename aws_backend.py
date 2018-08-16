@@ -54,7 +54,9 @@ class Run(backend.Run):
   # move everything into kwargs
   def make_job(self, role_name, num_tasks=1, skip_existing_job_validation=False, **kwargs):
     """skip_existing_job_validation: if True, doesn't check that existing job on server has same number of tasks as requested."""
-    
+
+    u.maybe_create_resources()
+
     assert num_tasks>=0
 
     # TODO: document launch parameters
@@ -79,6 +81,7 @@ class Run(backend.Run):
     install_script = kwargs.get('install_script','')
     skip_efs_mount = kwargs.get('skip_efs_mount', False)
     linux_type = kwargs.get('linux_type', 'ubuntu')
+    # TODO: use heuristics to tell linux type from AMI name
     user_data = kwargs.get('user_data', '')
     ebs = kwargs.get('ebs', '')
     use_spot = kwargs.get('use_spot', False)
