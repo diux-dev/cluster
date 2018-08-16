@@ -22,6 +22,8 @@ from collections import OrderedDict
 import util as u
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--kind', type=str, default='all',
+                    help=("which resources to delete, all/network/keypair/efs"))
 args = parser.parse_args()
 
 DEFAULT_NAME=u.get_resource_name()
@@ -31,24 +33,13 @@ ROUTE_TABLE_NAME=u.get_resource_name()
 KEYPAIR_NAME=u.get_keypair_name()
 EFS_NAME=u.get_resource_name()
 
+client = u.create_ec2_client()
+ec2 = u.create_ec2_resource()
 
-def delete_resources():
-  # TODO: also bring down all the instances and wait for them to come down
-  region = os.environ['AWS_DEFAULT_REGION']
-  if DEFAULT_NAME == 'nexus':
-    print("Nexus resources are protected, don't delete them")
-    sys.exit()
-    
-  print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
-  print("Make sure all instances are terminated or this will fail.")
-  existing_vpcs = u.get_vpc_dict()
-  client = u.create_ec2_client()
-  ec2 = u.create_ec2_resource()
-  
-  def response_type(response):
-    return 'ok' if u.is_good_response(response) else 'failed'
+def response_type(response):
+  return 'ok' if u.is_good_response(response) else 'failed'
 
-  # delete EFS
+def delete_efs():
   efss = u.get_efs_dict()
   efs_id = efss.get(DEFAULT_NAME, '')
   efs_client = u.create_efs_client()
@@ -78,6 +69,8 @@ def delete_resources():
       sys.stdout.write('failed\n')
       u.loge(str(e)+'\n')
 
+def delete_network():
+  existing_vpcs = u.get_vpc_dict()
   if VPC_NAME in existing_vpcs:
     vpc = ec2.Vpc(existing_vpcs[VPC_NAME].id)
     print("Deleting VPC %s (%s) subresources:"%(VPC_NAME, vpc.id))
@@ -122,9 +115,13 @@ def delete_resources():
         u.loge(str(e)+'\n')
 
     sys.stdout.write("Deleting VPC %s ... " % (vpc.id))
-    sys.stdout.write(response_type(vpc.delete())+'\n')
+    try:
+      sys.stdout.write(response_type(vpc.delete())+'\n')
+    except Exception as e:
+      sys.stdout.write('failed\n')
+      u.loge(str(e)+'\n')
   
-  # delete keypair
+def delete_keypair():
   keypairs = u.get_keypair_dict()
   keypair = keypairs.get(DEFAULT_NAME, '')
   if keypair:
@@ -140,7 +137,25 @@ def delete_resources():
   if os.path.exists(keypair_fn):
     print("Deleting local keypair file %s" % (keypair_fn,))
     os.system('rm -f '+keypair_fn)
+
+def delete_resources():
+  # TODO: also bring down all the instances and wait for them to come down
+  region = os.environ['AWS_DEFAULT_REGION']
     
+  print("Deleting %s resources in region %s"%(DEFAULT_NAME, region,))
+  print("Make sure all instances are terminated or this will fail.")
+  
+  if 'efs' in args.kind or 'all' in args.kind:
+    if DEFAULT_NAME == 'nexus':
+      print("Nexus EFS has useful stuff in it, not deleting it")
+    else:
+      # delete_efs()
+      pass
+  if 'network' in args.kind or 'all' in args.kind:
+    delete_network()
+
+  if 'keypair' in args.kind or 'all' in args.kind:
+    delete_keypair()
 
 
 if __name__=='__main__':

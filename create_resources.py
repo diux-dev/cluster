@@ -26,17 +26,17 @@ ROUTE_TABLE_NAME=u.get_resource_name()
 KEYPAIR_NAME=u.get_keypair_name()
 EFS_NAME=u.get_resource_name()
 
-PUBLIC_TCP_PORTS = [
+PUBLIC_TCP_RANGES = [
   22, # ssh 
   # ipython notebook ports
-  8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895, 8896, 8897,
+  (8888, 8899),
   # redis port
   6379,              
    # tensorboard ports
-  6006, 6007, 6008, 6009, 6010, 6011, 6012, 6013, 6014, 6015,
+  (6006, 6016)
 ]
 
-PUBLIC_UDP_PORTS = [ 60000+i for i in range(100)] # mosh ports
+PUBLIC_UDP_RANGES = [(60000,60100)] # mosh ports
 
 # region is taken from environment variable AWS_DEFAULT_REGION
 # assert 'AWS_DEFAULT_REGION' in os.environ
@@ -50,7 +50,8 @@ def network_setup():
   internet access, returns vpc, subnet, security_group"""
 
   # from https://gist.github.com/nguyendv/8cfd92fc8ed32ebb78e366f44c2daea6
-  
+
+  ec2 = u.create_ec2_resource()
   existing_vpcs = u.get_vpc_dict()
   zones = u.get_available_zones()
   if VPC_NAME in existing_vpcs:
@@ -61,7 +62,6 @@ def network_setup():
     
   else:
     print("Creating VPC "+VPC_NAME)
-    ec2 = u.create_ec2_resource()
     vpc = ec2.create_vpc(CidrBlock='192.168.0.0/16')
 
     # enable DNS on the VPC
@@ -73,6 +73,11 @@ def network_setup():
     vpc.create_tags(Tags=u.make_name(VPC_NAME))
     vpc.wait_until_available()
 
+  gateways = u.get_gateway_dict(vpc)
+  if DEFAULT_NAME in gateways:
+    print("Reusing gateways "+DEFAULT_NAME)
+  else:
+    print("Creating gateway "+DEFAULT_NAME)
     ig = ec2.create_internet_gateway()
     ig.attach_to_vpc(VpcId=vpc.id)
     ig.create_tags(Tags=u.make_name(DEFAULT_NAME))
@@ -144,18 +149,33 @@ def network_setup():
 
     # open public ports
     # always include SSH port which is required for basic functionality
-    assert 22 in PUBLIC_TCP_PORTS, "Must enable SSH access"
-    for port in PUBLIC_TCP_PORTS:
+    assert 22 in PUBLIC_TCP_RANGES, "Must enable SSH access"
+    for port in PUBLIC_TCP_RANGES:
+      if u.is_list_or_tuple(port):
+        assert len(port) == 2
+        from_port, to_port = port
+      else:
+        from_port, to_port = port, port
+        
       response = security_group.authorize_ingress(IpProtocol="tcp",
                                                   CidrIp="0.0.0.0/0",
-                                                  FromPort=port, ToPort=port)
+                                                  FromPort=from_port,
+                                                  ToPort=to_port)
       assert u.is_good_response(response)
 
-    for port in PUBLIC_UDP_PORTS:
+    for port in PUBLIC_UDP_RANGES:
+      if u.is_list_or_tuple(port):
+        assert len(port) == 2
+        from_port, to_port = port
+      else:
+        from_port, to_port = port, port
+        
       response = security_group.authorize_ingress(IpProtocol="udp",
                                                   CidrIp="0.0.0.0/0",
-                                                  FromPort=port, ToPort=port)
+                                                  FromPort=from_port,
+                                                  ToPort=to_port)
       assert u.is_good_response(response)
+
 
     # allow ingress within security group
     # Authorizing ingress doesn't work with names in a non-default VPC,
