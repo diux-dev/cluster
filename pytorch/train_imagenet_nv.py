@@ -110,8 +110,16 @@ def get_parser():
     parser.add_argument('--short-epoch', action='store_true',
                         help='make epochs short (for debugging)')
     parser.add_argument('--prefetch', default=0, type=int)
-    parser.add_argument('--auto-shutdown', default=1, type=int,
+    parser.add_argument('--auto-shutdown-success', default=1, type=int,
                         help='shutdown instance at the end of training')
+    parser.add_argument('--auto-shutdown-success-delay-mins', default=0,
+                        type=int,
+                        help='how long to wait until shutting down on success')
+    parser.add_argument('--auto-shutdown-failure', default=1, type=int,
+                        help='shutdown instance if error was encountered')
+    parser.add_argument('--auto-shutdown-failure-delay-mins', default=120,
+                        type=int,
+                        help='how long to wait before shutting down on error')
     return parser
 
 cudnn.benchmark = True
@@ -372,8 +380,8 @@ def main():
 
     event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
     event_writer.close()
-    if args.auto_shutdown:
-      os.system('sudo shutdown -h now')  # stop the instance
+    if args.auto_shutdown_success:
+      os.system(f'sudo shutdown -h -P +{args.auto_shutdown_success_delay_mins}')
 
 
     
@@ -675,7 +683,17 @@ def sum_tensor(tensor):
 
 if __name__ == '__main__':
     print('hello world')
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=UserWarning)
-        main()
+    try:
+      with warnings.catch_warnings():
+          warnings.simplefilter("ignore", category=UserWarning)
+          main()
+    except Exception as e:
+      exc_type, exc_value, exc_traceback = sys.exc_info()
+      import traceback
+      traceback.print_tb(exc_traceback, file=sys.stdout)
+
+      # in case of exception, wait 2 hours before shutting down
+      if args.auto_shutdown_failure:
+        os.system(f'sudo shutdown -h -P +{args.auto_shutdown_failure_delay_mins}')
+
 
