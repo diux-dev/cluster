@@ -134,6 +134,10 @@ def get_region():
   return get_session().region_name
 
 def get_zone():
+  assert 'ZONE' in os.environ
+  return os.environ['ZONE']
+
+def get_zone():
   assert 'ZONE' in os.environ, "Must specify ZONE environment variable"
   zone = os.environ['ZONE']
   region = get_region()
@@ -226,6 +230,10 @@ def get_vpc_dict():
 
   return result
 
+def get_gateway_dict(vpc):
+  """Returns dictionary of named gateways for given VPC {name: gateway}"""
+  return {u.get_name(gateway): gateway for
+          gateway in vpc.internet_gateways.all()}
 
 def get_security_group_dict():
   """Returns dictionary of named security groups {name: securitygroup}."""
@@ -422,12 +430,19 @@ def current_timestamp():
   return full_time_str
 
 
+PRINTED_ERROR_INFO = False
+ERROR_LOG_LOCATION = "/tmp/nexus_errors"
 def loge(message, args=None):
   """Log error."""
+  global PRINTED_ERROR_INFO
+  if not PRINTED_ERROR_INFO:
+    print("Errors encounted, logging to ", ERROR_LOG_LOCATION)
+    PRINTED_ERROR_INFO = True
+    
   ts = current_timestamp()
   if args:
     message = message % args
-  open("/tmp/nexus_errors", "a").write("%s %s\n"%(ts, message))
+  open(ERROR_LOG_LOCATION, "a").write("%s %s\n"%(ts, message))
 
 class timeit:
   """Decorator to measure length of time spent in the block in millis and log
@@ -1078,13 +1093,26 @@ def mount_volume(volume, task, mount_directory, device=DEFAULT_UNIX_DEVICE):
       print(f'Mount successful')
       break
 
-def maybe_create_resources(args):
+def maybe_create_resources():
   """Use heuristics to decide to possibly create resources"""
-  if hasattr(args, 'create_resources'):
-    do_create_resources = args.create_resources
-  else:
-    do_create_resources = False  # todo: decide more smartly
 
-  if do_create_resources:
+  def do_create_resources():
+    """Check if gateway, keypair, vpc exist."""
+    resource = u.get_resource_name()
+    if u.get_keypair_name() not in u.get_keypair_dict():
+      return True
+    vpcs = u.get_vpc_dict()
+    if resource not in vpcs:
+      return True
+    vpc = vpcs[resource]
+    gateways = u.get_gateway_dict(vpc)
+    if resource not in gateways:
+      return True
+    return False
+  
+  if do_create_resources():
     import create_resources as create_resources_lib
     create_resources_lib.create_resources()
+
+def is_list_or_tuple(value):
+  return isinstance(value, list) or isinstance(value, tuple)
