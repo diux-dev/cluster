@@ -57,6 +57,25 @@ def validate_resource_name(name):
   assert resource_regexp.match(name)
   validate_aws_name(name)
 
+
+def validate_run_name(name):
+  """Name used for run. Used as part of instance name, tmux session name."""
+  validate_resource_name(name)
+  
+def deprecated_validate_name(name):
+  """Checks that name matches AWS requirements."""
+  
+  # run name is used in tmux session name and instance name, so must restrict
+  # run name to also be valid part of tmux/instance names
+  # -Maximum number of tags per resource—50
+  # -Maximum key length—127 Unicode characters in UTF-8
+  # -Maximum value length—255 Unicode characters in UTF-8
+  # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
+  import re
+  assert len(name)<30
+  assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
+
+
 def get_resource_name(default=DEFAULT_RESOURCE_NAME):
   """Global default name for singleton AWS resources, see DEFAULT_RESOURCE_NAME."""
   name =os.environ.get('RESOURCE_NAME', default)
@@ -1029,19 +1048,6 @@ def random_id(N=5):
   """Random id to use for AWS identifiers."""
   #  https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits-in-python
   return ''.join(random.choices(string.ascii_lowercase + string.digits, k=N))
-
-def validate_name(name):
-  """Checks that name matches AWS requirements."""
-  
-  # run name is used in tmux session name and instance name, so must restrict
-  # run name to also be valid part of tmux/instance names
-  # -Maximum number of tags per resource—50
-  # -Maximum key length—127 Unicode characters in UTF-8
-  # -Maximum value length—255 Unicode characters in UTF-8
-  # letters, spaces, and numbers representable in UTF-8, plus the following special characters: + - = . _ : / @.
-  import re
-  assert len(name)<30
-  assert re.match("[-+=._:\/@a-zA-Z0-9]+", name)
 
 
 # no_op method/object to accept every signature

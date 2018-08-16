@@ -100,9 +100,11 @@ def launch_jupyter(job, sess='jupyter'):
 
   run_tmux_async(sess, 'source activate tensorflow_p36') # for TensorBoard/events
   run_tmux_async(sess, 'conda install pytorch torchvision -c pytorch -y')
-  run_tmux_async(sess, 'conda install -c conda-forge jupyter_nbextensions_configurator -y')
-  run_tmux_async(sess, 'conda install -c conda-forge jupyter_contrib_nbextensions -y')
-  run_tmux_async(sess, 'conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
+
+  # Commands below add TOC extension, but take few minutes to install
+  # conda solving environment is slow, disable
+  #  run_tmux_async(sess, 'conda install -c conda-forge jupyter_nbextensions_configurator -y')
+  #  run_tmux_async(sess, 'conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
   job.upload('../jupyter_notebook_config.py') # 2 step upload since don't know ~
   run_tmux_async(sess, 'cp jupyter_notebook_config.py ~/.jupyter')
   run_tmux_async(sess, 'mkdir -p /efs/notebooks')

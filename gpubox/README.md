@@ -2,6 +2,7 @@
 
 Steps: 1) install Anaconda environment 2) setup AWS credentials 3) launch
 
+Prerequisites: install mosh
 
 ## Step 1: Anaconda
 

@@ -33,7 +33,7 @@ class Run(backend.Run):
     self.install_script = install_script
     self.jobs = []
     self.logdir = f'{backend.LOGDIR_PREFIX}/{self.name}'
-    u.validate_name(name)
+    u.validate_run_name(name)
 
   # TODO: rename job_name to role_name
   def make_job(self, job_name, num_tasks=1, install_script='', **kwargs):
