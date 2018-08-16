@@ -29,8 +29,6 @@ parser.add_argument('--name', type=str, default='pytorch',
                      help="name of the current run")
 parser.add_argument('--instance-type', type=str, default='p3.2xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='us-west-2a',
-                    help='which availability zone to use')
 parser.add_argument('--linux-type', type=str, default='ubuntu',
                     help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
@@ -50,6 +48,7 @@ args = parser.parse_args()
 
 gpu_count = defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks):
+  module_path=os.path.dirname(os.path.abspath(__file__))
   job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, placement_group=args.placement_group, use_spot=args.spot)
   job.wait_until_ready()
 
@@ -61,9 +60,9 @@ def create_job(run, job_name, num_tasks):
   job.run('killall python || echo pass')  # kill previous run
 
   # upload files
-  job.upload('resnet.py')
-  job.upload('train_cifar10.py')
-  job.upload('fp16util.py')
+  job.upload(f'{module_path}/resnet.py')
+  job.upload(f'{module_path}/train_cifar10.py')
+  job.upload(f'{module_path}/fp16util.py')
 
   # setup env
   job.run('source activate pytorch_p36')
@@ -115,7 +114,6 @@ def launch_jupyter(job, sess='jupyter'):
 
 def main():
   run = aws_backend.make_run(args.name, ami_name=args.ami_name,
-                             availability_zone=args.zone,
                              linux_type=args.linux_type,
                              skip_efs_mount=args.skip_efs_mount)
   create_job(run, 'worker', args.num_tasks)

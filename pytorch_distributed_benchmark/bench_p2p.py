@@ -25,8 +25,6 @@ parser.add_argument('--ami-name', type=str,
                     help="name of AMI to use ")
 parser.add_argument('--run-locally', action='store_true')
 parser.add_argument('--placement', default=0)
-parser.add_argument('--create-resources', type=int, default=1,
-                    help='first-time run, create EFS/VPC/security groups/etc')
 parser.add_argument('--internal-role', type=str, default='launcher',
                     help='internal flag, launcher or worker')
 
@@ -83,7 +81,7 @@ def launcher():
   if args.run_locally:
     backend = tmux_backend
   else:
-    u.maybe_create_resources(args)
+    u.maybe_create_resources()
     backend = aws_backend
     
   run = backend.make_run(args.name, ami_name=args.ami_name)
