@@ -39,20 +39,12 @@ import launch_utils as launch_utils_lib
 u.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--ami', type=str, default='',
-                     help="id of AMI to use (deprecated, use ami-name)")
 parser.add_argument('--ami-name', type=str,
                     default='-1',
-                    #default='pytorch.imagenet.source.v5',
                     help="name of AMI to use")
-parser.add_argument('--placement-group', type=str, default='',
-                     help=("name of placement group to use (depecated, name "
-                           "is automatically picked"))
-parser.add_argument('--use-placement-group', type=int, default=1,
-                     help="whether to use placement group")
 parser.add_argument('--spot', action='store_true', 
                     help='launch using spot requests')
-parser.add_argument('--name', type=str, default='pytorch',
+parser.add_argument('--name', type=str, default='imagenet',
                      help=("name of the current run, this determines placement "
                            "group name, instance names and EFS logging "
                            "directory."))
@@ -63,8 +55,6 @@ parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
 parser.add_argument('--zone', type=str, default='',
                     help=('which availability zone to use (can also set '
                           'through env var "zone"'))
-parser.add_argument('--linux-type', type=str, default='ubuntu',
-                    help='which linux to use: ubuntu or amazon')
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 parser.add_argument('--num-tasks', type=int, default=-1,
@@ -93,6 +83,21 @@ quick_oom = [
     {'ep':0,  'sz':224, 'bs':256},
     {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     {'ep':(5,100), 'lr': lr}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+  '--skip-eval',
+  '--prefetch', 0,
+  '--short-epoch'
+]
+
+# fast run to check shutdown behavior
+quick_run = [
+  '--phases', [
+    {'ep':0,  'sz':224, 'bs':128},
   ],
   '--init-bn0',
   '--no-bn-wd',
@@ -470,18 +475,8 @@ def main():
   num_tasks = _extract_num_tasks(params)
   env_name = _extract_env_name(params)
   
-  if not args.zone:
-    assert 'zone' in os.environ, 'must specify --zone or $zone'
-    args.zone = os.environ['zone']
-  else:
-    print("Setting global zone to", args.zone)
-    os.environ['zone'] = args.zone  # global zone used by volume attachment
-    
-
-  run = aws_backend.make_run(args.name, ami=args.ami,
+  run = aws_backend.make_run(args.name,
                              ami_name=ami_name,
-                             availability_zone=args.zone,
-                             linux_type=args.linux_type,
                              skip_efs_mount=args.skip_efs_mount)
   
   job = create_job(run, 'worker', num_tasks, env_name)
@@ -501,18 +496,8 @@ def create_job(run, job_name, num_tasks, env_name):
       install_script = f.read()
   
   ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
-  if args.placement_group:
-    print("Warning, placement_group is deprecated, use --use-placement-group 1 for automatically picked placement group (same as run name).")
-    placement_group_name = args.placement_group
-  # use run+randomly generated names
-  # add randomness to avoid reusing placement groups from previous run of
-  # same name, which could've used different availability zone (illegal)
-  if args.use_placement_group:
-    placement_group_name = args.name+'-'+u.random_id()
-  else:
-    placement_group_name = ''
     
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, placement_group=placement_group_name, use_spot=args.spot)
+  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()
   print(job.connect_instructions)
 
@@ -596,6 +581,7 @@ def start_training(job, params, save_tag):
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo {cmd} > {save_dir}/script.log')
     task_cmds.append(cmd)
+
 
   for t,cmd in zip(job.tasks, task_cmds):
     t.run_async(cmd)

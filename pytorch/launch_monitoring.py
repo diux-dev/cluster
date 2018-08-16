@@ -25,8 +25,6 @@ parser.add_argument('--ami-name', type=str,
 parser.add_argument('--name', type=str, default='monitoring', help='run name')
 parser.add_argument('--instance-type', type=str, default='r5.large',
                      help='instance type to use for tensorboard job')
-parser.add_argument('--zone', type=str, default='us-west-2c',
-                    help='which availability zone to use')
 parser.add_argument('--backend', type=str, default='aws',
                     help='cluster backend, tmux (local) or aws')
 args = parser.parse_args()
@@ -38,10 +36,9 @@ def main():
     backend = aws_backend
   else:
     assert False, "unknown backend"
-    
+
   run = backend.make_run(args.name,
-                         ami_name=args.ami_name,
-                         availability_zone=args.zone)
+                         ami_name=args.ami_name)
   job = run.make_job('tb', instance_type=args.instance_type)
   job.wait_until_ready()
 
@@ -53,14 +50,15 @@ def main():
   job.run('cp jupyter_notebook_config.py ~/.jupyter')
   job.run('mkdir -p /efs/notebooks')
 
-  if args.zone.startswith('us-west-2'):
+  zone = u.get_zone()
+  if zone.startswith('us-west-2'):
     window_title = 'Oregon'
-  elif args.zone.startswith('us-east-1'):
+  elif zone.startswith('us-east-1'):
     window_title = 'Virginia'
-  elif args.zone.startswith('us-east-2'):
+  elif zone.startswith('us-east-2'):
     window_title = 'Ohio'
   else:
-    window_title = ''
+    window_title = 'Tensor-Board'
   job.run_async(f'tensorboard --logdir={backend_lib.LOGDIR_PREFIX} --port=6006 --window_title={window_title}')
   
   print(f'Tensorboard will be at http://{job.public_ip}:6006')
