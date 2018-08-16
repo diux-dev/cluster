@@ -63,7 +63,7 @@ Training on 1 p3.16xlarge instance
 ```
 export REPOROOT=<git_repo_root/cluster>
 cd ${REPOROOT}/pytorch
-python launch_nv.py --name test --num-tasks 1 --zone us-west-2c --spot
+python launch_nv.py --name test --num-tasks 1 --spot
 ```
 
 To view progress and interact
@@ -78,7 +78,7 @@ connect test
 Training on 4 p3.16xlarge instances
 ```
 cd ${REPOROOT}/pytorch
-python launch_nv.py --name 4gpu_distributed --num-tasks 4 --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
+python launch_nv.py --name 4gpu_distributed --num-tasks 4 --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
 ```
 This command will launch 4 p3.16xlarge instances. Setup the environment. 
 Then on each machine it will run the train_imagenet_nv.py script.

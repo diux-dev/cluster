@@ -2,20 +2,20 @@
 #
 # export ami="Deep Learning AMI (Ubuntu) Version 12.0"
 # 1 machine training
-# python launch_nv.py --name test --zone us-west-2c --spot
+# python launch_nv.py --name test --spot
 #
 # 4 machine training
-# python launch_nv.py --name 4gpu_distributed --zone us-west-2c --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
+# python launch_nv.py --name 4gpu_distributed --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
 
 # 8 machine training
-# python launch_nv.py --name yaro8 --zone us-west-2c --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
+# python launch_nv.py --name yaro8 --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
 
 # 16 machine training
 # export AWS_DEFAULT_REGION=us-east-1
-# ./launch_nv.py --name yaro16 --zone us-east-1c --params x16ar_args
+# ./launch_nv.py --name yaro16 --params x16ar_args
 
 # one machine training with slow pytorch
-# python launch_nv.py --name pytorch-one-machines-ar --params=xar_args_pytorch --zone=$zone --zone=$zone --attach-volume imagenet_high_perf
+# python launch_nv.py --name pytorch-one-machines-ar --params=xar_args_pytorch --attach-volume imagenet_high_perf
 
 
 DATA_ROOT='/home/ubuntu/data' # location where attached EBS "data" volume is mounted
@@ -48,13 +48,8 @@ parser.add_argument('--name', type=str, default='imagenet',
                      help=("name of the current run, this determines placement "
                            "group name, instance names and EFS logging "
                            "directory."))
-parser.add_argument('--job-name', type=str, default='distributed',
-                     help="name of the worker job (deprecated, use --name)")
 parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
-parser.add_argument('--zone', type=str, default='',
-                    help=('which availability zone to use (can also set '
-                          'through env var "zone"'))
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
 parser.add_argument('--num-tasks', type=int, default=-1,
@@ -349,7 +344,7 @@ x8ar_args_test_2 = [
 ]
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
-# python launch_nv.py --name yaro-friday-16 --num-tasks 16 --zone us-east-1c --params x16ar_args
+# python launch_nv.py --name yaro-friday-16 --num-tasks 16 --params x16ar_args
 
 # Current benchmark for 16x p3's - with Aspect Ratio Validatoin
 lr = 0.235
