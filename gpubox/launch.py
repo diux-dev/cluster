@@ -28,8 +28,6 @@ parser.add_argument('--mode', default='jupyter',
 parser.add_argument('--password',
                     default='DefaultNotebookPasswordPleaseChange',
                     help='password to use for jupyter notebook')
-parser.add_argument('--create-resources', type=int, default=1,
-                    help='first-time run, create EFS/VPC/security groups/etc')
 parser.add_argument('--spot', type=int, default=0,
                     help='use spot instances')
 parser.add_argument('--internal-role', type=str, default='launcher',
@@ -44,7 +42,7 @@ def main():
   import aws_backend
   import util as u
 
-  u.maybe_create_resources(args)
+  u.maybe_create_resources()
   
   run = aws_backend.make_run(args.name, ami_name=args.ami_name)
   job = run.make_job('worker', instance_type=args.instance_type,
