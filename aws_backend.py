@@ -83,6 +83,10 @@ class Run(backend.Run):
     linux_type = kwargs.get('linux_type', 'ubuntu')
     # TODO: use heuristics to tell linux type from AMI name
     user_data = kwargs.get('user_data', '')
+
+    if user_data:
+      assert user_data.startswith('#!/bin/bash')
+      
     ebs = kwargs.get('ebs', '')
     use_spot = kwargs.get('use_spot', False)
     monitoring = kwargs.get('monitoring', True)
@@ -164,14 +168,17 @@ class Run(backend.Run):
       assert instances
       assert len(instances) == num_tasks
 
-      # assign proper names to tasks
-      for instance in instances:
+      # TODO: make instances match their launch indices. This way
+      # tasks can figure out which # they are
+      for (task_num, instance) in enumerate(instances):
         while True:
           try:
             # sometimes get "An error occurred (InvalidInstanceID.NotFound)"
-            task_name = u.format_task_name(instance.ami_launch_index, role_name,
-                                           self.name)
+            # task_name = u.format_task_name(instance.ami_launch_index, role_name,
+            #                                self.name)
+            task_name = u.format_task_name(task_num, job_name)
             instance.create_tags(Tags=u.make_name(task_name))
+            
             break
           except Exception as e:
             self.log("create_tags failed with %s, retrying in %d seconds"%(
@@ -280,10 +287,13 @@ class Task(backend.Task):
     self.cached_public_ip = None
     self.skip_efs_mount = skip_efs_mount
 
+    self.name = u.format_task_name(task_id, job.name)
     # TODO, make below actually mean stuff (also, run_command_available)
     self.initialized = False 
 
     # scratch is client-local space for temporary files
+    # TODO: this job.name already contains name of run, the directory
+    # below uses run name twice
     self.scratch = "{}/{}.{}.{}.{}/scratch".format(TASKDIR_PREFIX,
                                                    job._run.name,
                                                    job.name, self.id,
@@ -351,6 +361,7 @@ class Task(backend.Task):
     self.log("Running initialize")
     self.initialize_called = True
     public_ip = self.public_ip # todo: add retry logic to public_ip property
+    assert public_ip, f"Trying to initialize, but task {self.name} doesn't have public_ip"
 
     while True:
       self.ssh_client = u.ssh_to_host(self.public_ip, self.keypair_fn,

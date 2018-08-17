@@ -155,12 +155,11 @@ def retrieve_tags_with_retries(instance):
       time.sleep(WAIT_INTERVAL_SEC)
   return tags
 
-def format_job_name(role, run):
-  return "{}.{}".format(role, run)
+def format_job_name(role, run_name):
+  return "{}.{}".format(role, run_name)
 
-def format_task_name(task_id, role, run):
-  assert int(task_id) == task_id
-  return "{}.{}.{}".format(task_id, role, run)
+def format_task_name(task_id, job_name):
+  return "{}.{}".format(task_id, job_name)
 
 
 def make_name(name):
@@ -1040,8 +1039,8 @@ def get_instances(fragment, verbose=True, filter_by_key=True):
       continue
     
     name = u.get_name(instance.tags)
-    if (fragment in name or fragment in instance.public_ip_address or
-        fragment in instance.id or fragment in instance.private_ip_address):
+    if (fragment in name or fragment in str(instance.public_ip_address) or
+        fragment in str(instance.id) or fragment in str(instance.private_ip_address)):
       instance_list.append((toseconds(instance.launch_time), instance))
 
   sorted_instance_list = reversed(sorted(instance_list, key=itemgetter(0)))
