@@ -233,8 +233,8 @@ def keypair_setup():
   else:
     print("Creating keypair "+KEYPAIR_NAME)
     ec2 = u.create_ec2_resource()
-    keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
     assert not os.path.exists(keypair_fn), "previous keypair exists, delete it with 'sudo rm %s' and also delete corresponding keypair through console"%(keypair_fn)
+    keypair = ec2.create_key_pair(KeyName=KEYPAIR_NAME)
 
     open(keypair_fn, 'w').write(keypair.key_material)
     os.system('chmod 400 '+keypair_fn)
