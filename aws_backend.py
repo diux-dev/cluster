@@ -38,7 +38,7 @@ class Run(backend.Run):
   
   def __init__(self, name, **kwargs):
     self.name = name
-    u.validate_runname(name)
+    u.validate_run_name(name)
     
     self.logdir_ = None   # set during setup_logdir()
     self.kwargs = kwargs

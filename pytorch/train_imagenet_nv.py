@@ -81,7 +81,7 @@ def get_parser():
     parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
-                        metavar='N', help='print every this many steps (default: 5)')
+                        metavar='N', help='log/print every this many steps (default: 5)')
     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
     parser.add_argument('--factorized-resnet', action='store_true', help='Speed up convolutions by factorizing - https://arxiv.org/pdf/1608.04337.pdf')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
