@@ -58,7 +58,7 @@ def network_setup():
     print("Reusing VPC "+VPC_NAME)
     vpc = existing_vpcs[VPC_NAME]
     subnets = list(vpc.subnets.all())
-    assert len(subnets) == len(zones), "Has %s subnets, but %s zones"%(len(subnets), len(zones))
+    assert len(subnets) == len(zones), "Has %s subnets, but %s zones, something went wrong during resource creation, try delete_resources.py/create_resources.py"%(len(subnets), len(zones))
     
   else:
     print("Creating VPC "+VPC_NAME)
