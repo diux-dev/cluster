@@ -64,7 +64,7 @@ def attach_instance_ebs(aws_instance, tag, unix_device=u.DEFAULT_UNIX_DEVICE):
   """Attaches volume to instance. Will try to detach volume if it's already mounted somewhere else. Will retry indefinitely on error."""
   
   ec2 = u.create_ec2_resource()
-  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}, {"Name":"availability-zone", 'Values':[os.environ['zone']]}]).all())
+  v = list(ec2.volumes.filter(Filters=[{'Name':'tag:Name', 'Values':[tag]}, {"Name":"availability-zone", 'Values':[os.environ['ZONE']]}]).all())
   assert(v), f"Volume {tag} not found."
   v = v[0]
   volume_name = u.get_name(v)

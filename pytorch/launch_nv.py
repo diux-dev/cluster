@@ -93,6 +93,7 @@ quick_oom = [
 quick_run = [
   '--phases', [
     {'ep':0,  'sz':224, 'bs':128},
+    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
   ],
   '--init-bn0',
   '--no-bn-wd',
