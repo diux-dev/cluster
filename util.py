@@ -244,6 +244,28 @@ def wait_until_available(resource):
       assert False, "Timeout exceeded waiting for %s"%(resource,)
     time.sleep(WAIT_TIMEOUT_SEC)
 
+def get_volume_dict():
+  """Returns dictionary of named volumes"""
+  ec2 = u.create_ec2_resource()
+  volumes = list(ec2.volumes.all())
+  d = {}
+  for v in volumes:
+    name = u.get_name(v)
+    if name != u.EMPTY_NAME:
+      d[name] = v
+  return d
+
+def get_snapshot_dict():
+  """Returns dictionary of named volumes"""
+  ec2 = u.create_ec2_resource()
+  volumes = list(ec2.snapshots.filter(Filters=[], OwnerIds=['self']))
+  d = {}
+  for v in volumes:
+    name = u.get_name(v)
+    if name != u.EMPTY_NAME:
+      d[name] = v
+  return d
+
 def get_vpc_dict():
   """Returns dictionary of named VPCs {name: vpc}
 
@@ -631,8 +653,12 @@ def create_spot_instances(launch_specs, spot_price=25, expiration_mins=15):
     # spot_args['InstanceInterruptionBehavior']='stop'
     
     print(launch_specs)
-
-    spot_requests = ec2c.request_spot_instances(**spot_args)
+    
+    try:
+      spot_requests = ec2c.request_spot_instances(**spot_args)
+    except Exception as e:
+      assert False, f"Spot instance request failed (out of capacity?), error was {e}"
+      
     spot_requests = spot_requests['SpotInstanceRequests']
     instance_ids = wait_on_fulfillment(ec2c, spot_requests)
     for i in instance_ids: 
@@ -976,7 +1002,8 @@ def lookup_ami_id(wildcard):
   # lookup_ami('pytorch*').name => ami-29fa"""
   ec2 = u.create_ec2_resource()
   filter = {'Name': 'name', 'Values' : [wildcard]}
-  images = list(ec2.images.filter(Filters = [filter], Owners=['self', 'amazon']))
+  #  images = list(ec2.images.filter(Filters = [filter], Owners=['self', 'amazon']))
+  images = list(ec2.images.filter(Filters = [filter]))
   assert len(images)<=1, "Multiple images match "+str(wildcard)
   assert len(images)>0, "No images match "+str(wildcard)
   return images[0]

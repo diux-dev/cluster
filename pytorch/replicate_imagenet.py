@@ -26,11 +26,10 @@
 
 import argparse
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--zone', type=str, default='')
 parser.add_argument('--replicas', type=int, default=8)
-parser.add_argument('--snapshot', type=str, default='') # snap-0d37b903e01bb794a
-parser.add_argument('--snapshot-desc', type=str, default='imagenet_blank',
-                    help='look for snapshot containing given string')
+parser.add_argument('--snapshot', type=str, default='imagenet18')
+parser.add_argument('--snapshot-account', type=str, default='316880547378',
+                    help='account id hosting this snapshot')
 parser.add_argument('--volume-offset', type=int, default=0, help='start numbering with this value')
 parser.add_argument('--iops', type=int, default=10000, help="iops requirement")
 parser.add_argument('--size_gb', type=int, default=0, help="size in GBs")
@@ -55,31 +54,31 @@ def create_tags(name):
 
 def main():
   ec2 = u.create_ec2_resource()
-  assert not args.snapshot, "Switched to snapshot_desc"
 
-  if not args.zone:
-    assert 'zone' in os.environ, 'must specify --zone or $zone'
-    args.zone = os.environ['zone']
-
+  assert 'ZONE' in os.environ
+  zone = os.environ['ZONE']
   snapshots = []
-  for snap in ec2.snapshots.filter(OwnerIds=['self']):
-    if args.snapshot_desc in snap.description:
-      snapshots.append(snap)
+  # filtering by name doesn't work, Tags are somehow not public?
+  # https://stackoverflow.com/questions/51887270/how-to-make-snapshot-tags-public
+  #  snapshots = list(ec2.snapshots.filter(Filters=[{'Name':'tag:Name', 'Values':[args.snapshot]}]))
 
-  assert len(snapshots)>0, f"no snapshot matching {args.snapshot_desc}"
-  assert len(snapshots)<2, f"multiple snapshots matching {args.snapshot_desc}"
+  # use filtering by description instead
+  snapshots = list(ec2.snapshots.filter(Filters=[{'Name':'description', 'Values':[args.snapshot]}, {'Name':'owner-id', 'Values':[args.snapshot_account]}]))
+
+  assert len(snapshots)>0, f"no snapshot matching {args.snapshot}"
+  assert len(snapshots)<2, f"multiple snapshots matching {args.snapshot}"
   snap = snapshots[0]
   if not args.size_gb:
     args.size_gb = snap.volume_size
     
-  print(f"Making {args.replicas} {args.size_gb} GB replicas in {args.zone}")
+  print(f"Making {args.replicas} {args.size_gb} GB replicas in {zone}")
   
   for i in range(args.volume_offset, args.replicas+args.volume_offset):
     vol_name = 'imagenet_%02d'%(i)
 
     vol = ec2.create_volume(Size=args.size_gb, VolumeType='io1',
                       TagSpecifications=create_tags(vol_name),
-                      AvailabilityZone=args.zone,
+                      AvailabilityZone=zone,
                       SnapshotId=snap.id,
                             Iops=args.iops)
     print(f"Creating {vol_name} {vol.id}")
