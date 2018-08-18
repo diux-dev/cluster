@@ -68,8 +68,9 @@ def main():
       continue
     
     name = u.get_name(instance.tags)
-    if (fragment in name or fragment in instance.public_ip_address or
-        fragment in instance.id or fragment in instance.private_ip_address):
+    if (fragment in name or fragment in str(instance.public_ip_address) or
+        fragment in str(instance.id) or
+        fragment in str(instance.private_ip_address)):
       instance_list.append((u.toseconds(instance.launch_time), instance))
       
   from tzlocal import get_localzone # $ pip install tzlocal
