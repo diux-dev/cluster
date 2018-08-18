@@ -13,12 +13,6 @@ import os
 import sys
 import time
 
-module_path=os.path.dirname(os.path.abspath(__file__))
-sys.path.append(module_path+'/..')
-import util
-import aws_backend
-import backend
-
 parser = argparse.ArgumentParser(description='launch')
 parser.add_argument('--ami-name', type=str,
                     default='Deep Learning AMI (Ubuntu) Version 12.0',
@@ -48,45 +42,7 @@ args = parser.parse_args()
 
 gpu_count = defaultdict(lambda:0, { 'p3.2xlarge': 1, 'p3.8xlarge': 4, 'p3.16xlarge': 8, 'p2.xlarge': 1, 'p2.8xlarge': 4, 'p2.16xlarge': 8 })
 def create_job(run, job_name, num_tasks):
-  module_path=os.path.dirname(os.path.abspath(__file__))
-  job = run.make_job(job_name, num_tasks=num_tasks, instance_type=args.instance_type, placement_group=args.placement_group, use_spot=args.spot)
-  job.wait_until_ready()
-
-  print(job.connect_instructions)
-
-  backend.set_global_logdir_prefix(args.logdir_prefix)
-  run.setup_logdir()
-
-  job.run('killall python || echo pass')  # kill previous run
-
-  # upload files
-  job.upload(f'{module_path}/resnet.py')
-  job.upload(f'{module_path}/train_cifar10.py')
-  job.upload(f'{module_path}/fp16util.py')
-
-  # setup env
-  job.run('source activate pytorch_p36')
-  job.run('pip install tensorboardX')
-
-  launch_jupyter(job)
-
-  # single machine
-  num_gpus = gpu_count[args.instance_type]
-  if (num_tasks == 1) and (num_gpus == 1):
-    job.run_async(f'python train_cifar10.py --logdir={run.logdir}') # single instance
-
-  else:
-    # multi job
-    world_0_ip = job.tasks[0].instance.private_ip_address
-    port = '6006' # 6006, 6007, 6008, 8890, 6379
-    job.run('ulimit -n 9000') # to prevent tcp too many files open error
-    world_size = num_gpus * num_tasks
-
-    for i,t in enumerate(job.tasks):
-      # Pytorch distributed
-      training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={run.logdir}' # must tweak --scale-lr
-      dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-      t.run_async(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}')
+  
 
 
 
@@ -115,10 +71,53 @@ def launch_jupyter(job, sess='jupyter'):
   
 
 def main():
-  run = aws_backend.make_run(args.name, ami_name=args.ami_name,
-                             linux_type=args.linux_type,
-                             skip_efs_mount=args.skip_efs_mount)
-  create_job(run, 'worker', args.num_tasks)
+  # log into different logging root
+  ncluster._set_global_logdir_prefix(args.logdir_prefix)
+  
+  job = ncluster.create_job('cifar', num_tasks=args.num_tasks,
+                            run_name=args.name, spot=args.spot)
+  job.join()  # wait for job to come up
 
+  # upload files
+  module_path=os.path.dirname(os.path.abspath(__file__))
+  job.upload(f'{module_path}/*.py')
+
+  # setup env
+  job.run('source activate pytorch_p36')
+  job.run('pip install tensorboardX')
+
+  # single process
+  num_gpus = gpu_count[args.instance_type]
+  if (num_tasks == 1) and (num_gpus == 1):
+    job.run(f'python train_cifar10.py --logdir={job.logdir}',
+             async=True) # single instance
+
+  # multi process
+  else:
+    task0 = job.tasks[0]
+    port = '12345'
+    #    job.run('ulimit -n 9000') # to prevent tcp too many files open error
+    world_size = num_gpus * num_tasks
+
+    for task in job.tasks:
+      training_args = f'--dist-url env:// --dist-backend gloo --distributed --world-size {world_size} --scale-lr 2  --logdir={job.logdir}'
+      dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={task0.ip} --master_port={port}'
+      task.run(f'python -m torch.distributed.launch {dist_args} train_cifar10.py {training_args}', async=True)
+
+
+  # also run jupyter notebook on task 0
+  task0.switch_tmux('jupyter')
+  task0.run('source activate tensorflow_p36') # for TensorBoard/events
+  task0.run('conda install pytorch torchvision -c pytorch -y')
+  task0.upload('../jupyter_notebook_config.py') # 2 step upload since don't know ~
+  task0.run('cp jupyter_notebook_config.py ~/.jupyter')
+  task0.run('mkdir -p /efs/notebooks')
+
+  task0.run('cd /efs/notebooks')
+  task0.run('jupyter notebook')
+  print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
+  print(f'Jupyter notebook will be at http://{task0.name}:8888')
+  
+      
 if __name__=='__main__':
   main()
