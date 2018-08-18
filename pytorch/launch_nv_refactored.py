@@ -105,6 +105,18 @@ quick_run = [
   '--short-epoch'
 ]
 
+# https://goodcode.io/articles/python-dict-object/
+quick_run = Config(
+ami='pytorch.imagenet.source.v6',
+conda_env='pytorch_source',
+num_tasks=1,
+phases=[
+  {'ep':0,  'sz':224, 'bs':128},
+  {'ep':(0,5),  'lr':(lr,lr*2)}
+  ]
+)
+  
+
 # throughput/batch-size testing
 lr = 1.0
 xar_throughput = [
@@ -471,93 +483,36 @@ def main():
   num_tasks = _extract_num_tasks(params)
   env_name = _extract_env_name(params)
   
-  run = aws_backend.make_run(args.name,
-                             ami_name=ami_name,
-                             skip_efs_mount=args.skip_efs_mount)
-  
-  job = create_job(run, 'worker', num_tasks, env_name)
-  run.setup_logdir()  # must happen after first job is created and ready
-
-  # Define custom params for training or use a preset above
-  # TODO: move "save_tag" into command-line parameter
-  start_training(job, params, save_tag=args.name)
-
-
-def create_job(run, job_name, num_tasks, env_name):
-  """Creates job, blocks until job is ready."""
-  
-  install_script = ''
-  if args.install_script:
-    with open(args.install_script, 'r') as f:
-      install_script = f.read()
-  
-  ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
-    
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, use_spot=args.spot, use_placement_group=True)
-  job.wait_until_ready()
-  print(job.connect_instructions)
-
-  job.run_async_join('killall python || echo ignoring')  # kill previous run
-
-  # mount_volume hardcoded to use data now
-  # TODO: this should be global setting/constant instead
-  assert DATA_ROOT.endswith('/data')
-  if args.attach_volume:
-    launch_utils_lib.mount_volume_data(job, tag=args.attach_volume, offset=args.volume_offset)
+  job = ncluster.create_job('worker', config.num_tasks, run_name='final',
+                            spot=args.spot, ami=config.ami)
+  for i in range(num_tasks):
+    job.tasks[i].attach_volume('imagenet_%02d'%(i), '/data')
 
   if not args.use_local_conda:
-    job.run_async_join(f'source activate {env_name}')
+    job.run(f'source activate {config.conda_env}')
   else:
     # enable conda command
-    job.run_async_join('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
-    job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/{env_name}')
-
-  # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
-  job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
-
-  # upload files
-  job.upload_async('resnet.py')
-  job.upload_async('fp16util.py')
-  job.upload_async('autoaugment.py')
-  job.upload_async('dataloader.py')
-  job.upload_async('dataloader_performance.py')
-  job.upload_async('train_imagenet_nv.py')
-  job.upload_async('experimental_utils.py')
-
-  # Sometimes get SSH session not active or "connection reset by peer"
-  # bad internet?
-
-  setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
-  if not all(setup_complete):
-    job.upload_async('setup_env_nv.sh')
-    job.run_async_join('chmod +x setup_env_nv.sh')
-    job.run_async_join('bash setup_env_nv.sh', max_wait_sec=60*60, check_interval=5)
-
-  return job
-
-def start_training(job, params, save_tag):
-
-  num_tasks = len(job.tasks)  
-  instance_0 = job.tasks[0].instance
-  world_0_ip = instance_0.private_ip_address
-  num_gpus = launch_utils_lib.get_gpu_count(instance_0)
-  port = '6006' # 6006, 6007, 6008, 8890, 6379
-  world_size = num_gpus * num_tasks
-
-  # Use NCCL rings for faster network throughput
-  nccl_args = launch_utils_lib.get_nccl_args(num_tasks, num_gpus)
-  # below is what official version uses
-  # nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
+    job.run('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
+    job.run(f'conda activate {DATA_ROOT}/anaconda3/envs/{config.env_name}')
+    
+  job.run('ulimit -n 9000')
+  job.upload('*.py')
   
-  # Create save directory
-  # TODO: replace with DATA_ROOT? ~ is not understood by all programs
+
+  # runs setup script if necessary. Installs packages in current conda env
+  # checks for "complete" file in the end, hence no-op if it exists
+  job._run_setup_script('setup_env_nv.sh')
+
+  world_size = 8*num_tasks
+  nccl_args = launch_utils_lib.get_nccl_args(num_tasks, 8)
+
   base_save_dir = '~/data/training/nv'
   datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-  # base_save_dir = f'/efs/training/nv' # TODO: save to efs instead
   save_dir = f'{base_save_dir}/{datestr}-{save_tag}-w{world_size}'
-  job.run_async_join(f'mkdir {save_dir} -p')
+  job.run(f'mkdir {save_dir} -p')
 
-  # Training script args
+  # todo: refactor params/config
+    # Training script args
   default_params = [
     '~/data/imagenet',
     '--save-dir', save_dir,
@@ -572,17 +527,15 @@ def start_training(job, params, save_tag):
 
   # Run tasks
   task_cmds = []
-  for i,t in enumerate(job.tasks):
-    dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
+  port = 6006
+  for i, task in enumerate(job.tasks):
+    dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={job.tasks[0].ip} --master_port={port}'
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-    t.run(f'echo {cmd} > {save_dir}/script.log')
-    task_cmds.append(cmd)
-
-
-  for t,cmd in zip(job.tasks, task_cmds):
-    t.run_async(cmd)
-
+    task.run(f'echo {cmd} > {save_dir}/script-{i}.log')
+    task.run(cmd, async=True)
+  
   print(f"Logging to {job.logdir}")
+
 
 if __name__=='__main__':
   main()
