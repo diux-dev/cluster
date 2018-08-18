@@ -10,6 +10,7 @@ import argparse
 import os
 import sys
 import time
+import ncluster
 
 import boto3
 
@@ -36,23 +37,14 @@ args = parser.parse_args()
 
 
 def main():
-  module_path=os.path.dirname(os.path.abspath(__file__))
-  sys.path.append(module_path+'/..')
-  import tmux_backend
-  import aws_backend
-  import util as u
+  task = ncluster.make_task('gpubox', instance_type=args.instance_type,
+                           use_spot=args.spot)
+  ncluster.join(task)
 
-  u.maybe_create_resources()
-  
-  run = aws_backend.make_run(args.name, ami_name=args.ami_name)
-  job = run.make_job('worker', instance_type=args.instance_type,
-                     use_spot=args.spot)
-  job.wait_until_ready()
-
-  print("Job ready for connection, run the following:")
+  print("Task ready for connection, run the following:")
   print("../connect "+args.name)
   print("Alternatively run")
-  print(job.connect_instructions)
+  print(task.connect_instructions)
   print()
   print()
   print()
@@ -64,24 +56,25 @@ def main():
     sha = passwd(args.password)
     local_config_fn = f'{module_path}/jupyter_notebook_config.py'
     temp_config_fn = '/tmp/'+os.path.basename(local_config_fn)
+    # TODO: remove /home/ubuntu
     remote_config_fn = f'/home/ubuntu/.jupyter/{os.path.basename(local_config_fn)}'
     os.system(f'cp {local_config_fn} {temp_config_fn}')
     _replace_lines(temp_config_fn, 'c.NotebookApp.password',
                    f"c.NotebookApp.password = '{sha}'")
-    job.upload(temp_config_fn, remote_config_fn)
+    task.upload(temp_config_fn, remote_config_fn)
 
     # upload sample notebook and start server
-    job.run('mkdir -p /efs/notebooks')
-    job.upload(f'{module_path}/sample.ipynb', '/efs/notebooks/sample.ipynb',
+    task.switch_tmux('jupyter')
+    task.run('mkdir -p /efs/notebooks')
+    task.upload(f'{module_path}/sample.ipynb', '/efs/notebooks/sample.ipynb',
                dont_overwrite=True)
-    job.run('cd /efs/notebooks')
-    job.run_async('jupyter notebook')
+    task.run('cd /efs/notebooks')
+    task.run('jupyter notebook')
     print(f'Jupyter notebook will be at http://{job.public_ip}:8888')
   elif args.mode == 'tf-benchmark':
-    job.run('source activate tensorflow_p36')
-    job.upload(__file__)
-    job.run('killall python || echo pass')  # kill previous run
-    job.run_async('python launch.py --internal-role=worker')
+    task.run('source activate tensorflow_p36')
+    task.upload(__file__)
+    task.run('python launch.py --internal-role=worker')
   else:
     assert False, "Unknown --mode, must be jupyter or tf-benchmark."
 
