@@ -108,8 +108,18 @@ class Run(backend.Run):
         assert len(instances) == num_tasks, ("Found job with same name %s(%s), but number of tasks %d doesn't match requested %d, kill job manually." % (job_name, instances[0].state, len(instances), num_tasks))
 
       print("Found existing job "+job_name)
+      starting_instances = False
       for i in instances:
-        if i.state['Name'] == 'stopped': i.start()
+        if i.state['Name'] == 'stopped':
+          i.start()
+          starting_instances = True
+
+      # TODO: replace with proper wait loop
+      if starting_instances:
+        while True:
+          print("Waiting forever for instances to start")
+          time.sleep(10)
+        
       print(instances)
     else:
       print("Launching new job %s into VPC %s" %(job_name, u.get_resource_name()))
@@ -254,14 +264,6 @@ class Job(backend.Job):
                   skip_efs_mount=skip_efs_mount)
       self.tasks[task_id] = task
 
-
-  # def run_async_join(self, cmd, *args, **kwargs):
-  #   import threading
-  #   """Runs command on every task in the job async. Then waits for all to finish"""
-  #   def t_run_cmd(t): t.run(cmd, *args, **kwargs)
-  #   t_threads = [threading.Thread(name=f't_{i}', target=t_run_cmd, args=[t]) for i,t in enumerate(self.tasks)]
-  #   for thread in t_threads: thread.start()
-  #   for thread in t_threads: thread.join()
 
   def _initialize(self):
     for task in self.tasks:
@@ -545,7 +547,6 @@ tmux a
     print(f"_run_raw: {cmd}") 
     return self._run_ssh(cmd)
 
-  # todo: transition to higher-level SshClient instead of paramiko.SSHClient
   def run(self, cmd, sync=True, ignore_errors=False,
           max_wait_sec=600, check_interval=0.5):
     """Runs command in tmux session. No need for multiple tmux sessions per
@@ -640,6 +641,7 @@ tmux a
       self.cached_public_ip = self.instance.public_ip_address
     return self.cached_public_ip
 
+  # deprecate
   @property
   def port(self):
     return DEFAULT_PORT
