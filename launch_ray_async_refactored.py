@@ -22,30 +22,25 @@ pip install jupyter
 
 DEFAULT_PORT = 6379  # default redis port
 
-def main():
-  import aws
-  import os
-  
-  # job launches are asynchronous, can spin up multiple jobs in parallel
-  job = aws.simple_job('ray', num_tasks=2, install_script=INSTALL_SCRIPT)
+import ncluster
 
-  # block until things launch to run commands
-  job.wait_until_ready()
+def main():
+  # job launches are asynchronous, can spin up multiple jobs in parallel
+  job = ncluster.make_job('ray', num_tasks=2, install_script=INSTALL_SCRIPT)
+  job.join()
 
   head_task = job.tasks[0]
-  head_task.run("ray start --head --redis-port=%d"%(DEFAULT_PORT,))
+  head_task.run(f"ray start --head --redis-port={DEFAULT_PORT}")
 
   slave_task = job.tasks[1]
-  slave_task.run("ray start --redis-address %s:%d"%(head_task.ip,
-                                                      DEFAULT_PORT))
+  slave_task.run("ray start --redis-address {head_task.ip}:{DEFAULT_PORT}")
   script_name = os.path.basename(BENCHMARK_URL)
   slave_task.run("rm -f "+script_name)
   slave_task.run("wget "+BENCHMARK_URL)
   slave_task.run("python "+script_name)
 
   print ("To see results:")
-  print("ssh -i %s -o StrictHostKeyChecking=no ubuntu@%s"%(os.environ['SSH_KEY_PATH'], slave_task.public_ip))
-  print("tmux a -t tmux")
+  print(slave_task.connect_instructions)
   
 if __name__=='__main__':
   main()
