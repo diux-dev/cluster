@@ -19,6 +19,7 @@ import os
 import pickle
 import sys
 import time
+import ncluster
 
 import boto3
 
@@ -43,7 +44,9 @@ parser.add_argument('--ami', type=str, default='',
                      help="name of AMI to use ")
 parser.add_argument('--name', type=str, default='tfbench',
                      help="name of the current run")
-parser.add_argument('--instance', type=str, default='c5.4xlarge', # c5.18xlarge
+parser.add_argument('--instance1', type=str, default='c5.4xlarge', # c5.18xlarge
+                     help="type of instance")
+parser.add_argument('--instance2', type=str, default='c5.4xlarge', # c5.18xlarge
                      help="type of instance")
 parser.add_argument('--zone', type=str, default='us-east-1a',
                     help='which availability zone to use')
@@ -57,7 +60,7 @@ parser.add_argument('--ps', type=int, default=1,
                     help='number of parameter server tasks')
 parser.add_argument('--workers', type=int, default=1,
                     help='number of parameter server tasks')
-parser.add_argument('--profile', type=int, default=0,
+parser.add_argument('--timelines', type=int, default=0,
                     help='dump timelines')
 parser.add_argument('--placement', type=int, default=1,
                     help='whether or not to use placement group')
@@ -66,31 +69,25 @@ args = parser.parse_args()
 
 
 
-def launch(backend, install_script='', init_cmd=''):
-  if args.placement:
-    placement_group = args.name
-  else:
-    placement_group = ''
-    
-  if backend.__name__ == 'aws_backend':
-    ami = ami_dict_ubuntu[u.get_region()]
-    run = backend.make_run(args.name, user_data=install_script,
-                           ami=ami, availability_zone=args.zone)
-    worker_job = run.make_job('worker', num_tasks=args.workers,
-                              instance_type=args.instance,
-                              placement_group=placement_group) # 
-    ps_job = run.make_job('ps', num_tasks=args.ps,
-                          instance_type=args.instance,
-                          placement_group=placement_group)
-    tb_job = run.make_job('tb', instance_type='t2.large')
-  else:  # local mode
-    run = backend.make_run(args.name, install_script=install_script)
-    worker_job = run.make_job('worker', args.workers) # 
-    ps_job = run.make_job('ps', args.ps)
-    tb_job = run.make_job('tb')
+def launch(backend, install_script=''):
 
-  for job in run.jobs:
-    job.wait_until_ready()
+    
+def main():
+
+  install_script="""#!/bin/bash
+source /home/ubuntu/anaconda3/bin/activate tensorflow_p36
+python -c "import tensorflow as tf; sess=tf.Session()"
+pip install ray
+echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
+"""
+
+  run = ncluster.make_run(args.name, install_script=install_script, ami=ami)
+  worker_job = run.make_job('worker', num_tasks=args.workers,
+                            instance_type=args.instance1)
+  ps_job = run.make_job('ps', num_tasks=args.ps,
+                        instance_type=args.instance2)
+  tb_job = run.make_job('tb', instance_type='t2.large')
+  run.join()
 
   run.upload('tf_adder.py')
   run.upload('../util.py')
@@ -133,13 +130,12 @@ def launch(backend, install_script='', init_cmd=''):
     pickle_string_encoded = pickle_string_encoded.decode('ascii')
     task.run("export TF_PICKLE_BASE16=%s"%(pickle_string_encoded,))
 
-  worker_hosts = ["%s:%d"%(task.ip, task.port) for task in worker_job.tasks]
-  ps_hosts = ["%s:%d"%(task.ip, task.port) for task in ps_job.tasks]
+  worker_hosts = [f"{task.ip}:12345" for task in worker_job.tasks]
+  ps_hosts = [f"{task.ip}:12345" for task in ps_job.tasks]
   cluster_spec = {'worker': worker_hosts, 'ps': ps_hosts}
   
   # Launch tensorflow tasks.
-  run.run(init_cmd)
-  tf_cmd = "python tf_adder.py --logdir={logdir} --profile={profile} --ps={ps}".format(logdir=run.logdir, profile=args.profile, ps=args.ps)
+  tf_cmd = f"python tf_adder.py --logdir={run.logdir} --timelines={args.timelines} --ps={args.ps}"
   
   # ps tasks go first because tensorboard doesn't support multiple processes
   # creating events in same directory locally (only shows latest created
@@ -147,49 +143,24 @@ def launch(backend, install_script='', init_cmd=''):
   for task in ps_job.tasks:
     task_spec = {'type': 'ps', 'index': task.id}
     tf_env_setup(task, cluster_spec, task_spec)
-    task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id), sync=False)
+    task.run(f'{tf_cmd} --label={task.job.name}:{task.id}', async=True)
 
   for task in worker_job.tasks:
     task_spec = {'type': 'worker', 'index': task.id}
     tf_env_setup(task, cluster_spec, task_spec)
-    task.run(tf_cmd+' --label='+task.job.name+':'+str(task.id), sync=False)
+    task.run(f'{tf_cmd} --label={task.job.name}:{task.id}', async=True)
 
   # todo: for local runs need to do task.port because multiple tb's
   # 6006 is hardwired because it's open through the security group
-  tb_port = tb_job.public_port #6006
-  tb_job.run("tensorboard --logdir={logdir} --port={port}".format(
-    logdir=run.logdir, port=tb_port), sync=False)
+  port = 6006
+  tb_job.run("tensorboard --logdir={run.logdir} --port={port}", async=True)
   print("*"*80)
-  print("See tensorboard at http://%s:%s"%(tb_job.public_ip, tb_port))
+  print("See tensorboard at http://{tb_job.public_ip}:{port}")
   print("*"*80)
   print(" "*80)
 
   print("Streaming log.txt of worker[0]")
   worker_job.tasks[0].stream_file('log.txt')
-
-    
-def main():
-  module_path=os.path.dirname(os.path.abspath(__file__))
-  sys.path.append(module_path+'/..')
-  import tmux_backend
-  import aws_backend
-
-  install_script="""#!/bin/bash
-source /home/ubuntu/anaconda3/bin/activate tensorflow_p36
-python -c "import tensorflow as tf; sess=tf.Session()"
-pip install ray
-echo 'INSTALLED ray' > /home/ubuntu/ray_installed.txt
-"""
-
-  if args.cluster == 'local':
-    launch(tmux_backend, init_cmd='source activate ' + args.local_conda_env)
-  elif args.cluster == 'aws':
-    launch(aws_backend, init_cmd='source activate ' + args.remote_conda_env,
-           install_script=install_script)
-    
-  else:
-    print("Unknown cluster", args.cluster)
-    # todo: create resources
 
 if __name__=='__main__':
   main()
