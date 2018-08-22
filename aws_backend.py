@@ -55,7 +55,7 @@ class Run(backend.Run):
   def make_job(self, role_name, num_tasks=1, skip_existing_job_validation=False, **kwargs):
     """skip_existing_job_validation: if True, doesn't check that existing job on server has same number of tasks as requested."""
 
-    u.maybe_create_resources()
+    #    u.maybe_create_resources()
 
     assert num_tasks>=0
 
@@ -362,8 +362,14 @@ class Task(backend.Task):
 
     self.log("Running initialize")
     self.initialize_called = True
-    public_ip = self.public_ip # todo: add retry logic to public_ip property
-    assert public_ip, f"Trying to initialize, but task {self.name} doesn't have public_ip"
+    while True:
+      public_ip = self.public_ip # todo: add retry logic to public_ip property
+      if public_ip:
+        break
+      print(f"Trying to initialize, but task {self.name} doesn't have public_ip, sleeping")
+      time.sleep(TIMEOUT_SEC)
+      
+      
 
     while True:
       self.ssh_client = u.ssh_to_host(self.public_ip, self.keypair_fn,
