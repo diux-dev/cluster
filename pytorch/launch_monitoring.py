@@ -27,6 +27,8 @@ parser.add_argument('--instance-type', type=str, default='r5.large',
                      help='instance type to use for tensorboard job')
 parser.add_argument('--backend', type=str, default='aws',
                     help='cluster backend, tmux (local) or aws')
+parser.add_argument('--skip-install', action='store_true',
+                    help='skip conda install (because slow)')
 args = parser.parse_args()
 
 def main():
@@ -43,12 +45,17 @@ def main():
   job.wait_until_ready()
 
   job.run('source activate tensorflow_p36')
-  job.run('conda install -c conda-forge jupyter_nbextensions_configurator -y')
-  job.run('conda install -c conda-forge jupyter_contrib_nbextensions -y')
-  job.run('conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
+  if not args.skip_install:
+   job.run('conda install -c conda-forge jupyter_nbextensions_configurator -y')
+   job.run('conda install -c conda-forge jupyter_contrib_nbextensions -y')
+   job.run('conda install ipyparallel -y') # to get rid of error https://github.com/jupyter/jupyter/issues/201
+   job.run('jupyter nbextension enable toc2/main')
+
   job.upload('jupyter_notebook_config.py') # 2 step upload since don't know ~
-  job.run('cp jupyter_notebook_config.py ~/.jupyter')
   job.run('mkdir -p /efs/notebooks')
+  job.run('cp jupyter_notebook_config.py ~/.jupyter')
+
+  job.run('cd /efs/notebooks')
 
   zone = u.get_zone()
   if zone.startswith('us-west-2'):
