@@ -164,7 +164,7 @@ xar_args_pytorch = [
 
 
 # Current benchmark for 4x p3
-lr = 0.47
+lr = 0.47 * 4 # 4 = num tasks
 x4ar_args = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
@@ -179,7 +179,6 @@ x4ar_args = [
   '--init-bn0',
   '--no-bn-wd',
   '--autoscale-lr2batch',
-  '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   # '--resume', 'sz128_checkpoint.path.tar'
@@ -187,7 +186,7 @@ x4ar_args = [
 
 
 # Faster benchmark for 4x p3 - 43 minutes
-lr = 0.47
+lr = 0.47 * 4 # 4 = num tasks
 x4ar_args_bench = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
@@ -202,7 +201,6 @@ x4ar_args_bench = [
   '--init-bn0',
   '--no-bn-wd',
   '--autoscale-lr2batch',
-  '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
@@ -210,7 +208,7 @@ x4ar_args_bench = [
 ]
 
 # Current testing params 4x p3
-lr = 0.47
+lr = 0.47 * 4 # 4 = num tasks
 x4ar_args_test_bench_2 = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
@@ -227,7 +225,6 @@ x4ar_args_test_bench_2 = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 4, # 4 = num tasks
   '--num-tasks', 4,
   '--ami-name', 'pytorch.imagenet.source.v6',
   # '--resume', 'sz128_checkpoint.path.tar'
@@ -237,7 +234,7 @@ x4ar_args_test_bench_2 = [
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
-lr = 0.235
+lr = 0.235 * 8 # 8 = num tasks
 x8ar_args_benchmark = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
@@ -255,15 +252,12 @@ x8ar_args_benchmark = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
 
-lr = 0.235
+lr = 0.235 * 8 # 8 = num tasks
 x8ar_args_benchmark_noprefetch = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
@@ -281,17 +275,14 @@ x8ar_args_benchmark_noprefetch = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
   '--prefetch', 0,
 ]
 
 # Also ~27 minutes. Faster per epoch, but takes one extra
-lr = 0.235
+lr = 0.235 * 8 # 8 = num tasks
 x8ar_args_352_folder = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
@@ -309,16 +300,13 @@ x8ar_args_352_folder = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
 
 # Trying faster training schedule with original size (original gets 93.1%) - also increasing batch size but doesn't work
-lr = 0.235
+lr = 0.235 * 8 # 8 = num tasks
 x8ar_args_test_2 = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
@@ -336,11 +324,8 @@ x8ar_args_test_2 = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 8,
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--resume', 'sz128_checkpoint.path.tar'
   '--env-name', 'pytorch_source',
 ]
 
@@ -371,7 +356,8 @@ x16ar_args = [
 
 # Ohio-sixteen base
 # 18:17 mins to 93.03, ohio-sixteen
-lr = 0.235
+lr = 0.235 * 8 # 
+bs = 64
 x16ar_args_benchmark = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},

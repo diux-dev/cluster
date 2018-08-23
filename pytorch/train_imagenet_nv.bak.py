@@ -74,18 +74,27 @@ def get_parser():
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
+    parser.add_argument('--resize-sched', default='0,18,41', type=str,
+                        help='Scheduler to resize from 128 -> 224 -> 288')
+    parser.add_argument('--autoscale-lr2batch', action='store_true',
+                        help='Automatically scale the learning rate if the batch size changes midway through training.')
+    parser.add_argument('--scale-lr', type=float, default=1, help='You should learning rate propotionally to world size')
     parser.add_argument('--init-bn0', action='store_true', help='Intialize running batch norm mean to 0')
     parser.add_argument('--print-freq', '-p', default=5, type=int,
                         metavar='N', help='log/print every this many steps (default: 5)')
     parser.add_argument('--no-bn-wd', action='store_true', help='Remove batch norm from weight decay')
+    parser.add_argument('--factorized-resnet', action='store_true', help='Speed up convolutions by factorizing - https://arxiv.org/pdf/1608.04337.pdf')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
-    parser.add_argument('--fp16', action='store_false', help='Run model fp16 mode. Default True')
+    parser.add_argument('--pretrained', dest='pretrained', action='store_true', help='use pre-trained model')
+    parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode.')
     parser.add_argument('--loss-scale', type=float, default=1,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
-    parser.add_argument('--distributed', action='store_false', help='Run distributed training. Default True')
+    parser.add_argument('--prof', dest='prof', action='store_true', help='Only run a few iters for profiling.')
+    parser.add_argument('--distributed', action='store_true', help='Run distributed training')
+    parser.add_argument('--c10d', action='store_true', help='Run distributed training with c10d')
     parser.add_argument('--world-size', default=-1, type=int, 
                         help='total number of processes (machines*gpus)')
     parser.add_argument('--dist-url', default='env://', type=str,
@@ -98,6 +107,8 @@ def get_parser():
                         help='where logs go')
     parser.add_argument('--skip-eval', action='store_true',
                         help='disable evaluation during training')
+    parser.add_argument('--short-epoch', action='store_true',
+                        help='make epochs short (for debugging)')
     parser.add_argument('--prefetch', default=0, type=int)
     parser.add_argument('--auto-shutdown-success', default=1, type=int,
                         help='shutdown instance at the end of training')
@@ -114,6 +125,10 @@ def get_parser():
 cudnn.benchmark = True
 args = get_parser().parse_args()
 if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+if args.c10d:
+    assert(args.distributed)
+    from torch.distributed import c10d
+    from torch.nn.parallel import distributed_c10d
 
 class DataManager():
     def __init__(self, phases):
@@ -146,12 +161,20 @@ class DataManager():
         # clear memory before we begin training
         gc.collect()
         torch.cuda.empty_cache()
+
+        # (AS) Kind of a hacky way to autoscale learning rate if the batch size changes. TODO: don't modify args.scale_lr directly
+        if 'autoscale_lr' in phase: args.scale_lr *= phase['autoscale_lr']
         
     def preload_phase_data(self, phases):
+        previous_bs = None
         for phase in phases:
             if not phase.get('keep_dl', False):
                 self.expand_directories(phase)
                 phase['data'] = self.preload_data(**phase)
+
+            if args.autoscale_lr2batch and previous_bs: 
+                phase['autoscale_lr'] = phase['bs']/previous_bs
+            previous_bs = phase['bs']
 
         return phases
 
@@ -170,13 +193,13 @@ class DataManager():
 
 # ### Learning rate scheduler
 class Scheduler():
-    def __init__(self, optimizer, phases):
+    def __init__(self, optimizer, phases, scale_lr):
         self.optimizer = optimizer
         self.current_lr = None
-        self.phases = [self.format_phase(p) for p in phases]
+        self.phases = [self.format_phase(p, scale_lr) for p in phases]
         self.tot_epochs = max([max(p['ep']) for p in self.phases])
 
-    def format_phase(self, phase):
+    def format_phase(self, phase, scale_lr):
         phase['ep'] = listify(phase['ep'])
         phase['lr'] = listify(phase['lr'])
         if len(phase['lr']) == 2: 
@@ -208,7 +231,9 @@ class Scheduler():
         return self.linear_phase_lr(phase, epoch, batch_curr, batch_tot)
 
     def update_lr(self, epoch, batch_num, batch_tot):
-        lr = self.get_lr(epoch, batch_num, batch_tot) 
+        # (AS) TODO: scale_lr should be factored in at init, otherwise resume from checkpointing will have wrong lr
+        # However, scale_lr is currently dynamically changed with --autoscale-lr2batch
+        lr = self.get_lr(epoch, batch_num, batch_tot) * args.scale_lr 
         if self.current_lr == lr: return
         if ((batch_num == 1) or (batch_num == batch_tot)): 
             print(f'Changing LR from {self.current_lr} to {lr}')
@@ -271,7 +296,15 @@ def main():
     dataloader.sort_ar(args.data+'/validation')
     
     global reduce_function
-    if args.distributed:
+    if args.c10d:
+        print('Distributed: loading c10d process group')
+        # https://github.com/pytorch/pytorch/blob/master/torch/lib/c10d/TCPStore.hpp
+        torch.cuda.set_device(args.local_rank)
+        rank = int(os.environ['RANK'])
+        store = c10d.TCPStore(os.environ['MASTER_ADDR'], int(os.environ['MASTER_PORT']), rank==0) # (masterAddr, masterPort, isServer) 
+        process_group = c10d.ProcessGroupNCCL(store, rank, args.world_size) # (store, rank, size)
+        reduce_function = lambda t: process_group.allreduce(t, c10d.AllreduceOptions().reduceOp)
+    elif args.distributed:
         print('Distributed initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
@@ -279,10 +312,14 @@ def main():
         reduce_function = lambda t: dist.all_reduce(t, op=dist.reduce_op.SUM)
         print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
 
+    if args.fp16: assert torch.backends.cudnn.enabled, "fp16 mode requires cudnn backend to be enabled."
 
     print("Loading model")
-    model = resnet.resnet50(bn0=args.init_bn0).cuda()
+    if args.factorized_resnet: model = resnet.resnet50factorized(pretrained=args.pretrained)
+    else: model = resnet.resnet50(pretrained=args.pretrained)
 
+    model = model.cuda()
+    if args.init_bn0: resnet.init_dist_weights(model) # Sets batchnorm std to 0
     if args.fp16: model = network_to_half(model)
     best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
 
@@ -293,7 +330,10 @@ def main():
         args.start_epoch = checkpoint['epoch']
         best_prec5 = checkpoint['best_prec5']
 
-    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    if args.c10d:
+        model = distributed_c10d._DistributedDataParallelC10d(model, process_group, device_ids=[args.local_rank], output_device=args.local_rank)
+        c10d_sanity_check()
+    elif args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
     if args.fp16: model_params, master_params = prep_param_lists(model)
@@ -310,9 +350,9 @@ def main():
 
     # Load data data manager and lr scheduler from phases
     phases = eval(args.phases)
-    print("Creating data loaders (this could take 2-3 minutes)")
+    print("Creating data loaders (this could take 6-12 minutes)")
     dm = DataManager([p for p in phases if 'bs' in p])
-    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p])
+    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p], args.scale_lr)
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.val_dl, model, criterion, 0, start_time)
@@ -328,6 +368,7 @@ def main():
         dm.set_epoch(epoch)
 
         train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
+        if args.prof: break
         prec5 = validate(dm.val_dl, model, criterion, epoch, start_time)
 
         is_best = prec5 > best_prec5
@@ -354,6 +395,12 @@ def to_python_float(t):
     if hasattr(t, 'item'): return t.item()
     else: return t[0]
 
+def c10d_sanity_check():
+    print('Sanity check to make sure tensor creation works')
+    tt = torch.tensor([1]).float().cuda()
+    print('Currently deadlock here', tt)
+    print('Woot able to reduce tensor:', sum_tensor(tt))
+
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
 
@@ -370,13 +417,18 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
     model.train()
     end = time.time()
 
+    st = time.time()
     trn_len = len(trn_loader)
 
     input = dataloader.DataPrefetcher(trn_loader, fp16=args.fp16,
                                       prefetch=args.prefetch)
     for i,(input,target) in enumerate(input):
+        if args.short_epoch and i>10:
+          break
         batch_size = input.size(0)
         batch_num = i+1
+        # if i == 0: print('Received input:', time.time()-st)
+        if args.prof and (i > 200): break
 
         # measure data loading time
         data_time.update(time.time() - end)
@@ -408,6 +460,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         top5.update(prec5, batch_total)
 
         # compute gradient and do SGD step
+        # if i == 0: print('Evaluate and loss:', time.time()-st)
         if args.fp16:
             loss = loss*args.loss_scale
             model.zero_grad()
@@ -423,6 +476,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             loss.backward()
             optimizer.step()
 
+        # if i == 0: print('Backward step:', time.time()-st)
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -496,13 +550,13 @@ def validate(val_loader, model, criterion, epoch, start_time):
     top1 = AverageMeter()
     top5 = AverageMeter()
 
+    eval_start_time = time.time()
     
     model.eval()
     end = time.time()
-    eval_start_time = time.time()
     val_len = len(val_loader)
 
-    for i,(input,target) in enumerate(dataloader.DataPrefetcher(val_loader, fp16=args.fp16, prefetch=args.prefetch)):
+    for i,(input,target) in enumerate(dataloader.DataPrefetcher(val_loader, fp16=args.fp16)):
         batch_num = i+1
         if args.distributed:
             prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)
@@ -547,7 +601,6 @@ def validate(val_loader, model, criterion, epoch, start_time):
     return top5.avg
 
 def distributed_predict(input, target, model, criterion):
-    assert(isinstance(model, nn.parallel.DistributedDataParallel))
     batch_size = input.size(0)
     output = loss = corr1 = corr5 = valid_batches = 0
     
@@ -556,6 +609,7 @@ def distributed_predict(input, target, model, criterion):
         with torch.no_grad():
             # using module instead of model because DistributedDataParallel forward function has a sync point.
             # with distributed validation sampler, we don't always have data for each gpu
+            assert(is_distributed_model(model))
             output = model.module(input)
             loss = criterion(output, target).data
         # measure accuracy and record loss
@@ -572,7 +626,7 @@ def distributed_predict(input, target, model, criterion):
 
 
 def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
-    if isinstance(model, nn.parallel.DistributedDataParallel): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
+    if is_distributed_model(model): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
     state = {
         'epoch': epoch+1, 'state_dict': model.state_dict(),
         'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
@@ -581,7 +635,7 @@ def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename
     if is_best: shutil.copyfile(filename, f'{args.save_dir}/{filename}')
 
 def is_distributed_model(model):
-    return 
+    return isinstance(model, nn.parallel.DistributedDataParallel) or (args.c10d and isinstance(model, distributed_c10d._DistributedDataParallelC10d))
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

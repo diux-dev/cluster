@@ -16,19 +16,15 @@ import torchvision
 import pickle
 from tqdm import tqdm
 
-from autoaugment import ImageNetPolicy
-
 def get_world_size(): return int(os.environ['WORLD_SIZE'])
 def get_rank(): return int(os.environ['RANK'])
 
-def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False, autoaugment=False):
+def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False):
     val_bs = val_bs or bs
     train_tfms = [
-            # AdaptiveRandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
             transforms.RandomHorizontalFlip()
-        ]
-    if autoaugment: train_tfms.append(ImageNetPolicy())
+    ]
     train_dataset = datasets.ImageFolder(traindir, transforms.Compose(train_tfms))
     train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
 
@@ -64,7 +60,7 @@ def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
 
 # Seems to speed up training by ~2%
 class DataPrefetcher():
-    def __init__(self, loader, prefetch=True, fp16=True):
+    def __init__(self, loader, prefetch=False, fp16=True):
         self.loader = loader
         self.prefetch = prefetch
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)

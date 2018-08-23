@@ -1,8 +1,6 @@
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
-from torch.nn.parameter import Parameter
-import torch
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -46,66 +44,6 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
-class FConv3(nn.Module):
-    def __init__(self, planes, stride):
-        super().__init__()
-        self.relu = nn.ReLU(inplace=True)
-        self.stride = stride
-        if self.stride == 1:
-            self.conv = nn.Conv2d(planes, planes, kernel_size=(1,3), stride=stride,
-                                   padding=(0,1), bias=False)
-            self.bn = nn.BatchNorm2d(planes)
-            self.conv1 = nn.Conv2d(planes, planes, kernel_size=(3,1), stride=stride,
-                                   padding=(1,0), bias=False)
-            self.bn1 = nn.BatchNorm2d(planes)
-        else:
-            self.conv = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                                   padding=1, bias=False)
-            self.bn = nn.BatchNorm2d(planes)
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        if self.stride == 1:
-            out = self.conv1(out)
-            out = self.bn1(out)
-            out = self.relu(out)
-        return out
-            
-
-class BottleneckFactorized(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(BottleneckFactorized, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = FConv3(planes, stride)
-        self.conv3 = nn.Conv2d(planes, planes * self.expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -247,7 +185,7 @@ def resnet34(pretrained=False, **kwargs):
     return model
 
 
-def resnet50(pretrained=False, **kwargs):
+def resnet50(pretrained=False, bn0=False, **kwargs):
     """Constructs a ResNet-50 model.
 
     Args:
@@ -256,18 +194,10 @@ def resnet50(pretrained=False, **kwargs):
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
+    if bn0:
+        init_dist_weights(model)
     return model
 
-def resnet50factorized(pretrained=False, **kwargs):
-    """Constructs a ResNet-50 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    model = ResNet(BottleneckFactorized, [3, 4, 6, 3], **kwargs)
-    if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
-    return model
 
 def resnet101(pretrained=False, **kwargs):
     """Constructs a ResNet-101 model.
