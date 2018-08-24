@@ -1,65 +1,29 @@
 import argparse, os, shutil, time, warnings
 from datetime import datetime
 from pathlib import Path
-import numpy as np
-import sys
-import os
+import sys, os
 import math
 import collections
+import gc
 
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
-import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 
-from tensorboardX import SummaryWriter
-
 # import models
 from fp16util import *
-import gc
 
 import resnet
 
 import dataloader
 import experimental_utils
-
-################################################################################
-# Generic utility methods, eventually refactor into separate file
-################################################################################
-def network_bytes():
-  """Returns received bytes, transmitted bytes."""
-  
-  import subprocess
-  proc = subprocess.Popen(['cat', '/proc/net/dev'], stdout=subprocess.PIPE)
-  stdout,stderr = proc.communicate()
-  stdout=stdout.decode('ascii')
-
-  recv_bytes = 0
-  transmit_bytes = 0
-  lines=stdout.strip().split('\n')
-  lines = lines[2:]  # strip header
-  for line in lines:
-    line = line.strip()
-    # ignore loopback interface
-    if line.startswith('lo'):
-      continue
-    toks = line.split()
-
-    recv_bytes += int(toks[1])
-    transmit_bytes += int(toks[9])
-  return recv_bytes, transmit_bytes
-
-# no_op method/object that accept every signature
-def no_op(*args, **kwargs): pass
-class NoOp:
-  def __getattr__(self, *args):
-    return no_op
-################################################################################
+import dist_utils
+from meter import AverageMeter, NetworkMeter, TimeMeter
 
 def get_parser():
     parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
@@ -86,8 +50,6 @@ def get_parser():
     parser.add_argument('--loss-scale', type=float, default=1,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--distributed', action='store_false', help='Run distributed training. Default True')
-    parser.add_argument('--world-size', default=-1, type=int, 
-                        help='total number of processes (machines*gpus)')
     parser.add_argument('--dist-url', default='env://', type=str,
                         help='url used to set up distributed training')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
@@ -113,7 +75,7 @@ def get_parser():
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
-if args.local_rank > 0: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+if args.local_rank: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
 
 class DataManager():
     def __init__(self, phases):
@@ -131,14 +93,12 @@ class DataManager():
         """Initializes data loader."""
         if phase.get('keep_dl', False):
             print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
-            log_tb('sizes/batch', phase['bs'])
+            tb.log_size(phase['bs'])
             self.trn_dl.batch_sampler.batch_size = phase['bs']
             return
         
         print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
-        log_tb('sizes/image', phase['sz'])
-        log_tb('sizes/batch', phase['bs'])
-        log_tb('sizes/world', args.world_size)
+        tb.log_size(phase['bs'], phase['sz'])
 
         self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = phase['data']
         self.phases.remove(phase)
@@ -216,19 +176,13 @@ class Scheduler():
         self.current_lr = lr
         should_print = (batch_num%args.print_freq == 0)
         
-        log_tb("sizes/lr", lr)
         momentum = -1
         for param_group in self.optimizer.param_groups:
             lr_old = param_group['lr'] or lr
             param_group['lr'] = lr
-
-            # Trick 4: apply momentum correction when lr is updated. (AS): Doesn't really work or help
-            # https://github.com/pytorch/examples/pull/262
-            # if lr > lr_old: param_group['momentum'] = lr / lr_old * args.momentum
-            if lr > lr_old: param_group['momentum'] = .92
-            else: param_group['momentum'] = args.momentum
-            momentum = param_group['momentum']
-        log_tb("sizes/momentum", momentum)
+            
+        tb.log("sizes/lr", lr)
+        tb.log("sizes/momentum", momentum)
 
 def listify(p=None, q=None):
     if p is None: p=[]
@@ -237,63 +191,31 @@ def listify(p=None, q=None):
     if len(p)==1: p = p * n
     return p
 
-def log_tb(tag, val):
-  """Log value to tensorboard (relies on global_example_count being set properly)"""
-  global global_example_count, event_writer
-  event_writer.add_scalar(tag, val, global_example_count)
-  
-def main():
-    # is_chief indicates this machine will do shared tasks for the cluster
-    # such as logging and checkpointing
-    # is_chief must be true only for at most 1 process in training cluster
-    # $RANK is set by pytorch.distributed.launch
-    # https://github.com/pytorch/pytorch/blob/db6e4576dab097abf01d032c3326e4b285eb8499/torch/distributed/launch.py#L193
-    global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
+# Only want master rank logging to tensorboard
+tb = TensorboardLogger(args.logdir, is_master=is_master())
+tb.log('first', time.time())
+tb.log('sizes/world', dist_utils.env_world_size())
 
-    is_chief = (not args.distributed) or (int(os.environ['RANK'])==0)
-
-    global_example_count = 0
-    if is_chief:
-      print(f"Logging to {args.logdir}")
-      event_writer = SummaryWriter(args.logdir)
-      log_tb("first", time.time())
-    else:
-      event_writer = NoOp()
-
-    # baseline number for network bytes
-    last_recv_bytes, last_transmit_bytes = network_bytes()
-    last_log_time = time.time()
-    
+def main():    
     print(args)
-    print("~~epoch\thours\ttop1Accuracy\n")
 
     # need to index validation directory before we start counting the time
     dataloader.sort_ar(args.data+'/validation')
     
-    global reduce_function
     if args.distributed:
         print('Distributed initializing process group')
         torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size)
-        assert(args.world_size == dist.get_world_size())
-        reduce_function = lambda t: dist.all_reduce(t, op=dist.reduce_op.SUM)
-        print("Distributed: success (%d/%d)"%(args.local_rank, args.world_size))
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=dist_utils.env_world_size())
+        assert(dist_utils.env_world_size() == dist.get_world_size())
+        print("Distributed: success (%d/%d)"%(args.local_rank, dist.get_world_size()))
 
 
     print("Loading model")
     model = resnet.resnet50(bn0=args.init_bn0).cuda()
 
     if args.fp16: model = network_to_half(model)
+    if args.distributed: model = dist_utils.DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
     best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
-
-    # Load model from checkpoint. This must happen distributed as model is saved without it
-    if args.resume:
-        checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
-        model.load_state_dict(checkpoint['state_dict'])
-        args.start_epoch = checkpoint['epoch']
-        best_prec5 = checkpoint['best_prec5']
-
-    if args.distributed: model = nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     global model_params, master_params
     if args.fp16: model_params, master_params = prep_param_lists(model)
@@ -304,8 +226,12 @@ def main():
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
     optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
+    
     if args.resume: # we must resume optimizer params separately
         checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
+        model.load_state_dict(checkpoint['state_dict'])
+        args.start_epoch = checkpoint['epoch']
+        best_prec5 = checkpoint['best_prec5']
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     # Load data data manager and lr scheduler from phases
@@ -322,6 +248,7 @@ def main():
         sum_tensor(torch.tensor([1.0]).float().cuda())
 
     print("Begin training")
+    print("~~epoch\thours\ttop1Accuracy\ttop5Accuracy\n")
     estart = time.time()
     for epoch in range(args.start_epoch, scheduler.tot_epochs):
         estart = time.time()
@@ -330,6 +257,7 @@ def main():
         train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
         prec5 = validate(dm.val_dl, model, criterion, epoch, start_time)
 
+        tb.log('epoch', epoch)
         is_best = prec5 > best_prec5
         best_prec5 = max(prec5, best_prec5)
         if args.local_rank == 0:
@@ -337,12 +265,11 @@ def main():
             phase = dm.get_phase(epoch)
             if phase:save_checkpoint(epoch, model, best_prec5, optimizer, filename=f'sz{phase["bs"]}_checkpoint.path.tar')
 
-    event_writer.export_scalars_to_json(args.logdir+'/scalars.json')
-    event_writer.close()
     if args.auto_shutdown_success:
       os.system(f'sudo shutdown -h -P +{args.auto_shutdown_success_delay_mins}')
 
-
+def is_master():
+    return (not args.distributed) or (dist_utils.env_rank()==0)
     
 def str_to_num_array(argstr, num_type=int):
     return [num_type(s) for s in argstr.split(',')]
@@ -355,32 +282,24 @@ def to_python_float(t):
     else: return t[0]
 
 def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
-    global is_chief, event_writer, global_example_count, last_recv_bytes, last_transmit_bytes, last_log_time
+    net_meter = NetworkMeter()
+    timer = TimeMeter()
 
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
+    # batch_time = AverageMeter()
+    # data_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
 
-    recv_meter = AverageMeter()
-    transmit_meter = AverageMeter()
-    
     # switch to train mode
     model.train()
-    end = time.time()
 
-    trn_len = len(trn_loader)
-
-    input = dataloader.DataPrefetcher(trn_loader, fp16=args.fp16,
-                                      prefetch=args.prefetch)
-    for i,(input,target) in enumerate(input):
+    prefetcher = dataloader.DataPrefetcher(trn_loader, fp16=args.fp16, prefetch=args.prefetch)
+    for i,(input,target) in enumerate(prefetcher):
         batch_size = input.size(0)
         batch_num = i+1
-
-        # measure data loading time
-        data_time.update(time.time() - end)
-        scheduler.update_lr(epoch, i+1, trn_len)
+        timer.batch_start()
+        scheduler.update_lr(epoch, i+1, len(trn_loader))
 
         # compute output
         output = model(input)
@@ -391,13 +310,30 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             corr1, corr5 = correct(output.data, target, topk=(1, 5))
             metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
             batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics).cpu().numpy()
-            reduced_loss = reduced_loss/args.world_size
+            reduced_loss = reduced_loss/dist_utils.env_world_size()
             prec1 = corr1*(100.0/batch_total)
             prec5 = corr5*(100.0/batch_total)
         else:
             reduced_loss = loss.data
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
+
+        # compute gradient and do SGD step
+        if args.fp16:
+            loss = loss*args.loss_scale
+            model.zero_grad()
+            loss.backward()
+            model_grads_to_master_grads(model_params, master_params)
+            for param in master_params: param.grad.data = param.grad.data/args.loss_scale
+            optimizer.step()
+            master_params_to_model_params(model_params, master_params)
+        else:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Train batch done. Logging results
+        timer.batch_end()
 
         reduced_loss = to_python_float(reduced_loss)
         batch_total = to_python_float(batch_total)
@@ -407,78 +343,32 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         top1.update(prec1, batch_total)
         top5.update(prec5, batch_total)
 
-        # compute gradient and do SGD step
-        if args.fp16:
-            loss = loss*args.loss_scale
-            model.zero_grad()
-            loss.backward()
-            model_grads_to_master_grads(model_params, master_params)
-            for param in master_params:
-                param.grad.data = param.grad.data/args.loss_scale
-            optimizer.step()
-            master_params_to_model_params(model_params, master_params)
-            torch.cuda.synchronize()
-        else:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        should_print = (batch_num%args.print_freq == 0) or (batch_num==trn_len)
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(trn_loader))
         if args.local_rank == 0 and should_print:
-          
-            log_tb("memory/allocated_gb", torch.cuda.memory_allocated()/1e9)
-            log_tb("memory/max_allocated_gb", torch.cuda.max_memory_allocated()/1e9)
-            log_tb("memory/cached_gb", torch.cuda.memory_cached()/1e9)
-            log_tb("memory/max_cached_gb", torch.cuda.max_memory_cached()/1e9)
-            
-            log_tb("times/step", 1000*batch_time.val)
-            log_tb("times/data", 1000*data_time.val)
-            log_tb("losses/xent", losses.val)
-            log_tb("sizes/batch_total", batch_total)
+            tb.log_memory()
+            tb.log_trn_times(batch_time.val, data_time.val, batch_size)
+
+            log_tb("losses/xent", losses.val)    # cross_entropy
             log_tb("losses/train_1", top1.val)   # precision@1
             log_tb("losses/train_5", top5.val)   # precision@5
-            images_per_sec = batch_size/batch_time.val
-            log_tb("times/1gpu_images_per_sec", images_per_sec)
-            log_tb("times/8gpu_images_per_sec", 8*images_per_sec)
+            log_tb("sizes/batch_total", batch_total)
 
-            time_delta = time.time()-last_log_time
-            recv_bytes, transmit_bytes = network_bytes()
+            recv_gbit, transmit_gbit = net_meter.update_bandwidth()
+            tb.log('net/recv_gbit', recv_gbit)
+            tb.log('net/transmit_gbit', transmit_gbit)
             
-            recv_delta = recv_bytes - last_recv_bytes
-            transmit_delta = transmit_bytes - last_transmit_bytes
-
-            # turn into Gbps
-            recv_gbit = 8*recv_delta/time_delta/1e9
-            transmit_gbit = 8*recv_delta/time_delta/1e9
-            
-            last_log_time = time.time()
-            last_recv_bytes = recv_bytes
-            last_transmit_bytes = transmit_bytes
-
-            recv_meter.update(recv_gbit)
-            transmit_meter.update(transmit_gbit)
-            log_tb('net/recv_gbit', recv_gbit)
-            log_tb('net/transmit_gbit', transmit_gbit)
-            
-            output = ('Epoch: [{0}][{1}/{2}]\t' \
-                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
-                    + 'Data {data_time.val:.3f} ({data_time.avg:.3f})\t' \
-                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
-                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t' \
-                      + 'bw {recv_meter.val:.3f} {transmit_meter.val:.3f}').format(
-                    epoch, batch_num, trn_len, batch_time=batch_time,
-                      data_time=data_time, loss=losses, top1=top1, top5=top5,
-                      recv_meter=recv_meter, transmit_meter=transmit_meter)
+            output = ('Epoch: [{0}][{1}/{2}]\t'
+                      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                      'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
+                      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                      'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'
+                      'BW {recv_gbit:.3f} {transmit_gbit:.3f}')
             print(output)
             with open(f'{args.save_dir}/full.log', 'a') as f:
                 f.write(output + '\n')
 
-        global_example_count+=batch_total
+        tb.update_step_count(batch_total)
 
              
             
@@ -491,19 +381,18 @@ def validate(val_loader, model, criterion, epoch, start_time):
     if args.skip_eval:
       return 0
     
-    batch_time = AverageMeter()
+    # batch_time = AverageMeter()
+    timer = TimeMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
 
-    
     model.eval()
-    end = time.time()
     eval_start_time = time.time()
-    val_len = len(val_loader)
 
     for i,(input,target) in enumerate(dataloader.DataPrefetcher(val_loader, fp16=args.fp16, prefetch=args.prefetch)):
         batch_num = i+1
+        timer.batch_start()
         if args.distributed:
             prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)
         else:
@@ -513,50 +402,39 @@ def validate(val_loader, model, criterion, epoch, start_time):
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1,5))
             
+
+        # Eval batch done. Logging results
+        timer.batch_end()
         losses.update(to_python_float(loss), to_python_float(batch_total))
         top1.update(to_python_float(prec1), to_python_float(batch_total))
         top5.update(to_python_float(prec5), to_python_float(batch_total))
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        should_print = (batch_num%args.print_freq == 0) or (batch_num==val_len)
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(val_loader))
         if args.local_rank == 0 and should_print:
-            output = ('Test: [{0}/{1}]\t' \
-                    + 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t' \
-                    + 'Loss {loss.val:.4f} ({loss.avg:.4f})\t' \
-                    + 'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t' \
-                    + 'Prec@5 {top5.val:.3f} ({top5.avg:.3f})').format(
-                    batch_num, val_len, batch_time=batch_time, loss=losses,
-                    top1=top1, top5=top5)
+            output = ('Test: [{0}/{1}]\t'
+                      'Time {timer.batch_time.val:.3f} ({timer.batch_time.avg:.3f})\t'
+                      'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
+                      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                      'Prec@5 {top5.val:.3f} ({top5.avg:.3f})')
             print(output)
-            with open(f'{args.save_dir}/full.log', 'a') as f:
-                f.write(output + '\n')
+            with open(f'{args.save_dir}/full.log', 'a') as f: f.write(output + '\n')
 
     time_diff = datetime.now()-start_time
-    print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top5.avg:.3f}\n')
-    print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'.format(top1=top1, top5=top5))
+    print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top1.avg:.3f}\t{top5.avg:.3f}\n')
     
-    log_tb('losses/test_1', top1.avg)
-    log_tb('losses/test_5', top5.avg)
-    log_tb('times/eval_sec', time.time()-eval_start_time)
-    log_tb('epoch', epoch)
-
+    tb.log_eval(top1.avg, top5.avg, time.time()-eval_start_time)
 
     return top5.avg
 
 def distributed_predict(input, target, model, criterion):
-    assert(isinstance(model, nn.parallel.DistributedDataParallel))
+    # assert(isinstance(model, nn.parallel.DistributedDataParallel))
     batch_size = input.size(0)
     output = loss = corr1 = corr5 = valid_batches = 0
     
     if batch_size:
         # compute output
         with torch.no_grad():
-            # using module instead of model because DistributedDataParallel forward function has a sync point.
-            # with distributed validation sampler, we don't always have data for each gpu
-            output = model.module(input)
+            output = model(input)
             loss = criterion(output, target).data
         # measure accuracy and record loss
         valid_batches = 1
@@ -572,7 +450,6 @@ def distributed_predict(input, target, model, criterion):
 
 
 def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
-    if isinstance(model, nn.parallel.DistributedDataParallel): model = model.module # do not save distributed module. Makes loading from checkpoint more flexible
     state = {
         'epoch': epoch+1, 'state_dict': model.state_dict(),
         'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
@@ -580,25 +457,6 @@ def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename
     torch.save(state, filename)
     if is_best: shutil.copyfile(filename, f'{args.save_dir}/{filename}')
 
-def is_distributed_model(model):
-    return 
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
@@ -609,26 +467,16 @@ def accuracy(output, target, topk=(1,)):
 def correct(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
-
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
     correct = pred.eq(target.view(1, -1).expand_as(pred))
-
     res = []
     for k in topk:
         correct_k = correct[:k].view(-1).sum(0, keepdim=True)
         res.append(correct_k)
     return res
 
-
-def reduce_tensor(tensor): return sum_tensor(tensor)/args.world_size
-def sum_tensor(tensor):
-    rt = tensor.clone()
-    reduce_function(rt)
-    return rt
-
 if __name__ == '__main__':
-    print('hello world')
     try:
       with warnings.catch_warnings():
           warnings.simplefilter("ignore", category=UserWarning)

@@ -5,10 +5,10 @@
 # python launch_nv.py --name test --spot
 #
 # 4 machine training
-# python launch_nv.py --name 4gpu_distributed --spot --attach-volume imagenet_high_perf --params x4_args --ami-name=$ami
+# python launch_nv.py --name 4gpu_distributed --spot --attach-volume imagenet_high_perf --params x4_args
 
 # 8 machine training
-# python launch_nv.py --name yaro8 --spot --attach-volume imagenet_high_perf  --params x8ar_args --ami-name="$ami"
+# python launch_nv.py --name yaro8 --spot --attach-volume imagenet_high_perf  --params x8ar_args
 
 # 16 machine training
 # export AWS_DEFAULT_REGION=us-east-1
@@ -39,9 +39,6 @@ import launch_utils as launch_utils_lib
 u.install_pdb_handler()
 
 parser = argparse.ArgumentParser(description='launch')
-parser.add_argument('--ami-name', type=str,
-                    default='-1',
-                    help="name of AMI to use")
 parser.add_argument('--spot', action='store_true', 
                     help='launch using spot requests')
 parser.add_argument('--name', type=str, default='imagenet',
@@ -52,8 +49,6 @@ parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
-parser.add_argument('--num-tasks', type=int, default=-1,
-                    help='number of instances to create, deprecated, specify it in params')
 parser.add_argument('--install-script', type=str, default='',
                     help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default='imagenet',
@@ -451,8 +446,6 @@ def _extract_env_name(params):
 
 def main():
   params = eval(args.params)
-  assert args.num_tasks == -1, "num-tasks is deprecated, it's now specified along with training parameters as --num-tasks."
-  assert args.ami_name == '-1', "ami_name is deprecated, it's now specified along with training parameters as --ami-name."
   ami_name = _extract_ami_name(params)
   num_tasks = _extract_num_tasks(params)
   env_name = _extract_env_name(params)
@@ -504,9 +497,7 @@ def create_job(run, job_name, num_tasks, env_name):
   # upload files
   job.upload_async('resnet.py')
   job.upload_async('fp16util.py')
-  job.upload_async('autoaugment.py')
   job.upload_async('dataloader.py')
-  job.upload_async('dataloader_performance.py')
   job.upload_async('train_imagenet_nv.py')
   job.upload_async('experimental_utils.py')
 
@@ -550,10 +541,10 @@ def start_training(job, params, save_tag):
     '--fp16',
     '--loss-scale', 1024,
     '--world-size', world_size,
+    '--logdir', job.logdir,
     '--distributed'
   ]
   training_args = default_params + params
-  training_args = training_args + ["--logdir", job.logdir]
   training_args = ' '.join(map(launch_utils_lib.format_args, training_args))
 
   # Run tasks

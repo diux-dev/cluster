@@ -16,10 +16,7 @@ import torchvision
 import pickle
 from tqdm import tqdm
 
-def get_world_size(): return int(os.environ['WORLD_SIZE'])
-def get_rank(): return int(os.environ['RANK'])
-
-def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, min_scale=0.08, distributed=False):
+def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, rect_val=False, min_scale=0.08, distributed=False):
     val_bs = val_bs or bs
     train_tfms = [
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
@@ -33,7 +30,7 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
         num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
         sampler=train_sampler)
 
-    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, use_ar=use_ar, distributed=distributed)
+    val_dataset, val_sampler = create_validation_set(valdir, val_bs, sz, rect_val=rect_val, distributed=distributed)
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
@@ -42,8 +39,8 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, use_ar=False, 
     return train_loader, val_loader, train_sampler, val_sampler
 
 
-def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
-    if use_ar:
+def create_validation_set(valdir, batch_size, target_size, rect_val, distributed):
+    if rect_val:
         idx_ar_sorted = sort_ar(valdir)
         idx_sorted, _ = zip(*idx_ar_sorted)
         idx2ar = map_idx2ar(idx_ar_sorted, batch_size)
@@ -57,6 +54,51 @@ def create_validation_set(valdir, batch_size, target_size, use_ar, distributed):
     val_dataset = datasets.ImageFolder(valdir, transforms.Compose(val_tfms))
     val_sampler = DistValSampler(list(range(len(val_dataset))), batch_size=batch_size, distributed=distributed)
     return val_dataset, val_sampler
+
+# class BatchTransformDataLoader():
+#     # Mean normalization on batch level instead of individual
+#     # https://github.com/NVIDIA/apex/blob/59bf7d139e20fb4fa54b09c6592a2ff862f3ac7f/examples/imagenet/main.py#L222
+#     def __init__(self, loader, prefetch=False, fp16=True):
+#         self.loader = loader
+#         self.prefetch = prefetch
+#         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
+#         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+#         self.fp16 = fp16
+#         self.loaditer = iter(self.loader)
+#         if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
+#         if self.prefetch:
+#             self.stream = torch.cuda.Stream()
+#             self.next_input = self.next_target = None
+#             self.preload()
+
+#     def __len__(self): return len(self.loader)
+
+#     def preload(self):
+#         self.next_input, self.next_target = next(self.loaditer)
+#         with torch.cuda.stream(self.stream):
+#             self.next_input, self.next_target = self.process_tensors(self.next_input, self.next_target, non_blocking=True)
+    
+#     def process_tensors(self, input, target, non_blocking=True):
+#         input = input.cuda(non_blocking=non_blocking)
+#         if self.fp16: input = input.half()
+#         else: input = input.float()
+#         if len(input.shape) < 3: return input, target.cuda(non_blocking=non_blocking)
+#         return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
+            
+#     def __iter__(self):
+#         if not self.prefetch:
+#             for input, target in self.loaditer: yield self.process_tensors(input, target, non_blocking=False)
+#             return
+#         while True:
+#             torch.cuda.current_stream().wait_stream(self.stream)
+#             input, target = self.next_input, self.next_target
+#             try: self.preload() # 0.5 fix
+#             except Exception as e:
+#                 yield input, target
+#                 break
+#             yield input, target
+
+
 
 # Seems to speed up training by ~2%
 class DataPrefetcher():
@@ -116,33 +158,6 @@ def fast_collate(batch):
         tensor[i] += torch.from_numpy(nump_array)
     return tensor, targets
 
-import os.path
-def sort_ar(valdir):
-    idx2ar_file = valdir+'/../sorted_idxar.p'
-    if os.path.isfile(idx2ar_file): return pickle.load(open(idx2ar_file, 'rb'))
-    print('Creating AR indexes. Please be patient this may take a couple minutes...')
-    val_dataset = datasets.ImageFolder(valdir) # AS: TODO: use Image.open instead of looping through dataset
-    sizes = [img[0].size for img in tqdm(val_dataset, total=len(val_dataset))]
-    idx_ar = [(i, round(s[0]/s[1], 5)) for i,s in enumerate(sizes)]
-    sorted_idxar = sorted(idx_ar, key=lambda x: x[1])
-    pickle.dump(sorted_idxar, open(idx2ar_file, 'wb'))
-    print('Done')
-    return sorted_idxar
-
-def chunks(l, n):
-    n = max(1, n)
-    return (l[i:i+n] for i in range(0, len(l), n))
-
-def map_idx2ar(idx_ar_sorted, batch_size):
-    ar_chunks = list(chunks(idx_ar_sorted, batch_size))
-    idx2ar = {}
-    for chunk in ar_chunks:
-        idxs, ars = list(zip(*chunk))
-        mean = round(np.mean(ars), 5)
-        for idx in idxs:
-            idx2ar[idx] = mean
-    return idx2ar
-
 class ValDataset(datasets.ImageFolder):
     def __init__(self, root, transform=None, target_transform=None):
         super().__init__(root, transform, target_transform)
@@ -159,8 +174,8 @@ class ValDataset(datasets.ImageFolder):
         return sample, target
 
 class DistValSampler(Sampler):
-    # DistValSampler distrbutes batches equally (based on batch size) to every gpu (even if there aren't enough images). 
-    # Some baches will contain an empty array to signify there aren't enough images
+    # DistValSampler distrbutes batches equally (based on batch size) to every gpu (even if there aren't enough images)
+    # WARNING: Some baches will contain an empty array to signify there aren't enough images
     # Distributed=False - same validation happens on every single gpu
     def __init__(self, indices, batch_size, distributed=True):
         self.indices = indices
@@ -188,6 +203,7 @@ class DistValSampler(Sampler):
     def __len__(self): return self.expected_num_batches
     def set_epoch(self, epoch): return
     
+
 class CropArTfm(object):
     def __init__(self, idx2ar, target_size):
         self.idx2ar, self.target_size = idx2ar, target_size
@@ -201,14 +217,29 @@ class CropArTfm(object):
             size = (self.target_size, h//8*8)
         return torchvision.transforms.functional.center_crop(img, size)
 
-class AdaptiveRandomResizedCrop(transforms.RandomResizedCrop):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.target_scale = self.scale
+import os.path
+def sort_ar(valdir):
+    idx2ar_file = valdir+'/../sorted_idxar.p'
+    if os.path.isfile(idx2ar_file): return pickle.load(open(idx2ar_file, 'rb'))
+    print('Creating AR indexes. Please be patient this may take a couple minutes...')
+    val_dataset = datasets.ImageFolder(valdir) # AS: TODO: use Image.open instead of looping through dataset
+    sizes = [img[0].size for img in tqdm(val_dataset, total=len(val_dataset))]
+    idx_ar = [(i, round(s[0]/s[1], 5)) for i,s in enumerate(sizes)]
+    sorted_idxar = sorted(idx_ar, key=lambda x: x[1])
+    pickle.dump(sorted_idxar, open(idx2ar_file, 'wb'))
+    print('Done')
+    return sorted_idxar
 
-    def __call__(self, img):
-        w,h = img.size
-        # print('Size:', self.size[0])
-        # print('W, h', w, h)
-        self.scale = (self.target_scale[0] * self.size[0]/min(w,h), self.target_scale[1])
-        return super().__call__(img)
+def chunks(l, n):
+    n = max(1, n)
+    return (l[i:i+n] for i in range(0, len(l), n))
+
+def map_idx2ar(idx_ar_sorted, batch_size):
+    ar_chunks = list(chunks(idx_ar_sorted, batch_size))
+    idx2ar = {}
+    for chunk in ar_chunks:
+        idxs, ars = list(zip(*chunk))
+        mean = round(np.mean(ars), 5)
+        for idx in idxs:
+            idx2ar[idx] = mean
+    return idx2ar
