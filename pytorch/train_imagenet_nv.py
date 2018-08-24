@@ -48,7 +48,7 @@ def get_parser():
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
     parser.add_argument('--fp16', action='store_true', help='Run model fp16 mode. Default True')
-    parser.add_argument('--loss-scale', type=float, default=1,
+    parser.add_argument('--loss-scale', type=float, default=1024,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--distributed', action='store_true', help='Run distributed training. Default True')
     parser.add_argument('--dist-url', default='env://', type=str,
@@ -59,8 +59,6 @@ def get_parser():
                         'or automatically set by using \'python -m multiproc\'.')
     parser.add_argument('--logdir', default='', type=str,
                         help='where logs go')
-    parser.add_argument('--skip-eval', action='store_true',
-                        help='disable evaluation during training')
     parser.add_argument('--skip-auto-shutdown', action='store_true',
                         help='Shutdown instance at the end of training or failure')
     parser.add_argument('--auto-shutdown-success-delay-mins', default=10, type=int,
@@ -122,9 +120,9 @@ class DataManager():
 
     def preload_data(self, ep, sz, bs, trndir, valdir, **kwargs): # dummy ep var to prevent error
         """Pre-initializes data-loaders. Use set_data to start using it."""
-        if sz == 128: val_bs = 640
-        elif sz == 224: val_bs = 288
-        else: val_bs = 160
+        if sz == 128: val_bs = max(bs, 512)
+        elif sz == 224: val_bs = max(bs, 256)
+    else: val_bs = max(bs, 160)
         return dataloader.get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
 # ### Learning rate scheduler
@@ -189,12 +187,11 @@ def listify(p=None, q=None):
 # Only want master rank logging to tensorboard
 is_master = (not args.distributed) or (dist_utils.env_rank()==0)
 tb = TensorboardLogger(args.logdir, is_master=is_master)
-tb.log('first', time.time())
-tb.log('sizes/world', dist_utils.env_world_size())
 logger = FileLogger(args.logdir, is_master=is_master)
 
 def main():    
     logger.log_verbose(args)
+    tb.log('sizes/world', dist_utils.env_world_size())
 
     # need to index validation directory before we start counting the time
     dataloader.sort_ar(args.data+'/validation')
@@ -266,8 +263,7 @@ def main():
     
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
-    if isinstance(t, float): return t
-    if isinstance(t, int): return t
+    if isinstance(t, (float, int)): return t
     if hasattr(t, 'item'): return t.item()
     else: return t[0]
 
@@ -351,7 +347,7 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
 
         tb.update_step_count(batch_total)
 
-    
+
 def validate(val_loader, model, criterion, epoch, start_time):
     if args.skip_eval: return 0
     
@@ -383,6 +379,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
         top1.update(to_python_float(prec1), to_python_float(batch_total))
         top5.update(to_python_float(prec5), to_python_float(batch_total))
 
+        print('Memory allocated after validation:', torch.cuda.memory_allocated())
         should_print = (batch_num%args.print_freq == 0) or (batch_num==len(val_loader))
         if args.local_rank == 0 and should_print:
             output = (f'Test: [{batch_num}/{len(val_loader)}]\t'
@@ -391,6 +388,7 @@ def validate(val_loader, model, criterion, epoch, start_time):
                       f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})')
             logger.log_verbose(output)
+
 
     time_diff = datetime.now()-start_time
     logger.log_event(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top1.avg:.3f}\t{top5.avg:.3f}\n')

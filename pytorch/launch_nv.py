@@ -49,8 +49,6 @@ parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
-parser.add_argument('--install-script', type=str, default='',
-                    help='location of script to install')
 parser.add_argument('--attach-volume', type=str, default='imagenet',
                     help='tag name of ebs volume to attach')
 parser.add_argument('--use-local-conda', action='store_true',
@@ -63,16 +61,13 @@ parser.add_argument('--params', type=str, default="xar_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
 
-DEFAULT_ENV_NAME='pytorch_p36'
-
-
 lr = 1.0
 ashaw = [
   '--phases', [
-    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    # {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
     {'ep':(0, 100),  'lr':lr},
-    {'ep':2,  'sz':224, 'bs':224},
-    {'ep':4,  'sz':288, 'bs':160},
+    {'ep':0,  'sz':224, 'bs':256},
+    {'ep':8,  'sz':288, 'bs':128},
   ],
   '--init-bn0',
   '--no-bn-wd',
@@ -81,7 +76,6 @@ ashaw = [
   # '--env-name', 'pytorch_p36',
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-  # '--skip-eval',
   '--short-epoch',
   '--skip-auto-shutdown'
 ]
@@ -102,7 +96,6 @@ quick_oom = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
   # '--env-name', 'pytorch_p36',
-  # '--skip-eval',
   '--short-epoch',
   '--skip-auto-shutdown'
 ]
@@ -118,7 +111,6 @@ quick_run = [
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-  '--skip-eval',
   '--short-epoch'
 ]
 
@@ -135,7 +127,6 @@ xar_throughput = [
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-  '--skip-eval',
   '--skip-auto-shutdown'
 ]
 
@@ -152,7 +143,6 @@ xar_throughput_dlami = [
   '--num-tasks', 1,
   '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
   '--env-name', 'pytorch_p36',
-  '--skip-eval',
 ]
 
 
@@ -414,21 +404,10 @@ x32ar_throughput = [
   '--num-tasks', 32,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-  '--skip-eval',
 ]
 
 
 # hacks to allow launcher level flags in worker params list
-def _extract_param(params, name, strict=True):
-  args = [v for v in params if v==name]
-  if strict: assert len(args) == 1, f"Must specify exactly 1 {name}"
-  if not args: return ''
-  
-  for i in range(len(params)-1):
-    if params[i] == name:
-      val = params[i+1]
-      del params[i+1], params[i]
-      return val
 
 def _extract_num_tasks(params): return _extract_param(params, '--num-tasks')
 def _extract_ami_name(params): return _extract_param(params, '--ami-name')
@@ -442,9 +421,9 @@ def _extract_env_name(params):
 
 def main():
   params = eval(args.params)
-  ami_name = _extract_ami_name(params)
-  num_tasks = _extract_num_tasks(params)
-  env_name = _extract_env_name(params)
+  num_tasks = launch_utils_lib.extract_param(params, '--num-tasks')
+  ami_name = launch_utils_lib.extract_param(params, '--ami-name', default='Deep Learning AMI (Ubuntu) Version 13.0')
+  env_name = launch_utils_lib.extract_param(params, '--env-name', default='pytorch_p36')
   
   run = aws_backend.make_run(args.name,
                              ami_name=ami_name,
@@ -452,18 +431,13 @@ def main():
   
   job = create_job(run, 'worker', num_tasks, env_name)
   run.setup_logdir()  # must happen after first job is created and ready
+  print(f"Logging to {job.logdir}")
 
   # Define custom params for training or use a preset above
   start_training(job, params)
 
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
-  
-  install_script = ''
-  if args.install_script:
-    with open(args.install_script, 'r') as f:
-      install_script = f.read()
-  
   ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
     
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, use_spot=args.spot, use_placement_group=True)
@@ -471,6 +445,8 @@ def create_job(run, job_name, num_tasks, env_name):
   print(job.connect_instructions)
 
   job.run_async_join('killall python || echo ignoring')  # kill previous run
+  job.run_async_join(f'shutdown -c') # cancel old shutdown command
+  job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
 
   # mount_volume hardcoded to use data now
   # TODO: this should be global setting/constant instead
@@ -485,21 +461,9 @@ def create_job(run, job_name, num_tasks, env_name):
     job.run_async_join('. /home/ubuntu/anaconda3/etc/profile.d/conda.sh')
     job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/{env_name}')
 
-  # job.run_async_join('source activate pytorch_source', ignore_errors=True) # currently a bug in latest pytorch
-  job.run_async_join('ulimit -n 9000') # to prevent tcp too many files open error
-
   # upload files
-  job.upload_async('resnet.py')
-  job.upload_async('fp16util.py')
-  job.upload_async('dataloader.py')
-  job.upload_async('meter.py')
-  job.upload_async('logger.py')
-  job.upload_async('dist_utils.py')
-  job.upload_async('train_imagenet_nv.py')
-  job.upload_async('experimental_utils.py')
-
-  # Sometimes get SSH session not active or "connection reset by peer"
-  # bad internet?
+  training_files = ['resnet.py', 'fp16util.py', 'dataloader.py', 'meter.py', 'logger.py', 'dist_utils.py', 'train_imagenet_nv.py', 'experimental_utils.py']
+  for f in training_files: job.upload_async(f)
 
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
@@ -510,7 +474,6 @@ def create_job(run, job_name, num_tasks, env_name):
   return job
 
 def start_training(job, params):
-
   num_tasks = len(job.tasks)  
   instance_0 = job.tasks[0].instance
   world_0_ip = instance_0.private_ip_address
@@ -520,17 +483,11 @@ def start_training(job, params):
 
   # Use NCCL rings for faster network throughput
   nccl_args = launch_utils_lib.get_nccl_args(num_tasks, num_gpus)
-  # below is what official version uses
-  # nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
-  
-  # Create save directory
-  job.run_async_join(f'shutdown -c')
 
   # Training script args
   default_params = [
     '~/data/imagenet',
     '--fp16',
-    '--loss-scale', 1024,
     '--logdir', job.logdir
   ]
   if world_size > 1: default_params.append('--distributed')
@@ -543,13 +500,7 @@ def start_training(job, params):
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
     t.run(f'echo {cmd} > {job.logdir}/script.log')
-    task_cmds.append(cmd)
-
-
-  for t,cmd in zip(job.tasks, task_cmds):
-    t.run_async(cmd)
-
-  print(f"Logging to {job.logdir}")
+    t.run(cmd, sync=False)
 
 if __name__=='__main__':
   main()

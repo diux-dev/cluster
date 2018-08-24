@@ -15,6 +15,7 @@ class TensorboardLogger(Logger):
     self.current_step = 0
     if is_master: self.writer = SummaryWriter(self.output_dir)
     else: self.writer = NoOp()
+    self.log('first', time.time())
 
   def log(self, tag, val):
     """Log value to tensorboard (relies on global_example_count being set properly)"""
@@ -39,7 +40,7 @@ class TensorboardLogger(Logger):
     self.log('times/eval_sec', time)
 
   def log_trn_loss(self, loss, top1, top5):
-    self.log("losses/xent", loss)    # cross_entropy
+    self.log("losses/xent", loss)      # cross_entropy
     self.log("losses/train_1", top1)   # precision@1
     self.log("losses/train_5", top5)   # precision@5
 
