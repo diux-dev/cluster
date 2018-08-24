@@ -5,9 +5,8 @@ import sys
 import math
 
 import torch
-import torch.distributed as dist
 import torch.utils.data
-import torch.utils.data.distributed
+from torch.utils.data.distributed import DistributedSampler
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
@@ -15,6 +14,7 @@ from torch.utils.data.sampler import Sampler
 import torchvision
 import pickle
 from tqdm import tqdm
+from dist_utils import env_world_size, env_rank
 
 def get_loaders(traindir, valdir, sz, bs, fp16=True, val_bs=None, workers=8, rect_val=False, min_scale=0.08, distributed=False):
     val_bs = val_bs or bs
@@ -23,7 +23,7 @@ def get_loaders(traindir, valdir, sz, bs, fp16=True, val_bs=None, workers=8, rec
             transforms.RandomHorizontalFlip()
     ]
     train_dataset = datasets.ImageFolder(traindir, transforms.Compose(train_tfms))
-    train_sampler = (torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=get_world_size(), rank=get_rank()) if distributed else None)
+    train_sampler = (DistributedSampler(train_dataset, num_replicas=env_world_size(), rank=env_rank()) if distributed else None)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=bs, shuffle=(train_sampler is None),
@@ -66,7 +66,6 @@ class BatchTransformDataLoader():
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
         self.fp16 = fp16
-        self.gen = None
         if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
 
     def __len__(self): return len(self.loader)
@@ -120,8 +119,8 @@ class DistValSampler(Sampler):
         self.indices = indices
         self.batch_size = batch_size
         if distributed:
-            self.world_size = get_world_size()
-            self.global_rank = get_rank()
+            self.world_size = env_world_size()
+            self.global_rank = env_rank()
         else: 
             self.global_rank = 0
             self.world_size = 1

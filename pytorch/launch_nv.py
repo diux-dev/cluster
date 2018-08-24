@@ -66,6 +66,27 @@ args = parser.parse_args()
 DEFAULT_ENV_NAME='pytorch_p36'
 
 
+lr = 1.0
+ashaw = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':(0, 100),  'lr':lr},
+    {'ep':2,  'sz':224, 'bs':224},
+    {'ep':4,  'sz':288, 'bs':160},
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  # '--env-name', 'pytorch_p36',
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+  # '--skip-eval',
+  '--short-epoch',
+  '--skip-auto-shutdown'
+]
+
+
 # OOM after 1-10 seconds
 lr = 1.0
 quick_oom = [
@@ -79,9 +100,9 @@ quick_oom = [
   '--no-bn-wd',
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--env-name', 'pytorch_source',
-  '--env-name', 'pytorch_p36',
-  '--skip-eval',
+  '--env-name', 'pytorch_source',
+  # '--env-name', 'pytorch_p36',
+  # '--skip-eval',
   '--short-epoch',
   '--skip-auto-shutdown'
 ]
@@ -433,9 +454,7 @@ def main():
   run.setup_logdir()  # must happen after first job is created and ready
 
   # Define custom params for training or use a preset above
-  # TODO: move "save_tag" into command-line parameter
-  start_training(job, params, save_tag=args.name)
-
+  start_training(job, params)
 
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
@@ -490,7 +509,7 @@ def create_job(run, job_name, num_tasks, env_name):
 
   return job
 
-def start_training(job, params, save_tag):
+def start_training(job, params):
 
   num_tasks = len(job.tasks)  
   instance_0 = job.tasks[0].instance
@@ -505,18 +524,11 @@ def start_training(job, params, save_tag):
   # nccl_args = 'NCCL_MIN_NRINGS=4 NCCL_DEBUG=VERSION'
   
   # Create save directory
-  # TODO: replace with DATA_ROOT? ~ is not understood by all programs
-  base_save_dir = '~/data/training/nv'
-  datestr = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-  # base_save_dir = f'/efs/training/nv' # TODO: save to efs instead
-  save_dir = f'{base_save_dir}/{datestr}-{save_tag}-w{world_size}'
-  job.run_async_join(f'mkdir {save_dir} -p')
   job.run_async_join(f'shutdown -c')
 
   # Training script args
   default_params = [
     '~/data/imagenet',
-    '--save-dir', save_dir,
     '--fp16',
     '--loss-scale', 1024,
     '--logdir', job.logdir
@@ -530,7 +542,7 @@ def start_training(job, params, save_tag):
   for i,t in enumerate(job.tasks):
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-    t.run(f'echo {cmd} > {save_dir}/script.log')
+    t.run(f'echo {cmd} > {job.logdir}/script.log')
     task_cmds.append(cmd)
 
 

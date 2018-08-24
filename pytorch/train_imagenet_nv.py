@@ -23,7 +23,7 @@ import resnet
 import dataloader
 import experimental_utils
 import dist_utils
-from logger import TensorboardLogger
+from logger import TensorboardLogger, FileLogger
 from meter import AverageMeter, NetworkMeter, TimeMeter
 
 def get_parser():
@@ -31,7 +31,7 @@ def get_parser():
     parser.add_argument('data', metavar='DIR', help='path to dataset')
     parser.add_argument('--phases', type=str,
                     help='Specify epoch order of data resize and learning rate schedule: [{"ep":0,"sz":128,"bs":64},{"ep":5,"lr":1e-2}]')
-    parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
+    # parser.add_argument('--save-dir', type=str, default=Path.cwd(), help='Directory to save logs and models.')
     parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                         help='number of data loading workers (default: 8)')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -61,9 +61,9 @@ def get_parser():
                         help='where logs go')
     parser.add_argument('--skip-eval', action='store_true',
                         help='disable evaluation during training')
-    parser.add_argument('--skip-auto-shutdown', action='store_false',
+    parser.add_argument('--skip-auto-shutdown', action='store_true',
                         help='Shutdown instance at the end of training or failure')
-    parser.add_argument('--auto-shutdown-success-delay-mins', default=0, type=int,
+    parser.add_argument('--auto-shutdown-success-delay-mins', default=10, type=int,
                         help='how long to wait until shutting down on success')
     parser.add_argument('--auto-shutdown-failure-delay-mins', default=120, type=int,
                         help='how long to wait before shutting down on error')
@@ -75,7 +75,8 @@ def get_parser():
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
-if args.local_rank: sys.stdout = open(f'{args.save_dir}/GPU_{args.local_rank}.log', 'w')
+# if args.local_rank != 0: sys.stdout = open(f'{args.log_dir}/GPU_{args.local_rank}.log', 'w', 1)
+if args.local_rank != 0: sys.stdout = open(f'/dev/null', 'w', 100)
 
 class DataManager():
     def __init__(self, phases):
@@ -92,28 +93,25 @@ class DataManager():
     def set_data(self, phase):
         """Initializes data loader."""
         if phase.get('keep_dl', False):
-            print(f'Batch size changed, dataset remains the same. \nBatch size: {phase["bs"]}')
+            logger.log_event(f'Batch size changed: {phase["bs"]}')
             tb.log_size(phase['bs'])
             self.trn_dl.batch_sampler.batch_size = phase['bs']
             return
         
-        print(f'Dataset changed. \nImage size: {phase["sz"]} \nBatch size: {phase["bs"]} \nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
+        logger.log_event(f'Dataset changed.\nImage size: {phase["sz"]}\nBatch size: {phase["bs"]}\nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
         tb.log_size(phase['bs'], phase['sz'])
 
         self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = phase['data']
         self.phases.remove(phase)
 
         # clear memory before we begin training
-        torch.cuda.synchronize()
         gc.collect()
-        torch.cuda.empty_cache()
         
     def preload_phase_data(self, phases):
         for phase in phases:
             if not phase.get('keep_dl', False):
                 self.expand_directories(phase)
                 phase['data'] = self.preload_data(**phase)
-
         return phases
 
     def expand_directories(self, phase):
@@ -172,17 +170,14 @@ class Scheduler():
         lr = self.get_lr(epoch, batch_num, batch_tot) 
         if self.current_lr == lr: return
         if ((batch_num == 1) or (batch_num == batch_tot)): 
-            print(f'Changing LR from {self.current_lr} to {lr}')
+            logger.log_event(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
-        should_print = (batch_num%args.print_freq == 0)
-        
-        momentum = -1
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
             
         tb.log("sizes/lr", lr)
-        tb.log("sizes/momentum", momentum)
+        tb.log("sizes/momentum", args.momentum)
 
 def listify(p=None, q=None):
     if p is None: p=[]
@@ -192,19 +187,20 @@ def listify(p=None, q=None):
     return p
 
 # Only want master rank logging to tensorboard
-def is_master(): return (not args.distributed) or (dist_utils.env_rank()==0)
-tb = TensorboardLogger(args.logdir, is_master=is_master())
+is_master = (not args.distributed) or (dist_utils.env_rank()==0)
+tb = TensorboardLogger(args.logdir, is_master=is_master)
 tb.log('first', time.time())
 tb.log('sizes/world', dist_utils.env_world_size())
+logger = FileLogger(args.logdir, is_master=is_master)
 
 def main():    
-    print(args)
+    logger.log_verbose(args)
 
     # need to index validation directory before we start counting the time
     dataloader.sort_ar(args.data+'/validation')
     
     if args.distributed:
-        print('Distributed initializing process group')
+        print('Distributed initializing process group:', dist_utils.env_world_size())
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=dist_utils.env_world_size())
         assert(dist_utils.env_world_size() == dist.get_world_size())
@@ -215,7 +211,7 @@ def main():
     model = resnet.resnet50(bn0=args.init_bn0).cuda()
     if args.fp16: model = network_to_half(model)
     if args.distributed: model = dist_utils.DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    best_prec5 = 93 # only save models over 92%. Otherwise it stops to save every time
+    best_prec5 = 93 # only save models over 93%. Otherwise it stops to save every time
 
     global model_params, master_params
     if args.fp16: model_params, master_params = prep_param_lists(model)
@@ -235,7 +231,6 @@ def main():
         optimizer.load_state_dict(checkpoint['optimizer'])
             
     # save script so we can reproduce from logs
-    shutil.copy2(os.path.realpath(__file__), f'{args.save_dir}')
     shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
 
     # Load data data manager and lr scheduler from phases
@@ -249,28 +244,17 @@ def main():
 
     if args.distributed:
         print('Syncing machines before training')
-        sum_tensor(torch.tensor([1.0]).float().cuda())
+        dist_utils.sum_tensor(torch.tensor([1.0]).float().cuda())
 
     print("Begin training")
-    print("~~epoch\thours\ttop1Accuracy\ttop5Accuracy\n")
+    logger.log_verbose("~~epoch\thours\ttop1Accuracy\ttop5Accuracy\n")
     estart = time.time()
     for epoch in range(args.start_epoch, scheduler.tot_epochs):
         estart = time.time()
         dm.set_epoch(epoch)
 
         train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
-
-        # clear memory before we begin training
-        torch.cuda.synchronize()
-        gc.collect()
-        torch.cuda.empty_cache()
-
         prec5 = validate(dm.val_dl, model, criterion, epoch, start_time)
-
-        # clear memory before we begin training
-        torch.cuda.synchronize()
-        gc.collect()
-        torch.cuda.empty_cache()
 
         tb.log('epoch', epoch)
         is_best = prec5 > best_prec5
@@ -307,19 +291,6 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         output = model(input)
         loss = criterion(output, target)
 
-        # if args.distributed:
-        #     # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
-        #     corr1, corr5 = correct(output.data, target, topk=(1, 5))
-        #     metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
-        #     batch_total, reduced_loss, corr1, corr5 = sum_tensor(metrics).cpu().numpy()
-        #     reduced_loss = reduced_loss/dist_utils.env_world_size()
-        #     prec1 = corr1*(100.0/batch_total)
-        #     prec5 = corr5*(100.0/batch_total)
-        # else:
-        #     reduced_loss = loss.data
-        #     batch_total = input.size(0)
-        #     prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
-
         # compute gradient and do SGD step
         if args.fp16:
             loss = loss*args.loss_scale
@@ -334,10 +305,21 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
             loss.backward()
             optimizer.step()
 
-        continue
-
         # Train batch done. Logging results
         timer.batch_end()
+
+        if args.distributed:
+            # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
+            corr1, corr5 = correct(output.data, target, topk=(1, 5))
+            metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
+            batch_total, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
+            reduced_loss = reduced_loss/dist_utils.env_world_size()
+            prec1 = corr1*(100.0/batch_total)
+            prec5 = corr5*(100.0/batch_total)
+        else:
+            reduced_loss = loss.data
+            batch_total = input.size(0)
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
 
         reduced_loss = to_python_float(reduced_loss)
         batch_total = to_python_float(batch_total)
@@ -351,13 +333,10 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
         if args.local_rank == 0 and should_print:
             tb.log_memory()
             tb.log_trn_times(timer.batch_time.val, timer.data_time.val, batch_size)
-
-            tb.log("losses/xent", losses.val)    # cross_entropy
-            tb.log("losses/train_1", top1.val)   # precision@1
-            tb.log("losses/train_5", top5.val)   # precision@5
-            tb.log("sizes/batch_total", batch_total)
+            tb.log_trn_loss(losses.val, top1.val, top5.val)
 
             recv_gbit, transmit_gbit = net_meter.update_bandwidth()
+            tb.log("sizes/batch_total", batch_total)
             tb.log('net/recv_gbit', recv_gbit)
             tb.log('net/transmit_gbit', transmit_gbit)
             
@@ -368,17 +347,13 @@ def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
                       f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'
                       f'BW {recv_gbit:.3f} {transmit_gbit:.3f}')
-            print(output)
-            with open(f'{args.save_dir}/full.log', 'a') as f:
-                f.write(output + '\n')
+            logger.log_verbose(output)
 
         tb.update_step_count(batch_total)
-    print('Epoch:', epoch)
 
     
 def validate(val_loader, model, criterion, epoch, start_time):
-    if args.skip_eval:
-      return 0
+    if args.skip_eval: return 0
     
     # batch_time = AverageMeter()
     timer = TimeMeter()
@@ -401,9 +376,6 @@ def validate(val_loader, model, criterion, epoch, start_time):
                 loss = criterion(output, target).data
             batch_total = input.size(0)
             prec1, prec5 = accuracy(output.data, target, topk=(1,5))
-            
-
-        continue
 
         # Eval batch done. Logging results
         timer.batch_end()
@@ -418,11 +390,10 @@ def validate(val_loader, model, criterion, epoch, start_time):
                       f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
                       f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                       f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})')
-            print(output)
-            with open(f'{args.save_dir}/full.log', 'a') as f: f.write(output + '\n')
+            logger.log_verbose(output)
 
     time_diff = datetime.now()-start_time
-    print(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top1.avg:.3f}\t{top5.avg:.3f}\n')
+    logger.log_event(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top1.avg:.3f}\t{top5.avg:.3f}\n')
     
     tb.log_eval(top1.avg, top5.avg, time.time()-eval_start_time)
 
@@ -443,7 +414,7 @@ def distributed_predict(input, target, model, criterion):
         corr1, corr5 = correct(output.data, target, topk=(1, 5))
 
     metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
-    batch_total, valid_batches, reduced_loss, corr1, corr5 = sum_tensor(metrics).cpu().numpy()
+    batch_total, valid_batches, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
     reduced_loss = reduced_loss/valid_batches
 
     prec1 = corr1*(100.0/batch_total)
@@ -457,7 +428,7 @@ def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename
         'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
     }
     torch.save(state, filename)
-    if is_best: shutil.copyfile(filename, f'{args.save_dir}/{filename}')
+    if is_best: shutil.copyfile(filename, f'{args.logdir}/{filename}')
 
 
 def accuracy(output, target, topk=(1,)):
@@ -479,18 +450,19 @@ def correct(output, target, topk=(1,)):
     return res
 
 if __name__ == '__main__':
-    # try:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=UserWarning)
-        main()
-    if args.skip_auto_shutdown: os.system(f'sudo shutdown -h -P +{args.auto_shutdown_success_delay_mins}')
-    # except Exception as e:
-    #   exc_type, exc_value, exc_traceback = sys.exc_info()
-    #   import traceback
-    #   traceback.print_tb(exc_traceback, file=sys.stdout)
-        # print(exc_value)
-
-    #   # in case of exception, wait 2 hours before shutting down
-    #   if not args.skip_auto_shutdown: os.system(f'sudo shutdown -h -P +{args.auto_shutdown_failure_delay_mins}')
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            main()
+        if not args.skip_auto_shutdown: os.system(f'sudo shutdown -h -P +{args.auto_shutdown_success_delay_mins}')
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        import traceback
+        traceback.print_tb(exc_traceback, file=sys.stdout)
+        logger.log_event(e)
+        # in case of exception, wait 2 hours before shutting down
+        if not args.skip_auto_shutdown: os.system(f'sudo shutdown -h -P +{args.auto_shutdown_failure_delay_mins}')
+    logger.close()
+    tb.close()
 
 
