@@ -16,7 +16,7 @@ import torchvision
 import pickle
 from tqdm import tqdm
 
-def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, rect_val=False, min_scale=0.08, distributed=False):
+def get_loaders(traindir, valdir, sz, bs, fp16=True, val_bs=None, workers=8, rect_val=False, min_scale=0.08, distributed=False):
     val_bs = val_bs or bs
     train_tfms = [
             transforms.RandomResizedCrop(sz, scale=(min_scale, 1.0)),
@@ -35,6 +35,9 @@ def get_loaders(traindir, valdir, sz, bs, val_bs=None, workers=8, rect_val=False
         val_dataset,
         num_workers=workers, pin_memory=True, collate_fn=fast_collate, 
         batch_sampler=val_sampler)
+
+    train_loader = BatchTransformDataLoader(train_loader, fp16=fp16)
+    val_loader = BatchTransformDataLoader(val_loader, fp16=fp16)
 
     return train_loader, val_loader, train_sampler, val_sampler
 
@@ -55,73 +58,19 @@ def create_validation_set(valdir, batch_size, target_size, rect_val, distributed
     val_sampler = DistValSampler(list(range(len(val_dataset))), batch_size=batch_size, distributed=distributed)
     return val_dataset, val_sampler
 
-# class BatchTransformDataLoader():
-#     # Mean normalization on batch level instead of individual
-#     # https://github.com/NVIDIA/apex/blob/59bf7d139e20fb4fa54b09c6592a2ff862f3ac7f/examples/imagenet/main.py#L222
-#     def __init__(self, loader, prefetch=False, fp16=True):
-#         self.loader = loader
-#         self.prefetch = prefetch
-#         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
-#         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
-#         self.fp16 = fp16
-#         self.loaditer = iter(self.loader)
-#         if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
-#         if self.prefetch:
-#             self.stream = torch.cuda.Stream()
-#             self.next_input = self.next_target = None
-#             self.preload()
-
-#     def __len__(self): return len(self.loader)
-
-#     def preload(self):
-#         self.next_input, self.next_target = next(self.loaditer)
-#         with torch.cuda.stream(self.stream):
-#             self.next_input, self.next_target = self.process_tensors(self.next_input, self.next_target, non_blocking=True)
-    
-#     def process_tensors(self, input, target, non_blocking=True):
-#         input = input.cuda(non_blocking=non_blocking)
-#         if self.fp16: input = input.half()
-#         else: input = input.float()
-#         if len(input.shape) < 3: return input, target.cuda(non_blocking=non_blocking)
-#         return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
-            
-#     def __iter__(self):
-#         if not self.prefetch:
-#             for input, target in self.loaditer: yield self.process_tensors(input, target, non_blocking=False)
-#             return
-#         while True:
-#             torch.cuda.current_stream().wait_stream(self.stream)
-#             input, target = self.next_input, self.next_target
-#             try: self.preload() # 0.5 fix
-#             except Exception as e:
-#                 yield input, target
-#                 break
-#             yield input, target
-
-
-
-# Seems to speed up training by ~2%
-class DataPrefetcher():
-    def __init__(self, loader, prefetch=False, fp16=True):
+class BatchTransformDataLoader():
+    # Mean normalization on batch level instead of individual
+    # https://github.com/NVIDIA/apex/blob/59bf7d139e20fb4fa54b09c6592a2ff862f3ac7f/examples/imagenet/main.py#L222
+    def __init__(self, loader, fp16=True):
         self.loader = loader
-        self.prefetch = prefetch
         self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
         self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
         self.fp16 = fp16
-        self.loaditer = iter(self.loader)
+        self.gen = None
         if self.fp16: self.mean, self.std = self.mean.half(), self.std.half()
-        if self.prefetch:
-            self.stream = torch.cuda.Stream()
-            self.next_input = self.next_target = None
-            self.preload()
 
     def __len__(self): return len(self.loader)
 
-    def preload(self):
-        self.next_input, self.next_target = next(self.loaditer)
-        with torch.cuda.stream(self.stream):
-            self.next_input, self.next_target = self.process_tensors(self.next_input, self.next_target, non_blocking=True)
-    
     def process_tensors(self, input, target, non_blocking=True):
         input = input.cuda(non_blocking=non_blocking)
         if self.fp16: input = input.half()
@@ -130,17 +79,7 @@ class DataPrefetcher():
         return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
             
     def __iter__(self):
-        if not self.prefetch:
-            for input, target in self.loaditer: yield self.process_tensors(input, target, non_blocking=False)
-            return
-        while True:
-            torch.cuda.current_stream().wait_stream(self.stream)
-            input, target = self.next_input, self.next_target
-            try: self.preload() # 0.5 fix
-            except Exception as e:
-                yield input, target
-                break
-            yield input, target
+        return (self.process_tensors(input, target, non_blocking=True) for input,target in self.loader)
 
 def fast_collate(batch):
     if not batch: return torch.tensor([]), torch.tensor([])
@@ -240,6 +179,5 @@ def map_idx2ar(idx_ar_sorted, batch_size):
     for chunk in ar_chunks:
         idxs, ars = list(zip(*chunk))
         mean = round(np.mean(ars), 5)
-        for idx in idxs:
-            idx2ar[idx] = mean
+        for idx in idxs: idx2ar[idx] = mean
     return idx2ar

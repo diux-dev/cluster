@@ -70,18 +70,20 @@ DEFAULT_ENV_NAME='pytorch_p36'
 lr = 1.0
 quick_oom = [
   '--phases', [
-    {'ep':0,  'sz':224, 'bs':256},
-    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-    {'ep':(5,100), 'lr': lr}
+    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+    {'ep':(0, 100),  'lr':lr},
+    {'ep':2,  'sz':224, 'bs':224},
+    {'ep':4,  'sz':288, 'bs':160},
   ],
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
+  # '--env-name', 'pytorch_source',
+  '--env-name', 'pytorch_p36',
   '--skip-eval',
-  '--prefetch', 0,
-  '--short-epoch'
+  '--short-epoch',
+  '--skip-auto-shutdown'
 ]
 
 # fast run to check shutdown behavior
@@ -96,7 +98,6 @@ quick_run = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
   '--skip-eval',
-  '--prefetch', 0,
   '--short-epoch'
 ]
 
@@ -114,6 +115,7 @@ xar_throughput = [
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
   '--skip-eval',
+  '--skip-auto-shutdown'
 ]
 
 # throughput/batch-size testing
@@ -250,30 +252,6 @@ x8ar_args_benchmark = [
   '--num-tasks', 8,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
-]
-
-lr = 0.235 * 8 # 8 = num tasks
-x8ar_args_benchmark_noprefetch = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,            'bs':256, 'keep_dl':True},
-    {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224,'bs':128},
-    {'ep':16,      'lr':lr},
-    {'ep':19,          'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':lr/(10/1.5)},
-    {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':37,     'lr':lr/100},
-    {'ep':(38,40),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 8,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-  '--prefetch', 0,
 ]
 
 # Also ~27 minutes. Faster per epoch, but takes one extra
@@ -422,11 +400,8 @@ x32ar_throughput = [
 # hacks to allow launcher level flags in worker params list
 def _extract_param(params, name, strict=True):
   args = [v for v in params if v==name]
-  if strict:
-    assert len(args) == 1, f"Must specify exactly 1 {name}"
-
-  if not args:
-    return ''
+  if strict: assert len(args) == 1, f"Must specify exactly 1 {name}"
+  if not args: return ''
   
   for i in range(len(params)-1):
     if params[i] == name:
@@ -498,6 +473,9 @@ def create_job(run, job_name, num_tasks, env_name):
   job.upload_async('resnet.py')
   job.upload_async('fp16util.py')
   job.upload_async('dataloader.py')
+  job.upload_async('meter.py')
+  job.upload_async('logger.py')
+  job.upload_async('dist_utils.py')
   job.upload_async('train_imagenet_nv.py')
   job.upload_async('experimental_utils.py')
 
@@ -533,6 +511,7 @@ def start_training(job, params, save_tag):
   # base_save_dir = f'/efs/training/nv' # TODO: save to efs instead
   save_dir = f'{base_save_dir}/{datestr}-{save_tag}-w{world_size}'
   job.run_async_join(f'mkdir {save_dir} -p')
+  job.run_async_join(f'shutdown -c')
 
   # Training script args
   default_params = [
@@ -540,10 +519,9 @@ def start_training(job, params, save_tag):
     '--save-dir', save_dir,
     '--fp16',
     '--loss-scale', 1024,
-    '--world-size', world_size,
-    '--logdir', job.logdir,
-    '--distributed'
+    '--logdir', job.logdir
   ]
+  if world_size > 1: default_params.append('--distributed')
   training_args = default_params + params
   training_args = ' '.join(map(launch_utils_lib.format_args, training_args))
 

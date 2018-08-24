@@ -1,5 +1,5 @@
 from tensorboardX import SummaryWriter
-import subprocess
+import torch
 
 
 class Logger:
@@ -20,14 +20,22 @@ class TensorboardLogger(Logger):
     if not self.writer: return
     self.writer.add_scalar(tag, val, self.current_step)
 
+  def update_step_count(self, batch_total):
+    self.current_step += batch_total
+
+  def close(self):
+    self.writer.export_scalars_to_json(self.output_dir+'/scalars.json')
+    self.writer.close()
+
+  # Convenience logging methods
   def log_size(self, bs=None, sz=None):
     if bs: self.log('sizes/batch', bs)
     if sz: self.log('sizes/image', sz)
     
   def log_eval(self, top1, top5, time):
-    log_tb('losses/test_1', top1.avg)
-    log_tb('losses/test_5', top5.avg)
-    log_tb('times/eval_sec', time.time()-eval_start_time)
+    self.log('losses/test_1', top1)
+    self.log('losses/test_5', top5)
+    self.log('times/eval_sec', time)
 
   def log_memory(self):
     if not self.writer: return
@@ -44,12 +52,6 @@ class TensorboardLogger(Logger):
     self.log("times/1gpu_images_per_sec", images_per_sec)
     self.log("times/8gpu_images_per_sec", 8*images_per_sec)
 
-  def update_step_count(self, batch_total):
-    self.current_step += batch_total
-
-  def close(self):
-    self.writer.export_scalars_to_json(self.output_dir+'/scalars.json')
-    self.writer.close()
 
 class FileLogger(Logger):
   def __init__(self, output_dir, is_master=False):
@@ -58,3 +60,4 @@ class FileLogger(Logger):
     # if is_master: self.writer = SummaryWriter(self.output_dir)
 
   def log(self, out, verbose=True):
+    pass

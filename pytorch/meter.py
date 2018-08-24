@@ -1,7 +1,9 @@
 
+import subprocess, time
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
-    def __init__(self, mom=0.5):
+    def __init__(self, avg_mom=0.5):
         self.avg_mom = avg_mom
         self.reset()
 
@@ -16,7 +18,7 @@ class AverageMeter(object):
         self.val = val
         self.sum += val * n
         self.count += n
-        self.smooth_avg = val if count == 0 else self.avg*self.avg_mom + val*(1-self.avg_mom)
+        self.smooth_avg = val if self.count == 0 else self.avg*self.avg_mom + val*(1-self.avg_mom)
         self.avg = self.sum / self.count
 
 class NetworkMeter:
@@ -54,7 +56,7 @@ class TimeMeter:
     self.data_time.update(time.time() - self.start)
 
   def batch_end(self):
-    self.data_time.update(time.time() - self.start)
+    self.batch_time.update(time.time() - self.start)
     self.start = time.time()
 
       

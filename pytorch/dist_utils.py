@@ -1,8 +1,9 @@
 import torch.distributed as dist
-import torch.nn.parallel
+from torch.nn.parallel import DistributedDataParallel
+import os
 
-def DDP(nn.parallel.DistributedDataParallel):
-  # Distributed wrapper. Supports asynchronous evaluation and model saving
+def DDP(DistributedDataParallel):
+      # Distributed wrapper. Supports asynchronous evaluation and model saving
   def forward(self, *args, **kwargs):
     # DDP has a sync point on forward. No need to do this for eval. This allows us to have different batch sizes
     if self.training: return super()(*args, **kwargs)
