@@ -155,14 +155,16 @@ xar_args_pytorch = [
     {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     {'ep':5,      'lr':lr},
     {'ep':14, 'sz':224, 'bs':192},
-    {'ep':16,     'lr':lr/10},
-    {'ep':27,     'lr':lr/100},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':(33,35),'lr':lr/1000}
+    {'ep':14,     'lr':lr*(512/192)},
+    {'ep':16,     'lr':lr/10*(512/192)},
+    {'ep':27,     'lr':lr/100*(512/192)},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':32,     'lr':lr/100*(512/128)},
+    {'ep':(33,35),'lr':lr/1000*(512/128)}
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--autoscale-lr2batch',
+  # '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', 'pytorch.imagenet.source.v6',
   '--env-name', 'pytorch_source',
@@ -170,6 +172,29 @@ xar_args_pytorch = [
   # '--c10d'
 ]
 
+
+# Current testing params 4x p3
+lr = 0.47 * 4 # 4 = num tasks
+x4ar_args_scale = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':192},
+    {'ep':16,     'lr':lr*(256/192)},
+    {'ep':19,     'lr':lr/10*(256/192)},
+    {'ep':31,     'lr':lr/100*(256/192)},
+    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':36,     'lr':lr/100*(256/128)},
+    {'ep':(37,39),'lr':lr/1000*(256/128)}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 4,
+  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--env-name', 'pytorch_source',
+]
 
 # Current benchmark for 4x p3
 lr = 0.47 * 4 # 4 = num tasks
@@ -181,7 +206,7 @@ x4ar_args = [
     {'ep':16, 'sz':224, 'bs':192},
     {'ep':19,     'lr':lr/10},
     {'ep':31,     'lr':lr/100},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':(38,40),'lr':lr/1000}
   ],
   '--init-bn0',
@@ -203,7 +228,7 @@ x4ar_args_bench = [
     {'ep':15, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
     {'ep':18,     'lr':lr/10},
     {'ep':29,     'lr':lr/100},
-    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':(35,38),'lr':lr/1000}
   ],
   '--init-bn0',
@@ -215,31 +240,6 @@ x4ar_args_bench = [
   '--factorized-resnet',
 ]
 
-# Current testing params 4x p3
-lr = 0.47 * 4 # 4 = num tasks
-x4ar_args_test_bench_2 = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True},
-    {'ep':6,      'lr':lr*2},
-    {'ep':15, 'sz':224, 'bs':194, 'trndir':'-sz/352', 'min_scale':0.086},
-    {'ep':15,      'lr':lr/1.5},
-    {'ep':18,     'lr':lr/10/1.5},
-    {'ep':29,     'lr':lr/100/1.5},
-    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
-    {'ep':34,     'lr':lr/100},
-    {'ep':(35,38),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 4,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  # '--resume', 'sz128_checkpoint.path.tar'
-  '--env-name', 'pytorch_source',
-  # '--factorized-resnet',
-  # '--c10d'
-]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
 lr = 0.235 * 8 # 8 = num tasks
@@ -254,7 +254,7 @@ x8ar_args_benchmark = [
     {'ep':19,          'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
@@ -278,7 +278,7 @@ x8ar_args_352_folder = [
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
@@ -302,7 +302,7 @@ x8ar_args_test_2 = [
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':lr/(10/1.5)},
     {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':36,     'lr':lr/100},
     {'ep':(37,40),'lr':lr/1000}
   ],
@@ -326,7 +326,7 @@ x16ar_args = [
     {'ep':16, 'sz':224, 'bs':64},
     {'ep':19,     'lr':lr/10},
     {'ep':31,     'lr':lr/100},
-    {'ep':37, 'sz':288, 'bs':64, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':64, 'min_scale':0.5, 'rect_val':True},
     {'ep':(38,40),'lr':lr/1000}
   ],
   '--init-bn0',
@@ -353,7 +353,7 @@ x16ar_args_benchmark = [
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':2*lr/(10/1.5)},
     {'ep':31,     'lr':2*lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':2*lr/100},
     {'ep':(38,40),'lr':2*lr/1000}
   ],
@@ -379,7 +379,7 @@ x24ar_args_test = [
     {'ep':19,           'bs':192, 'keep_dl':True},
     {'ep':19,     'lr':3*lr/(10/1.5)},
     {'ep':31,     'lr':3*lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':3*lr/100},
     {'ep':(38,50),'lr':3*lr/1000}
   ],
@@ -407,18 +407,6 @@ x32ar_throughput = [
 ]
 
 
-# hacks to allow launcher level flags in worker params list
-
-def _extract_num_tasks(params): return _extract_param(params, '--num-tasks')
-def _extract_ami_name(params): return _extract_param(params, '--ami-name')
-def _extract_env_name(params):
-  name = _extract_param(params, '--env-name', strict=False)
-  if not name:
-    return DEFAULT_ENV_NAME
-  else:
-    return name
-
-
 def main():
   params = eval(args.params)
   num_tasks = launch_utils_lib.extract_param(params, '--num-tasks')
@@ -440,7 +428,7 @@ def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
   ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
     
-  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, install_script=install_script, use_spot=args.spot, use_placement_group=True)
+  job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()
   print(job.connect_instructions)
 
@@ -462,8 +450,7 @@ def create_job(run, job_name, num_tasks, env_name):
     job.run_async_join(f'conda activate {DATA_ROOT}/anaconda3/envs/{env_name}')
 
   # upload files
-  training_files = ['resnet.py', 'fp16util.py', 'dataloader.py', 'meter.py', 'logger.py', 'dist_utils.py', 'train_imagenet_nv.py', 'experimental_utils.py']
-  for f in training_files: job.upload_async(f)
+  job.upload_async('training', remote_fn='training')
 
   setup_complete = [t.file_exists('/tmp/nv_setup_complete') for t in job.tasks]
   if not all(setup_complete):
@@ -498,7 +485,7 @@ def start_training(job, params):
   task_cmds = []
   for i,t in enumerate(job.tasks):
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
-    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
+    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} training/train_imagenet_nv.py {training_args}'
     t.run(f'echo {cmd} > {job.logdir}/script.log')
     t.run(cmd, sync=False)
 

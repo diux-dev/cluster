@@ -26,13 +26,13 @@ def format_args(arg):
   else: return str(arg)
 
 def extract_param(params, name, default=None):
-  args = [i,k for i,k in enumerate(params) if k==name]
+  args = [(i,k) for i,k in enumerate(params) if k==name]
   if (not args) and (default is not None): return default
   assert len(args) == 1, f"Must specify exactly 1 '{name}'"
 
   idx,key = args[0]
-  del params[idx]
   val = params.pop(idx+1)
+  del params[idx]
   return val
 
 # EBS Utils

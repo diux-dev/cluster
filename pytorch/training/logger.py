@@ -1,17 +1,10 @@
 from tensorboardX import SummaryWriter
 import torch
-
-
-class Logger:
-  def __init__(self, output_dir):
-    self.output_dir = output_dir
-  def log(val):
-    raise NotImplementedError()
-    
+import time    
   
-class TensorboardLogger(Logger):
+class TensorboardLogger:
   def __init__(self, output_dir, is_master=False):
-    super().__init__(output_dir)
+    self.output_dir = output_dir
     self.current_step = 0
     if is_master: self.writer = SummaryWriter(self.output_dir)
     else: self.writer = NoOp()
@@ -60,33 +53,42 @@ class TensorboardLogger(Logger):
     self.log("times/8gpu_images_per_sec", 8*images_per_sec)
 
 
-class FileLogger(Logger):
+import logging
+
+
+class FileLogger:
   def __init__(self, output_dir, is_master=False):
-    super().__init__(output_dir)
-    self.current_step = 0
-    print('File log:', output_dir+'/verbose.log')
-    if is_master:
-      bufsize = 5
-      self.verbose_log = open(output_dir+'/verbose.log', 'a', 1)
-      self.event_log = open(output_dir+'/event.log', 'a', 1)
-    else:
-      self.verbose_log = NoOp()
-      self.event_log = NoOp()
+    self.output_dir = output_dir
+    self.logger = self.get_logger(output_dir) if is_master else NoOp()
 
-  def log(self, val):
-    print(val)
+  def get_logger(self, output_dir):
+    logger = logging.getLogger('imagenet_training')
+    logger.setLevel(logging.DEBUG)
 
-  def log_verbose(self, val):
-    self.log(val)
-    self.verbose_log.write(str(val)+'\n')
+    formatter = logging.Formatter('%(message)s')
+    vlog = logging.FileHandler(output_dir+'/verbose.log')
+    vlog.setLevel(logging.INFO)
+    vlog.setFormatter(formatter)
+    elog = logging.FileHandler(output_dir+'/event.log')
+    elog.setLevel(logging.WARN)
+    elog.setFormatter(formatter)
+    logger.addHandler(vlog)
+    logger.addHandler(elog)
+    
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    console.setLevel(logging.DEBUG)
+    logger.addHandler(console)
+    return logger
 
-  def log_event(self, val): 
-    self.log_verbose(val)
-    self.event_log.write(str(val)+'\n')
+  def console(self, val):
+    self.logger.debug(val)
 
-  def close(self):
-    self.verbose_log.close()
-    self.event_log.close()
+  def event(self, val):
+    self.logger.warn(val)
+
+  def verbose(self, val):
+    self.logger.info(val)
 
 # no_op method/object that accept every signature
 class NoOp:

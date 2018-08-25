@@ -76,6 +76,217 @@ args = get_parser().parse_args()
 # if args.local_rank != 0: sys.stdout = open(f'{args.log_dir}/GPU_{args.local_rank}.log', 'w', 1)
 if args.local_rank != 0: sys.stdout = open(f'/dev/null', 'w', 100)
 
+# Only want master rank logging to tensorboard
+is_master = (not args.distributed) or (dist_utils.env_rank()==0)
+tb = TensorboardLogger(args.logdir, is_master=is_master)
+log = FileLogger(args.logdir, is_master=is_master)
+
+def main():    
+    log.console(args)
+    tb.log('sizes/world', dist_utils.env_world_size())
+
+    # need to index validation directory before we start counting the time
+    dataloader.sort_ar(args.data+'/validation')
+    
+    if args.distributed:
+        log.console('Distributed initializing process group:', dist_utils.env_world_size())
+        torch.cuda.set_device(args.local_rank)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=dist_utils.env_world_size())
+        assert(dist_utils.env_world_size() == dist.get_world_size())
+        log.console("Distributed: success (%d/%d)"%(args.local_rank, dist.get_world_size()))
+
+
+    log.console("Loading model")
+    model = resnet.resnet50(bn0=args.init_bn0).cuda()
+    if args.fp16: model = network_to_half(model)
+    if args.distributed: model = dist_utils.DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
+    best_top5 = 93 # only save models over 93%. Otherwise it stops to save every time
+
+    global model_params, master_params
+    if args.fp16: model_params, master_params = prep_param_lists(model)
+    else: model_params = master_params = model.parameters()
+
+    optim_params = experimental_utils.bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
+
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+    optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
+    
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
+        model.load_state_dict(checkpoint['state_dict'])
+        args.start_epoch = checkpoint['epoch']
+        best_top5 = checkpoint['best_top5']
+        optimizer.load_state_dict(checkpoint['optimizer'])
+            
+    # save script so we can reproduce from logs
+    shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
+
+    log.console("Creating data loaders (this could take 2-3 minutes)")
+    phases = eval(args.phases)
+    dm = DataManager([p for p in phases if 'bs' in p])
+    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p])
+
+    start_time = datetime.now() # Loading start to after everything is loaded
+    if args.evaluate: return validate(dm.val_dl, model, criterion, 0, start_time)
+
+    if args.distributed:
+        log.console('Syncing machines before training')
+        dist_utils.sum_tensor(torch.tensor([1.0]).float().cuda())
+
+    log.event("~~epoch\thours\ttop1\ttop5\n")
+    for epoch in range(args.start_epoch, scheduler.tot_epochs):
+        dm.set_epoch(epoch)
+
+        train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
+        top1, top5 = validate(dm.val_dl, model, criterion, epoch, start_time)
+
+        time_diff = (datetime.now()-start_time).total_seconds()/3600.0
+        log.event(f'~~{epoch}\t{time_diff:.5f}\t\t{top1:.3f}\t\t{top5:.3f}\n')
+
+        is_best = top5 > best_top5
+        best_top5 = max(top5, best_top5)
+        if args.local_rank == 0:
+            if is_best: save_checkpoint(epoch, model, best_top5, optimizer, is_best=True, filename='model_best.pth.tar')
+            phase = dm.get_phase(epoch)
+            if phase: save_checkpoint(epoch, model, best_top5, optimizer, filename=f'sz{phase["bs"]}_checkpoint.path.tar')
+
+
+def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
+    net_meter = NetworkMeter()
+    timer = TimeMeter()
+    losses = AverageMeter()
+    top1 = AverageMeter()
+    top5 = AverageMeter()
+
+    # switch to train mode
+    model.train()
+    for i,(input,target) in enumerate(trn_loader):
+        if args.short_epoch and (i > 10): break
+        batch_num = i+1
+        timer.batch_start()
+        scheduler.update_lr(epoch, i+1, len(trn_loader))
+
+        # compute output
+        output = model(input)
+        loss = criterion(output, target)
+
+        # compute gradient and do SGD step
+        if args.fp16:
+            loss = loss*args.loss_scale
+            model.zero_grad()
+            loss.backward()
+            model_grads_to_master_grads(model_params, master_params)
+            for param in master_params: param.grad.data = param.grad.data/args.loss_scale
+            optimizer.step()
+            master_params_to_model_params(model_params, master_params)
+            loss = loss/args.loss_scale
+        else:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        # Train batch done. Logging results
+        timer.batch_end()
+        corr1, corr5 = correct(output.data, target, topk=(1, 5))
+        reduced_loss, batch_total = to_python_float(loss.data), to_python_float(input.size(0))
+        if args.distributed: # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
+            metrics = torch.tensor([batch_total, reduced_loss, corr1, corr5]).float().cuda()
+            batch_total, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
+            reduced_loss = reduced_loss/dist_utils.env_world_size()
+        top1acc = to_python_float(corr1)*(100.0/batch_total)
+        top5acc = to_python_float(corr5)*(100.0/batch_total)
+
+        losses.update(reduced_loss, batch_total)
+        top1.update(top1acc, batch_total)
+        top5.update(top5acc, batch_total)
+
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(trn_loader))
+        if args.local_rank == 0 and should_print:
+            tb.log_memory()
+            tb.log_trn_times(timer.batch_time.val, timer.data_time.val, input.size(0))
+            tb.log_trn_loss(losses.val, top1.val, top5.val)
+
+            recv_gbit, transmit_gbit = net_meter.update_bandwidth()
+            tb.log("sizes/batch_total", batch_total)
+            tb.log('net/recv_gbit', recv_gbit)
+            tb.log('net/transmit_gbit', transmit_gbit)
+            
+            output = (f'Epoch: [{epoch}][{batch_num}/{len(trn_loader)}]\t'
+                      f'Time {timer.batch_time.val:.3f} ({timer.batch_time.avg:.3f})\t'
+                      f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
+                      f'Acc@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                      f'Acc@5 {top5.val:.3f} ({top5.avg:.3f})\t'
+                      f'Data {timer.data_time.val:.3f} ({timer.data_time.avg:.3f})\t'
+                      f'BW {recv_gbit:.3f} {transmit_gbit:.3f}')
+            log.verbose(output)
+
+        tb.update_step_count(batch_total)
+
+
+def validate(val_loader, model, criterion, epoch, start_time):
+    timer = TimeMeter()
+    losses = AverageMeter()
+    top1 = AverageMeter()
+    top5 = AverageMeter()
+
+    model.eval()
+    eval_start_time = time.time()
+
+    for i,(input,target) in enumerate(val_loader):
+        if args.short_epoch and (i > 10): break
+        batch_num = i+1
+        timer.batch_start()
+        if args.distributed:
+            top1acc, top5acc, loss, batch_total = distributed_predict(input, target, model, criterion)
+        else:
+            with torch.no_grad():
+                output = model(input)
+                loss = criterion(output, target).data
+            batch_total = input.size(0)
+            top1acc, top5acc = accuracy(output.data, target, topk=(1,5))
+
+        # Eval batch done. Logging results
+        timer.batch_end()
+        losses.update(to_python_float(loss), to_python_float(batch_total))
+        top1.update(to_python_float(top1acc), to_python_float(batch_total))
+        top5.update(to_python_float(top5acc), to_python_float(batch_total))
+        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(val_loader))
+        if args.local_rank == 0 and should_print:
+            output = (f'Test:  [{epoch}][{batch_num}/{len(val_loader)}]\t'
+                      f'Time {timer.batch_time.val:.3f} ({timer.batch_time.avg:.3f})\t'
+                      f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
+                      f'Acc@1 {top1.val:.3f} ({top1.avg:.3f})\t'
+                      f'Acc@5 {top5.val:.3f} ({top5.avg:.3f})')
+            log.verbose(output)
+
+    tb.log_eval(top1.avg, top5.avg, time.time()-eval_start_time)
+    tb.log('epoch', epoch)
+
+    return top1.avg, top5.avg
+
+def distributed_predict(input, target, model, criterion):
+    # Allows distributed prediction on uneven batches. Test set isn't always large enough for every GPU to get a batch
+    batch_size = input.size(0)
+    output = loss = corr1 = corr5 = valid_batches = 0
+
+    if batch_size:
+        with torch.no_grad():
+            output = model(input)
+            loss = criterion(output, target).data
+        # measure accuracy and record loss
+        valid_batches = 1
+        corr1, corr5 = correct(output.data, target, topk=(1, 5))
+
+    metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
+    batch_total, valid_batches, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
+    reduced_loss = reduced_loss/valid_batches
+
+    top1 = corr1*(100.0/batch_total)
+    top5 = corr5*(100.0/batch_total)
+    return top1, top5, reduced_loss, batch_total
+
+
 class DataManager():
     def __init__(self, phases):
         self.phases = self.preload_phase_data(phases)
@@ -91,12 +302,12 @@ class DataManager():
     def set_data(self, phase):
         """Initializes data loader."""
         if phase.get('keep_dl', False):
-            logger.log_event(f'Batch size changed: {phase["bs"]}')
+            log.event(f'Batch size changed: {phase["bs"]}')
             tb.log_size(phase['bs'])
             self.trn_dl.batch_sampler.batch_size = phase['bs']
             return
         
-        logger.log_event(f'Dataset changed.\nImage size: {phase["sz"]}\nBatch size: {phase["bs"]}\nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
+        log.event(f'Dataset changed.\nImage size: {phase["sz"]}\nBatch size: {phase["bs"]}\nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
         tb.log_size(phase['bs'], phase['sz'])
 
         self.trn_dl, self.val_dl, self.trn_smp, self.val_smp = phase['data']
@@ -122,7 +333,7 @@ class DataManager():
         """Pre-initializes data-loaders. Use set_data to start using it."""
         if sz == 128: val_bs = max(bs, 512)
         elif sz == 224: val_bs = max(bs, 256)
-    else: val_bs = max(bs, 160)
+        else: val_bs = max(bs, 128)
         return dataloader.get_loaders(trndir, valdir, bs=bs, val_bs=val_bs, sz=sz, workers=args.workers, distributed=args.distributed, **kwargs)
 
 # ### Learning rate scheduler
@@ -168,7 +379,7 @@ class Scheduler():
         lr = self.get_lr(epoch, batch_num, batch_tot) 
         if self.current_lr == lr: return
         if ((batch_num == 1) or (batch_num == batch_tot)): 
-            logger.log_event(f'Changing LR from {self.current_lr} to {lr}')
+            log.event(f'Changing LR from {self.current_lr} to {lr}')
 
         self.current_lr = lr
         for param_group in self.optimizer.param_groups:
@@ -177,266 +388,29 @@ class Scheduler():
         tb.log("sizes/lr", lr)
         tb.log("sizes/momentum", args.momentum)
 
-def listify(p=None, q=None):
-    if p is None: p=[]
-    elif not isinstance(p, collections.Iterable): p=[p]
-    n = q if type(q)==int else 1 if q is None else len(q)
-    if len(p)==1: p = p * n
-    return p
-
-# Only want master rank logging to tensorboard
-is_master = (not args.distributed) or (dist_utils.env_rank()==0)
-tb = TensorboardLogger(args.logdir, is_master=is_master)
-logger = FileLogger(args.logdir, is_master=is_master)
-
-def main():    
-    logger.log_verbose(args)
-    tb.log('sizes/world', dist_utils.env_world_size())
-
-    # need to index validation directory before we start counting the time
-    dataloader.sort_ar(args.data+'/validation')
-    
-    if args.distributed:
-        print('Distributed initializing process group:', dist_utils.env_world_size())
-        torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=dist_utils.env_world_size())
-        assert(dist_utils.env_world_size() == dist.get_world_size())
-        print("Distributed: success (%d/%d)"%(args.local_rank, dist.get_world_size()))
-
-
-    print("Loading model")
-    model = resnet.resnet50(bn0=args.init_bn0).cuda()
-    if args.fp16: model = network_to_half(model)
-    if args.distributed: model = dist_utils.DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
-    best_prec5 = 93 # only save models over 93%. Otherwise it stops to save every time
-
-    global model_params, master_params
-    if args.fp16: model_params, master_params = prep_param_lists(model)
-    else: model_params = master_params = model.parameters()
-
-    optim_params = experimental_utils.bnwd_optim_params(model, model_params, master_params) if args.no_bn_wd else master_params
-
-    # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda()
-    optimizer = torch.optim.SGD(optim_params, 0, momentum=args.momentum, weight_decay=args.weight_decay) # start with 0 lr. Scheduler will change this later
-    
-    if args.resume: # we must resume optimizer params separately
-        checkpoint = torch.load(args.resume, map_location = lambda storage, loc: storage.cuda(args.local_rank))
-        model.load_state_dict(checkpoint['state_dict'])
-        args.start_epoch = checkpoint['epoch']
-        best_prec5 = checkpoint['best_prec5']
-        optimizer.load_state_dict(checkpoint['optimizer'])
-            
-    # save script so we can reproduce from logs
-    shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
-
-    # Load data data manager and lr scheduler from phases
-    phases = eval(args.phases)
-    print("Creating data loaders (this could take 2-3 minutes)")
-    dm = DataManager([p for p in phases if 'bs' in p])
-    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p])
-
-    start_time = datetime.now() # Loading start to after everything is loaded
-    if args.evaluate: return validate(dm.val_dl, model, criterion, 0, start_time)
-
-    if args.distributed:
-        print('Syncing machines before training')
-        dist_utils.sum_tensor(torch.tensor([1.0]).float().cuda())
-
-    print("Begin training")
-    logger.log_verbose("~~epoch\thours\ttop1Accuracy\ttop5Accuracy\n")
-    estart = time.time()
-    for epoch in range(args.start_epoch, scheduler.tot_epochs):
-        estart = time.time()
-        dm.set_epoch(epoch)
-
-        train(dm.trn_dl, model, criterion, optimizer, scheduler, epoch)
-        prec5 = validate(dm.val_dl, model, criterion, epoch, start_time)
-
-        tb.log('epoch', epoch)
-        is_best = prec5 > best_prec5
-        best_prec5 = max(prec5, best_prec5)
-        if args.local_rank == 0:
-            if is_best: save_checkpoint(epoch, model, best_prec5, optimizer, is_best=True, filename='model_best.pth.tar')
-            phase = dm.get_phase(epoch)
-            if phase:save_checkpoint(epoch, model, best_prec5, optimizer, filename=f'sz{phase["bs"]}_checkpoint.path.tar')
-    
 # item() is a recent addition, so this helps with backward compatibility.
 def to_python_float(t):
     if isinstance(t, (float, int)): return t
     if hasattr(t, 'item'): return t.item()
     else: return t[0]
 
-def train(trn_loader, model, criterion, optimizer, scheduler, epoch):
-    net_meter = NetworkMeter()
-    timer = TimeMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
-
-    # switch to train mode
-    model.train()
-    for i,(input,target) in enumerate(trn_loader):
-        if args.short_epoch and (i > 10): break
-        batch_size = input.size(0)
-        batch_num = i+1
-        timer.batch_start()
-        scheduler.update_lr(epoch, i+1, len(trn_loader))
-
-        # compute output
-        output = model(input)
-        loss = criterion(output, target)
-
-        # compute gradient and do SGD step
-        if args.fp16:
-            loss = loss*args.loss_scale
-            model.zero_grad()
-            loss.backward()
-            model_grads_to_master_grads(model_params, master_params)
-            for param in master_params: param.grad.data = param.grad.data/args.loss_scale
-            optimizer.step()
-            master_params_to_model_params(model_params, master_params)
-        else:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # Train batch done. Logging results
-        timer.batch_end()
-
-        if args.distributed:
-            # Must keep track of global batch size, since not all machines are guaranteed equal batches at the end of an epoch
-            corr1, corr5 = correct(output.data, target, topk=(1, 5))
-            metrics = torch.tensor([batch_size, loss, corr1, corr5]).float().cuda()
-            batch_total, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
-            reduced_loss = reduced_loss/dist_utils.env_world_size()
-            prec1 = corr1*(100.0/batch_total)
-            prec5 = corr5*(100.0/batch_total)
-        else:
-            reduced_loss = loss.data
-            batch_total = input.size(0)
-            prec1, prec5 = accuracy(output.data, target, topk=(1, 5)) # measure accuracy and record loss
-
-        reduced_loss = to_python_float(reduced_loss)
-        batch_total = to_python_float(batch_total)
-        prec1 = to_python_float(prec1)
-        prec5 = to_python_float(prec5)
-        losses.update(reduced_loss, batch_total)
-        top1.update(prec1, batch_total)
-        top5.update(prec5, batch_total)
-
-        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(trn_loader))
-        if args.local_rank == 0 and should_print:
-            tb.log_memory()
-            tb.log_trn_times(timer.batch_time.val, timer.data_time.val, batch_size)
-            tb.log_trn_loss(losses.val, top1.val, top5.val)
-
-            recv_gbit, transmit_gbit = net_meter.update_bandwidth()
-            tb.log("sizes/batch_total", batch_total)
-            tb.log('net/recv_gbit', recv_gbit)
-            tb.log('net/transmit_gbit', transmit_gbit)
-            
-            output = (f'Epoch: [{epoch}][{batch_num}/{len(trn_loader)}]\t'
-                      f'Time {timer.batch_time.val:.3f} ({timer.batch_time.avg:.3f})\t'
-                      f'Data {timer.data_time.val:.3f} ({timer.data_time.avg:.3f})\t'
-                      f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                      f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                      f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'
-                      f'BW {recv_gbit:.3f} {transmit_gbit:.3f}')
-            logger.log_verbose(output)
-
-        tb.update_step_count(batch_total)
-
-
-def validate(val_loader, model, criterion, epoch, start_time):
-    if args.skip_eval: return 0
-    
-    # batch_time = AverageMeter()
-    timer = TimeMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
-
-    model.eval()
-    eval_start_time = time.time()
-
-    for i,(input,target) in enumerate(val_loader):
-        if args.short_epoch and (i > 10): break
-        batch_num = i+1
-        timer.batch_start()
-        if args.distributed:
-            prec1, prec5, loss, batch_total = distributed_predict(input, target, model, criterion)
-        else:
-            with torch.no_grad():
-                output = model(input)
-                loss = criterion(output, target).data
-            batch_total = input.size(0)
-            prec1, prec5 = accuracy(output.data, target, topk=(1,5))
-
-        # Eval batch done. Logging results
-        timer.batch_end()
-        losses.update(to_python_float(loss), to_python_float(batch_total))
-        top1.update(to_python_float(prec1), to_python_float(batch_total))
-        top5.update(to_python_float(prec5), to_python_float(batch_total))
-
-        print('Memory allocated after validation:', torch.cuda.memory_allocated())
-        should_print = (batch_num%args.print_freq == 0) or (batch_num==len(val_loader))
-        if args.local_rank == 0 and should_print:
-            output = (f'Test: [{batch_num}/{len(val_loader)}]\t'
-                      f'Time {timer.batch_time.val:.3f} ({timer.batch_time.avg:.3f})\t'
-                      f'Loss {losses.val:.4f} ({losses.avg:.4f})\t'
-                      f'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                      f'Prec@5 {top5.val:.3f} ({top5.avg:.3f})')
-            logger.log_verbose(output)
-
-
-    time_diff = datetime.now()-start_time
-    logger.log_event(f'~~{epoch}\t{float(time_diff.total_seconds() / 3600.0)}\t{top1.avg:.3f}\t{top5.avg:.3f}\n')
-    
-    tb.log_eval(top1.avg, top5.avg, time.time()-eval_start_time)
-
-    return top5.avg
-
-def distributed_predict(input, target, model, criterion):
-    # assert(isinstance(model, nn.parallel.DistributedDataParallel))
-    batch_size = input.size(0)
-    output = loss = corr1 = corr5 = valid_batches = 0
-    
-    if batch_size:
-        # compute output
-        with torch.no_grad():
-            output = model(input)
-            loss = criterion(output, target).data
-        # measure accuracy and record loss
-        valid_batches = 1
-        corr1, corr5 = correct(output.data, target, topk=(1, 5))
-
-    metrics = torch.tensor([batch_size, valid_batches, loss, corr1, corr5]).float().cuda()
-    batch_total, valid_batches, reduced_loss, corr1, corr5 = dist_utils.sum_tensor(metrics).cpu().numpy()
-    reduced_loss = reduced_loss/valid_batches
-
-    prec1 = corr1*(100.0/batch_total)
-    prec5 = corr5*(100.0/batch_total)
-    return prec1, prec5, reduced_loss, batch_total
-
-
-def save_checkpoint(epoch, model, best_prec5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
+def save_checkpoint(epoch, model, best_top5, optimizer, is_best=False, filename='checkpoint.pth.tar'):
     state = {
         'epoch': epoch+1, 'state_dict': model.state_dict(),
-        'best_prec5': best_prec5, 'optimizer' : optimizer.state_dict(),
+        'best_top5': best_top5, 'optimizer' : optimizer.state_dict(),
     }
     torch.save(state, filename)
     if is_best: shutil.copyfile(filename, f'{args.logdir}/{filename}')
 
 
 def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
+    """Computes the accuracy@k for the specified values of k"""
     corrrect_ks = correct(output, target, topk)
     batch_size = target.size(0)
     return [correct_k.float().mul_(100.0 / batch_size) for correct_k in corrrect_ks]
 
 def correct(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
+    """Computes the accuracy@k for the specified values of k"""
     maxk = max(topk)
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
@@ -446,6 +420,13 @@ def correct(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).sum(0, keepdim=True)
         res.append(correct_k)
     return res
+
+def listify(p=None, q=None):
+    if p is None: p=[]
+    elif not isinstance(p, collections.Iterable): p=[p]
+    n = q if type(q)==int else 1 if q is None else len(q)
+    if len(p)==1: p = p * n
+    return p
 
 if __name__ == '__main__':
     try:
@@ -457,10 +438,9 @@ if __name__ == '__main__':
         exc_type, exc_value, exc_traceback = sys.exc_info()
         import traceback
         traceback.print_tb(exc_traceback, file=sys.stdout)
-        logger.log_event(e)
+        log.event(e)
         # in case of exception, wait 2 hours before shutting down
         if not args.skip_auto_shutdown: os.system(f'sudo shutdown -h -P +{args.auto_shutdown_failure_delay_mins}')
-    logger.close()
     tb.close()
 
 
