@@ -89,7 +89,7 @@ def main():
     dataloader.sort_ar(args.data+'/validation')
     
     if args.distributed:
-        log.console('Distributed initializing process group:', dist_utils.env_world_size())
+        log.console('Distributed initializing process group')
         torch.cuda.set_device(args.local_rank)
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=dist_utils.env_world_size())
         assert(dist_utils.env_world_size() == dist.get_world_size())
@@ -330,6 +330,7 @@ class DataManager():
         phase['valdir'] = args.data+valdir+'/validation'
 
     def preload_data(self, ep, sz, bs, trndir, valdir, **kwargs): # dummy ep var to prevent error
+        if 'lr' in kwargs: del kwargs['lr'] # in case we mix schedule and data phases
         """Pre-initializes data-loaders. Use set_data to start using it."""
         if sz == 128: val_bs = max(bs, 512)
         elif sz == 224: val_bs = max(bs, 256)

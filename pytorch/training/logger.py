@@ -81,14 +81,14 @@ class FileLogger:
     logger.addHandler(console)
     return logger
 
-  def console(self, val):
-    self.logger.debug(val)
+  def console(self, *args):
+    self.logger.debug(*args)
 
-  def event(self, val):
-    self.logger.warn(val)
+  def event(self, *args):
+    self.logger.warn(*args)
 
-  def verbose(self, val):
-    self.logger.info(val)
+  def verbose(self, *args):
+    self.logger.info(*args)
 
 # no_op method/object that accept every signature
 class NoOp:

@@ -61,57 +61,26 @@ parser.add_argument('--params', type=str, default="xar_args",
                     help='args to use, see "params = " line')
 args = parser.parse_args()
 
-lr = 1.0
-ashaw = [
-  '--phases', [
-    # {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0, 100),  'lr':lr},
-    {'ep':0,  'sz':224, 'bs':256},
-    {'ep':8,  'sz':288, 'bs':128},
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 1,
-  # '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  # '--env-name', 'pytorch_p36',
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-  '--short-epoch',
-  '--skip-auto-shutdown'
-]
-
+DEFAULT_PYTORCH_SOURCE = 'pytorch.imagenet.source.v7'
+DEFAULT_DLAMI = 'Deep Learning AMI (Ubuntu) Version 12.0'
 
 # OOM after 1-10 seconds
 lr = 1.0
 quick_oom = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0, 100),  'lr':lr},
+    {'ep':(0, 8),  'lr':lr},
     {'ep':2,  'sz':224, 'bs':224},
     {'ep':4,  'sz':288, 'bs':160},
   ],
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 1,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
   # '--env-name', 'pytorch_p36',
   '--short-epoch',
   '--skip-auto-shutdown'
-]
-
-# fast run to check shutdown behavior
-quick_run = [
-  '--phases', [
-    {'ep':0,  'sz':224, 'bs':128},
-    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 1,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-  '--short-epoch'
 ]
 
 # throughput/batch-size testing
@@ -125,7 +94,7 @@ xar_throughput = [
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 1,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
   '--skip-auto-shutdown'
 ]
@@ -141,7 +110,7 @@ xar_throughput_dlami = [
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 1,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
+  '--ami-name', DEFAULT_DLAMI,
   '--env-name', 'pytorch_p36',
 ]
 
@@ -153,93 +122,50 @@ xar_args_pytorch = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
     {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-    {'ep':5,      'lr':lr},
-    {'ep':14, 'sz':224, 'bs':192},
-    {'ep':14,     'lr':lr*(512/192)},
-    {'ep':16,     'lr':lr/10*(512/192)},
-    {'ep':27,     'lr':lr/100*(512/192)},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':32,     'lr':lr/100*(512/128)},
-    {'ep':(33,35),'lr':lr/1000*(512/128)}
+    # {'ep':5,      'lr':lr},
+    {'ep':(5,10), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':224,
+                  'lr':lr/(512/224)},
+    {'ep':16,     'lr':lr/10/(512/224)},
+    {'ep':27,     'lr':lr/100/(512/224)},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100/(512/128)},
+    {'ep':(33,35),'lr':lr/1000/(512/128)}
   ],
   '--init-bn0',
   '--no-bn-wd',
   # '--autoscale-lr2batch',
   '--num-tasks', 1,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
-  # '--c10d'
 ]
 
 
 # Current testing params 4x p3
 lr = 0.47 * 4 # 4 = num tasks
-x4ar_args_scale = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True},
-    {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':192},
-    {'ep':16,     'lr':lr*(256/192)},
-    {'ep':19,     'lr':lr/10*(256/192)},
-    {'ep':31,     'lr':lr/100*(256/192)},
-    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':36,     'lr':lr/100*(256/128)},
-    {'ep':(37,39),'lr':lr/1000*(256/128)}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 4,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-]
-
-# Current benchmark for 4x p3
-lr = 0.47 * 4 # 4 = num tasks
+scale_224 = 224/256
+scale_288 = 128/256
 x4ar_args = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,      'lr':lr},
-    {'ep':16, 'sz':224, 'bs':192},
-    {'ep':19,     'lr':lr/10},
-    {'ep':31,     'lr':lr/100},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':(38,40),'lr':lr/1000}
+    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True,
+                  'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':224,
+                  'lr':lr*scale_224},
+    {'ep':19,     'lr':lr/10*scale_224},
+    {'ep':31,     'lr':lr/100*scale_224},
+    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100*scale_288},
+    {'ep':(37,39),'lr':lr/1000*scale_288}
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--autoscale-lr2batch',
   '--num-tasks', 4,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-  # '--resume', 'sz128_checkpoint.path.tar'
-]
-
-
-# Faster benchmark for 4x p3 - 43 minutes
-lr = 0.47 * 4 # 4 = num tasks
-x4ar_args_bench = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,      'lr':lr},
-    {'ep':15, 'sz':224, 'bs':192, 'trndir':'-sz/352', 'min_scale':0.086},
-    {'ep':18,     'lr':lr/10},
-    {'ep':29,     'lr':lr/100},
-    {'ep':34, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':(35,38),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--num-tasks', 4,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
-  '--factorized-resnet',
 ]
-
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
 lr = 0.235 * 8 # 8 = num tasks
@@ -261,7 +187,7 @@ x8ar_args_benchmark = [
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 8,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
 ]
 
@@ -285,58 +211,11 @@ x8ar_args_352_folder = [
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 8,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
 ]
 
-# Trying faster training schedule with original size (original gets 93.1%) - also increasing batch size but doesn't work
-lr = 0.235 * 8 # 8 = num tasks
-x8ar_args_test_2 = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,            'bs':256, 'keep_dl':True}, # (AS) definitely diverges here - remove batch size
-    {'ep':6,      'lr':lr*4},
-    {'ep':16, 'sz':224, 'bs':128},
-    {'ep':16,     'lr':lr*1.5},
-    {'ep':19,           'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':lr/(10/1.5)},
-    {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':36,     'lr':lr/100},
-    {'ep':(37,40),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--num-tasks', 8,
-  '--ami-name', 'pytorch.imagenet.source.v6',
-  '--env-name', 'pytorch_source',
-]
-
-# Current benchmark for 16x p3's - with Aspect Ratio Validatoin
-# python launch_nv.py --name yaro-friday-16 --num-tasks 16 --params x16ar_args
-
-# Current benchmark for 16x p3's - with Aspect Ratio Validatoin
-lr = 0.235
-x16ar_args = [
-  '--phases', [
-    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,      'lr':lr},
-    {'ep':16, 'sz':224, 'bs':64},
-    {'ep':19,     'lr':lr/10},
-    {'ep':31,     'lr':lr/100},
-    {'ep':37, 'sz':288, 'bs':64, 'min_scale':0.5, 'rect_val':True},
-    {'ep':(38,40),'lr':lr/1000}
-  ],
-  '--init-bn0',
-  '--no-bn-wd',
-  '--autoscale-lr2batch',
-  '--scale-lr', 8, # 8 = num tasks / 2 (because 64 batch size)
-  '--num-tasks', 16,
-  '--ami-name', 'Deep Learning AMI (Ubuntu) Version 12.0',
-]
-
+# Current benchmark for 16x p3's - with Aspect Ratio Validation
 
 # Ohio-sixteen base
 # 18:17 mins to 93.03, ohio-sixteen
@@ -361,7 +240,7 @@ x16ar_args_benchmark = [
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 16,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
 ]
 
@@ -387,7 +266,7 @@ x24ar_args_test = [
   '--no-bn-wd',
   '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 24,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
 ]
 
@@ -402,7 +281,7 @@ x32ar_throughput = [
   '--init-bn0',
   '--no-bn-wd',
   '--num-tasks', 32,
-  '--ami-name', 'pytorch.imagenet.source.v6',
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
 ]
 
