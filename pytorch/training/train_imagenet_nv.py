@@ -19,6 +19,7 @@ import torch.utils.data.distributed
 from fp16util import *
 
 import resnet
+import copy
 
 import dataloader
 import experimental_utils
@@ -122,10 +123,10 @@ def main():
     # save script so we can reproduce from logs
     shutil.copy2(os.path.realpath(__file__), f'{args.logdir}')
 
-    log.console("Creating data loaders (this could take 2-3 minutes)")
+    log.console("Creating data loaders (this could take up to 10 minutes if volume needs to be warmed up)")
     phases = eval(args.phases)
-    dm = DataManager([p for p in phases if 'bs' in p])
-    scheduler = Scheduler(optimizer, [p for p in phases if 'lr' in p])
+    dm = DataManager([copy.deepcopy(p) for p in phases if 'bs' in p])
+    scheduler = Scheduler(optimizer, [copy.deepcopy(p) for p in phases if 'lr' in p])
 
     start_time = datetime.now() # Loading start to after everything is loaded
     if args.evaluate: return validate(dm.val_dl, model, criterion, 0, start_time)
@@ -304,7 +305,7 @@ class DataManager():
         if phase.get('keep_dl', False):
             log.event(f'Batch size changed: {phase["bs"]}')
             tb.log_size(phase['bs'])
-            self.trn_dl.batch_sampler.batch_size = phase['bs']
+            self.trn_dl.update_batch_size = phase['bs']
             return
         
         log.event(f'Dataset changed.\nImage size: {phase["sz"]}\nBatch size: {phase["bs"]}\nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')

@@ -45,7 +45,6 @@ def now_micros():
 aws_regexp=re.compile('^[a-zA-Z0-9+-=._:/@.]*$')
 def validate_aws_name(name):
   """Validate resource name using AWS name restrictions from # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/Using_Tags.html#tag-restrictions"""
-  print('aws_regex:', name)
   assert len(name)<=127
   # disallow unicode characters to avoid pain
   assert name == name.encode('ascii').decode('ascii')
@@ -54,7 +53,6 @@ def validate_aws_name(name):
 resource_regexp=re.compile('^[a-z0-9]+$')
 def validate_resource_name(name):
   """Check that name is valid as substitute for DEFAULT_RESOURCE_NAME. Since it's used in unix filenames, be more conservative than AWS requirements, just allow 30 chars, lowercase only."""
-  print('resource name:', name)
   assert len(name)<=30
   assert resource_regexp.match(name)
   validate_aws_name(name)
@@ -133,7 +131,7 @@ def parse_job_name(name):
 
 def get_session():
   # in future can add profiles with Session(profile_name=...)
-  return boto3.Session(profile_name='diux')
+  return boto3.Session()
 
 def get_parsed_job_name(tags_or_instance):
   """Return jobname,task_id for given aws instance tags. IE, for

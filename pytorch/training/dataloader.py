@@ -76,6 +76,9 @@ class BatchTransformDataLoader():
         else: input = input.float()
         if len(input.shape) < 3: return input, target.cuda(non_blocking=non_blocking)
         return input.sub_(self.mean).div_(self.std), target.cuda(non_blocking=non_blocking)
+
+    def update_batch_size(self, bs):
+        self.loader.batch_sampler.batch_size = bs
             
     def __iter__(self):
         return (self.process_tensors(input, target, non_blocking=True) for input,target in self.loader)
