@@ -146,7 +146,7 @@ def run_benchmark(master, direction=None):
     step = 0
     while True:
       p_to_t = run_benchmark(master, 'p->t')
-      print("recoridng", p_to_t, "to", FLAGS.logdir)
+      print("recording", p_to_t, "to", FLAGS.logdir)
       t_to_p = run_benchmark(master, 't->p')
       
       event = make_event('p->t', p_to_t, step)
