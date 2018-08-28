@@ -90,10 +90,13 @@ def delete_network():
       sys.stdout.write("Deleting gateway %s ... " % (gateway.id))
       # todo: if instances are using VPC, this fails with
       # botocore.exceptions.ClientError: An error occurred (DependencyViolation) when calling the DetachInternetGateway operation: Network vpc-ca4abab3 has some mapped public address(es). Please unmap those public address(es) before detaching the gateway.
-
-      sys.stdout.write('detached ... ' if u.is_good_response(gateway.detach_from_vpc(VpcId=vpc.id)) else ' detach_failed ')
-      sys.stdout.write('deleted ' if u.is_good_response(gateway.delete()) else ' delete_failed ')
-      sys.stdout.write('\n')
+      try:
+        sys.stdout.write('detached ... ' if u.is_good_response(gateway.detach_from_vpc(VpcId=vpc.id)) else ' detach_failed ')
+        sys.stdout.write('deleted ' if u.is_good_response(gateway.delete()) else ' delete_failed ')
+        sys.stdout.write('\n')
+      except Exception as e:
+        sys.stdout.write('failed\n')
+        u.loge(str(e)+'\n')
 
     def desc(route_table):
       return "%s (%s)"%(route_table.id, u.get_name(route_table.tags))
