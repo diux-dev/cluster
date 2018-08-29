@@ -142,21 +142,21 @@ xar_args_pytorch = [
 ]
 
 
-# Current testing params 4x p3
-lr = 0.47 * 4 # 4 = num tasks
+# Current best settings 4x p3 - 34.5 minutes
+lr = 0.50 * 4 # 4 = num tasks
 scale_224 = 224/256
 scale_288 = 128/256
 x4ar_args = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':(0,6),  'lr':(lr,lr*2)}, 
     {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True,
                   'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':224,
+    {'ep':16, 'sz':224, 'bs':224, 'trndir': '-sz/352', 'min_scale': 0.087,
                   'lr':lr*scale_224},
     {'ep':19,     'lr':lr/10*scale_224},
-    {'ep':31,     'lr':lr/100*scale_224},
-    {'ep':36, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+    {'ep':30,     'lr':lr/100*scale_224},
+    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
                   'lr':lr/100*scale_288},
     {'ep':(37,39),'lr':lr/1000*scale_288}
   ],
@@ -164,7 +164,7 @@ x4ar_args = [
   '--no-bn-wd',
   '--num-tasks', 4,
   '--ami-name', DEFAULT_PYTORCH_SOURCE,
-  '--env-name', 'pytorch_source',
+  '--env-name', 'pytorch_c10d',
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
@@ -192,20 +192,21 @@ x8ar_args_benchmark = [
 ]
 
 # Also ~27 minutes. Faster per epoch, but takes one extra
-lr = 0.235 * 8 # 8 = num tasks
+lr = 0.25 * 8 # 8 = num tasks
+scale_224 = 224/128
 x8ar_args_352_folder = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,            'bs':256, 'keep_dl':True},
-    {'ep':6,      'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.086},
-    {'ep':16,      'lr':lr},
-    {'ep':19,           'bs':192, 'keep_dl':True},
-    {'ep':19,     'lr':lr/(10/1.5)},
-    {'ep':31,     'lr':lr/(100/1.5)},
-    {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':37,     'lr':lr/100},
+    {'ep':6,            'bs':256, 'keep_dl':True,
+                  'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
+                  'lr':lr},
+    {'ep':19,           'bs':224, 'keep_dl':True,
+                  'lr':lr/10*scale_224},
+    {'ep':30,     'lr':lr/100*scale_224},
+    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100},
     {'ep':(38,40),'lr':lr/1000}
   ],
   '--init-bn0',
@@ -305,7 +306,7 @@ def main():
 
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
-  ebs = launch_utils_lib.get_ebs_settings(use_iops=(args.attach_volume is None))
+  ebs = launch_utils_lib.get_ebs_settings(use_iops=bool(args.attach_volume))
     
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()

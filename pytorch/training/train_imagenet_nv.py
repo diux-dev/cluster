@@ -64,7 +64,7 @@ def get_parser():
                         help='Shutdown instance at the end of training or failure')
     parser.add_argument('--auto-shutdown-success-delay-mins', default=10, type=int,
                         help='how long to wait until shutting down on success')
-    parser.add_argument('--auto-shutdown-failure-delay-mins', default=120, type=int,
+    parser.add_argument('--auto-shutdown-failure-delay-mins', default=60, type=int,
                         help='how long to wait before shutting down on error')
 
 
@@ -305,7 +305,7 @@ class DataManager():
         if phase.get('keep_dl', False):
             log.event(f'Batch size changed: {phase["bs"]}')
             tb.log_size(phase['bs'])
-            self.trn_dl.update_batch_size = phase['bs']
+            self.trn_dl.update_batch_size(phase['bs'])
             return
         
         log.event(f'Dataset changed.\nImage size: {phase["sz"]}\nBatch size: {phase["bs"]}\nTrain Directory: {phase["trndir"]}\nValidation Directory: {phase["valdir"]}')
