@@ -239,7 +239,6 @@ x16ar_args_benchmark = [
   ],
   '--init-bn0',
   '--no-bn-wd',
-  '--scale-lr', 8, # 8 = num tasks
   '--num-tasks', 16,
   '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
