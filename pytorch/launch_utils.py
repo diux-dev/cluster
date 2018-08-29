@@ -25,6 +25,16 @@ def format_args(arg):
   if isinstance(arg, list) or isinstance(arg, dict): return '\"'+str(arg)+'\"'
   else: return str(arg)
 
+def extract_param(params, name, default=None):
+  args = [(i,k) for i,k in enumerate(params) if k==name]
+  if (not args) and (default is not None): return default
+  assert len(args) == 1, f"Must specify exactly 1 '{name}'"
+
+  idx,key = args[0]
+  val = params.pop(idx+1)
+  del params[idx]
+  return val
+
 # EBS Utils
 ATTACH_WAIT_INTERVAL_SEC = 5
 def mount_volume_data(job, tag, offset, unix_device=u.DEFAULT_UNIX_DEVICE):

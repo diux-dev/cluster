@@ -38,7 +38,9 @@ def network_to_half(network):
     """
     Convert model to half precision in a batchnorm-safe way.
     """
-    return nn.Sequential(tofp16(), BN_convert_float(network.half()))
+    # (AS) This is better as it does not change model structure
+    return BN_convert_float(network.half())
+    # return nn.Sequential(tofp16(), BN_convert_float(network.half()))
 
 
 def backwards_debug_hook(grad):
@@ -135,10 +137,3 @@ def master_params_to_model_params(model_params, master_params, flat_master=False
     else:
         for model, master in zip(model_params, master_params):
             model.data.copy_(master.data)
-
-# item() is a recent addition, so this helps with backward compatibility.
-def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return t[0]

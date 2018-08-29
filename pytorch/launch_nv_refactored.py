@@ -52,7 +52,7 @@ one_machine = Config(
     {'ep':14, 'sz':224, 'bs':192},
     {'ep':16,     'lr':lr/10},
     {'ep':27,     'lr':lr/100},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'use_ar':True},
+    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':(33,35),'lr':lr/1000}
   ],
   num_tasks=1,
