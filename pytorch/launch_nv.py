@@ -165,7 +165,27 @@ x4ar_args = [
   '--no-bn-wd',
   '--num-tasks', 4,
   '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_c10d'
+]
+
+
+
+# Current best settings 4x p3 - 34.5 minutes
+lr = 0.50 * 4 # 4 = num tasks
+scale_224 = 224/256
+scale_288 = 128/256
+c10d = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160',
+                  'lr':lr*2}
+  ],
+  '--num-tasks', 4,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_c10d',
+  '--c10d',
+  # '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+  # '--dist-url', 'tcp://localhost:6006', # single instances are faster with file sync
+  # '--dist-url', 'env://',
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight, 24:31 release-eight.02)
@@ -356,7 +376,11 @@ def start_training(job, params):
   default_params = [
     '~/data/imagenet',
     '--fp16',
-    '--logdir', job.logdir
+    '--logdir', job.logdir,
+    '--dist-url', f'tcp://{world_0_ip}:6006', # single instances are faster with file sync
+    # '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+    # '--dist-url', 'tcp://localhost:6006', # single instances are faster with file sync
+    # '--dist-url', 'env://',
   ]
   if world_size > 1: default_params.append('--distributed')
   training_args = default_params + params
