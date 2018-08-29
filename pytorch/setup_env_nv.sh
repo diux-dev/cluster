@@ -19,7 +19,8 @@ popd
 # Installing through pip is faster than following this https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
 # echo '>pillow'
 pip uninstall pillow -y
-CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
+CC="cc -mavx2" pip install -U pillow-simd
+# CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 
 
 # following GPU settings from below (not clear if helps) 
