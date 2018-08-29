@@ -76,7 +76,7 @@ class FileLogger:
     eventlog.setFormatter(formatter)
     logger.addHandler(eventlog)
 
-    time_formatter = logging.Formatter('%(asctime)s - %(message)s')
+    time_formatter = logging.Formatter('%(asctime)s - %(filename)s:%(lineno)d - %(message)s')
     debuglog = logging.FileHandler(output_dir+'/debug.log')
     debuglog.setLevel(logging.DEBUG)
     debuglog.setFormatter(time_formatter)
