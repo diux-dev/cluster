@@ -60,8 +60,6 @@ parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
 parser.add_argument('--params', type=str, default="xar_args",
                     help='args to use, see "params = " line')
-parser.add_argument('--upgrade-root-volume', action='store_true',
-                    help='use higher IOPS for default root')
 args = parser.parse_args()
 
 DEFAULT_PYTORCH_SOURCE = 'pytorch.imagenet.source.v7'
@@ -309,7 +307,7 @@ def main():
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
   
-  ebs = launch_utils_lib.get_ebs_settings(use_iops=args.upgrade_root_volume)
+  ebs = launch_utils_lib.get_ebs_settings(use_iops=True)
     
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()
