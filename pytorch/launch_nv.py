@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 #
+# 8 machine training
+# python launch_nv.py --name release-eight --params x8ar_args_benchmark --upgrade-root-volume
+#
+# Old settings. TODO: update
 # export ami="Deep Learning AMI (Ubuntu) Version 12.0"
 # 1 machine training
 # python launch_nv.py --name test --spot
 #
 # 4 machine training
-# python launch_nv.py --name 4gpu_distributed --spot --attach-volume imagenet_high_perf --params x4_args
-
-# 8 machine training
-# python launch_nv.py --name yaro8 --spot --attach-volume imagenet_high_perf  --params x8ar_args
+# python launch_nv.py --name 4gpu_distributed --spot --params x4_args
 
 # 16 machine training
 # export AWS_DEFAULT_REGION=us-east-1
@@ -49,7 +50,7 @@ parser.add_argument('--instance-type', type=str, default='p3.16xlarge',
                      help="type of instance")
 parser.add_argument('--role', type=str, default='launcher',
                     help='launcher or worker')
-parser.add_argument('--attach-volume', type=str, default='imagenet',
+parser.add_argument('--attach-volume', type=str, default='',
                     help='tag name of ebs volume to attach')
 parser.add_argument('--use-local-conda', action='store_true',
                     help='use local conda installation (for initial setup, see recipes.md)')
@@ -59,6 +60,8 @@ parser.add_argument('--skip-efs-mount', action='store_true',
                     help='skip mounting EFS for speed')
 parser.add_argument('--params', type=str, default="xar_args",
                     help='args to use, see "params = " line')
+parser.add_argument('--upgrade-root-volume', action='store_true',
+                    help='use higher IOPS for default root')
 args = parser.parse_args()
 
 DEFAULT_PYTORCH_SOURCE = 'pytorch.imagenet.source.v7'
@@ -167,7 +170,7 @@ x4ar_args = [
   '--env-name', 'pytorch_c10d',
 ]
 
-# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight)
+# Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight, 24:31 release-eight.02)
 lr = 0.235 * 8 # 8 = num tasks
 x8ar_args_benchmark = [
   '--phases', [
@@ -219,7 +222,7 @@ x8ar_args_352_folder = [
 # Current benchmark for 16x p3's - with Aspect Ratio Validation
 
 # Ohio-sixteen base
-# 18:17 mins to 93.03, ohio-sixteen
+# 18:17 mins to 93.03, ohio-sixteen, 19:33 sun-sixteen.01 
 lr = 0.235 * 8 # 
 bs = 64
 x16ar_args_benchmark = [
@@ -305,7 +308,8 @@ def main():
 
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
-  ebs = launch_utils_lib.get_ebs_settings(use_iops=bool(args.attach_volume))
+  
+  ebs = launch_utils_lib.get_ebs_settings(use_iops=args.upgrade_root_volume)
     
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()
