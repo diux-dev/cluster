@@ -71,7 +71,7 @@ quick_oom = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
     {'ep':(0, 8),  'lr':lr},
-    {'ep':2,  'sz':224, 'bs':224},
+    {'ep':2,  'sz':224, 'bs':224, 'trndir': '-sz/352', 'min_scale': 0.087},
     {'ep':4,  'sz':288, 'bs':160},
   ],
   '--init-bn0',
@@ -306,8 +306,7 @@ def main():
 
 def create_job(run, job_name, num_tasks, env_name):
   """Creates job, blocks until job is ready."""
-  
-  ebs = launch_utils_lib.get_ebs_settings(use_iops=True)
+  ebs = launch_utils_lib.get_ebs_settings(use_iops=not bool(args.attach_volume)) # higher iops if no ebs attached
     
   job = run.make_job(job_name, num_tasks=num_tasks, ebs=ebs, instance_type=args.instance_type, use_spot=args.spot, use_placement_group=True)
   job.wait_until_ready()
@@ -367,7 +366,7 @@ def start_training(job, params):
   for i,t in enumerate(job.tasks):
     dist_args = f'--nproc_per_node={num_gpus} --nnodes={num_tasks} --node_rank={i} --master_addr={world_0_ip} --master_port={port}'
     cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} training/train_imagenet_nv.py {training_args}'
-    t.run(f'echo {cmd} > {job.logdir}/script.log')
+    if i == 0: t.run(f'echo {cmd} > {job.logdir}/script.log', ignore_errors=True)
     t.run(cmd, sync=False)
 
 if __name__=='__main__':

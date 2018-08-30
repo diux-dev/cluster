@@ -74,13 +74,12 @@ def get_parser():
 
 cudnn.benchmark = True
 args = get_parser().parse_args()
-# if args.local_rank != 0: sys.stdout = open(f'{args.log_dir}/GPU_{args.local_rank}.log', 'w', 1)
-if args.local_rank != 0: sys.stdout = open(f'/dev/null', 'w', 100)
 
 # Only want master rank logging to tensorboard
 is_master = (not args.distributed) or (dist_utils.env_rank()==0)
+is_rank0 = args.local_rank == 0
 tb = TensorboardLogger(args.logdir, is_master=is_master)
-log = FileLogger(args.logdir, is_master=is_master)
+log = FileLogger(args.logdir, is_master=is_master, is_rank0=is_rank0)
 
 def main():    
     log.console(args)

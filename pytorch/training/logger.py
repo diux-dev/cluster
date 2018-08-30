@@ -57,31 +57,35 @@ import logging
 
 
 class FileLogger:
-  def __init__(self, output_dir, is_master=False):
+  def __init__(self, output_dir, is_master=False, is_rank0=False):
     self.output_dir = output_dir
-    self.logger = self.get_logger(output_dir) if is_master else NoOp()
 
-  def get_logger(self, output_dir):
+    # Log to console if rank 0, Log to console and file if master
+    if not is_rank0: self.logger = NoOp()
+    else: self.logger = self.get_logger(output_dir, log_to_file=is_master)
+
+  def get_logger(self, output_dir, log_to_file=True):
     logger = logging.getLogger('imagenet_training')
     logger.setLevel(logging.DEBUG)
-
     formatter = logging.Formatter('%(message)s')
-    vlog = logging.FileHandler(output_dir+'/verbose.log')
-    vlog.setLevel(logging.INFO)
-    vlog.setFormatter(formatter)
-    logger.addHandler(vlog)
 
-    eventlog = logging.FileHandler(output_dir+'/event.log')
-    eventlog.setLevel(logging.WARN)
-    eventlog.setFormatter(formatter)
-    logger.addHandler(eventlog)
+    if log_to_file:
+      vlog = logging.FileHandler(output_dir+'/verbose.log')
+      vlog.setLevel(logging.INFO)
+      vlog.setFormatter(formatter)
+      logger.addHandler(vlog)
 
-    time_formatter = logging.Formatter('%(asctime)s - %(filename)s:%(lineno)d - %(message)s')
-    debuglog = logging.FileHandler(output_dir+'/debug.log')
-    debuglog.setLevel(logging.DEBUG)
-    debuglog.setFormatter(time_formatter)
-    logger.addHandler(debuglog)
-    
+      eventlog = logging.FileHandler(output_dir+'/event.log')
+      eventlog.setLevel(logging.WARN)
+      eventlog.setFormatter(formatter)
+      logger.addHandler(eventlog)
+
+      time_formatter = logging.Formatter('%(asctime)s - %(filename)s:%(lineno)d - %(message)s')
+      debuglog = logging.FileHandler(output_dir+'/debug.log')
+      debuglog.setLevel(logging.DEBUG)
+      debuglog.setFormatter(time_formatter)
+      logger.addHandler(debuglog)
+      
     console = logging.StreamHandler()
     console.setFormatter(formatter)
     console.setLevel(logging.DEBUG)
