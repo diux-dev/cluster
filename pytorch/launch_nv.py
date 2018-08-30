@@ -220,7 +220,8 @@ x8ar_args_352_folder = [
 # Current benchmark for 16x p3's - with Aspect Ratio Validation
 
 # Ohio-sixteen base
-# 18:17 mins to 93.03, ohio-sixteen, 19:33 sun-sixteen.01 
+# 18:17 mins to 93.03, ohio-sixteen, 19:33 sun-sixteen.01
+# after refactor, 16:36 to 92.97 in release-sixteen.02, 16:51 to 93.11 in release-sixteen.04 
 lr = 0.235 * 8 # 
 bs = 64
 x16ar_args_benchmark = [
@@ -236,7 +237,7 @@ x16ar_args_benchmark = [
     {'ep':31,     'lr':2*lr/(100/1.5)},
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':2*lr/100},
-    {'ep':(38,40),'lr':2*lr/1000}
+    {'ep':(38,50),'lr':2*lr/1000}
   ],
   '--init-bn0',
   '--no-bn-wd',
