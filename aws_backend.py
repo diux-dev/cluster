@@ -258,7 +258,7 @@ class Job(backend.Job):
     self.tasks = [None]*len(instances)
     for instance in instances:
       task_id, current_job_name = u.get_parsed_job_name(instance) # use job name in case ami's were not launched at the same time
-      task_id = task_id or instance.ami_launch_index
+      task_id = task_id # or instance.ami_launch_index
       task = Task(instance, self, task_id, install_script=install_script,
                   linux_type=linux_type, user_data=user_data,
                   skip_efs_mount=skip_efs_mount)
