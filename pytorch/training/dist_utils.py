@@ -1,6 +1,7 @@
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 import os
+from torch.nn.parallel import distributed_c10d
 
 class DDP(DistributedDataParallel):
   # Distributed wrapper. Supports asynchronous evaluation and model saving
@@ -15,7 +16,18 @@ class DDP(DistributedDataParallel):
   def state_dict(self, *args, **kwargs):
     return self.module.state_dict(*args, **kwargs)
     
+class DDPC10d(distributed_c10d._DistributedDataParallelC10d):
+  # Distributed wrapper. Supports asynchronous evaluation and model saving
+  def forward(self, *args, **kwargs):
+    # DDP has a sync point on forward. No need to do this for eval. This allows us to have different batch sizes
+    if self.training: return super().forward(*args, **kwargs)
+    else:             return self.module(*args, **kwargs)
 
+  def load_state_dict(self, *args, **kwargs):
+    self.module.load_state_dict(*args, **kwargs)
+
+  def state_dict(self, *args, **kwargs):
+    return self.module.state_dict(*args, **kwargs)
 
 
 def reduce_tensor(tensor): return sum_tensor(tensor)/env_world_size()
