@@ -60,7 +60,7 @@ def main():
   install_script = open(INSTALL_SCRIPT_FN).read()
   install_script = f'source activate {ENV_NAME}\n' + install_script
 
-  job = ncluster.make_job(name='imagenet',
+  job = ncluster.make_job(name=args.name,
                           run_name=args.name,
                           num_tasks=args.machines,
                           image_name=IMAGE_NAME,
