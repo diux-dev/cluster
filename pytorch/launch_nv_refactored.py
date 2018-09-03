@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
-#
+# TODO: don't use env-var, too easy to forget to unset it
+# export NCLUSTER_AWS_FAST_ROOTDISK=1
 # python train_imagenet.py --machines=1  # 1 machine
 # python train_imagenet.py --machines=4  # 4 machines
 # python train_imagenet.py --machines=8  # 8 machines
@@ -23,6 +24,7 @@ import launch_utils as launch_utils_lib
 INSTALL_SCRIPT_FN = 'setup_env_nv.sh'
 IMAGE_NAME = 'pytorch.imagenet.source.v7'
 ENV_NAME = 'pytorch_source'
+INSTANCE_TYPE = 'p3.16xlarge'
 NUM_GPUS = 8
 
 parser = argparse.ArgumentParser()
@@ -44,7 +46,23 @@ one_machine = [
 ]
 
 four_machines = []
-eight_machines = []
+
+lr = 0.235 * 8 # 8 = num tasks
+eight_machines = [
+  {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+  {'ep':(0,6),  'lr':(lr,lr*2)},
+  {'ep':6,            'bs':256, 'keep_dl':True},
+  {'ep':6,      'lr':lr*2},
+  {'ep':16, 'sz':224,'bs':128},
+  {'ep':16,      'lr':lr},
+  {'ep':19,          'bs':192, 'keep_dl':True},
+  {'ep':19,     'lr':lr/(10/1.5)},
+  {'ep':31,     'lr':lr/(100/1.5)},
+  {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+  {'ep':37,     'lr':lr/100},
+  {'ep':(38,40),'lr':lr/1000}
+]
+
 sixteen_machines = []
 
 schedules = {1: one_machine,
@@ -60,10 +78,12 @@ def main():
   install_script = open(INSTALL_SCRIPT_FN).read()
   install_script = f'source activate {ENV_NAME}\n' + install_script
 
+  os.environ['NCLUSTER_AWS_FAST_ROOTDISK'] = '1'
   job = ncluster.make_job(name=args.name,
                           run_name=args.name,
                           num_tasks=args.machines,
                           image_name=IMAGE_NAME,
+                          instance_type=INSTANCE_TYPE,
                           install_script=install_script,
                           preemptible=args.preemptible)
   job.upload('training', remote_fn='training')
@@ -77,7 +97,10 @@ def main():
     '~/data/imagenet',
     '--fp16',
     '--logdir', job.logdir,
-    '--distributed'
+    '--distributed',
+    '--skip-auto-shutdown',
+    '--init-bn0',
+    '--no-bn-wd',
   ]
 
   params = ['--phases', schedules[args.machines]]
@@ -101,3 +124,4 @@ def main():
   
 if __name__ == '__main__':
   main()
+  
