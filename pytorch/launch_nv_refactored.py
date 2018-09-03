@@ -113,15 +113,13 @@ def main():
   task_cmds = []
   for i, task in enumerate(job.tasks):
     dist_args = f'--nproc_per_node=8 --nnodes={args.machines} --node_rank={i} --master_addr={job.tasks[0].ip} --master_port={6006}'
-    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} train_imagenet_nv.py {training_args}'
-    if i == 0:
-      task.run(f'echo {cmd} > {job.logdir}/script.log')
+    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} training/train_imagenet_nv.py {training_args}'
+    task.run(f'echo {cmd} > {job.logdir}/task-{i}.cmd')  # save command-line
     task.run(cmd, async=True)
 
   print(f"Logging to {job.logdir}")
 
-# TODO: simplify uploading fn, "uploading /tmp/ncluster/0.imagenet/17369468941"
-  
+
 if __name__ == '__main__':
   main()
   
