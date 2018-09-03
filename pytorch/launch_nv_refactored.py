@@ -86,7 +86,7 @@ def main():
                           instance_type=INSTANCE_TYPE,
                           install_script=install_script,
                           preemptible=args.preemptible)
-  job.upload('training', remote_fn='training')
+  job.upload('training')
   job.run(f'source activate {ENV_NAME}')
 
   world_size = NUM_GPUS * args.machines
