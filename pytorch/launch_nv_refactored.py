@@ -45,6 +45,24 @@ one_machine = [
   {'ep': (33, 35), 'lr': lr / 1000}
 ]
 
+lr = 0.50 * 4 # 4 = num tasks
+scale_224 = 224/256
+scale_288 = 128/256
+four_machines = [
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)}, 
+    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True,
+                  'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':224, 'trndir': '-sz/352', 'min_scale': 0.087,
+                  'lr':lr*scale_224},
+    {'ep':19,     'lr':lr/10*scale_224},
+    {'ep':30,     'lr':lr/100*scale_224},
+    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100*scale_288},
+    {'ep':(37,39),'lr':lr/1000*scale_288}
+]
+
+# monday-eight.02, 24:15 to 93.06
 lr = 0.235 * 8
 eight_machines = [
   {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
@@ -61,6 +79,7 @@ eight_machines = [
   {'ep':(38,40),'lr':lr/1000}
 ]
 
+# monday-sixteen.01, 17:16 to 93.04
 lr = 0.235 * 8
 sixteen_machines = [
   {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
