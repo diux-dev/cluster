@@ -27,13 +27,6 @@ sudo ldconfig
 nvidia-smi
 # Driver version should be: 396.37
 
-# This is for cudnn 7.1.4 - however there's a bug that prevents us from using fp16 - https://github.com/pytorch/pytorch/issues/9465
-# wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cudnn-9.2-linux-x64-v7.1.tgz
-# tar -xf cudnn-9.2-linux-x64-v7.1.tgz
-# sudo cp -R cuda/include/* /usr/local/cuda-9.2/include
-# sudo cp -R cuda/lib64/* /usr/local/cuda-9.2/lib64
-
-
 # Install cudnn 7.2.1
 wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cudnn-9.2-linux-x64-v7.2.1.38.tgz
 tar -xf cudnn-9.2-linux-x64-v7.2.1.38.tgz
@@ -44,7 +37,7 @@ sudo cp -R ~/cuda/lib64/* /usr/local/cuda-9.2/lib64
 wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/nccl_2.2.13-1%2Bcuda9.2_x86_64.txz
 tar -xf nccl_2.2.13-1+cuda9.2_x86_64.txz
 sudo cp -R ~/nccl_2.2.13-1+cuda9.2_x86_64/* /usr/local/cuda-9.2/targets/x86_64-linux/
-sudo cp -R ~/nccl_2.2.13-1+cuda9.2_x86_64/* /lib/nccl/cuda-9.2
+# sudo cp -R ~/nccl_2.2.13-1+cuda9.2_x86_64/* /lib/nccl/cuda-9.2
 sudo ldconfig
 
 
@@ -66,16 +59,6 @@ conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing -y
 conda install -c mingfeima mkldnn -y
 conda install -c pytorch magma-cuda90 -y
 
-
-# THIS VERSION IS SLOWER THAN JUST INSTALLING FROM PIP BELOW...
-# Install libjpeg-turbo with pillow-simd
-# sudo apt install yasm
-# https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
-# seems like it's faster without the top versioncond
-pip uninstall pillow -y
-CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
-
-
 # Temporarily move old cuda libraries. For some reason building from source wants to point to these
 pushd /usr/local/
 sudo mv cuda-9.1/ cuda-9.1.bak
@@ -87,9 +70,11 @@ popd
 # https://github.com/pytorch/pytorch/pull/8958#issuecomment-410125932
 
 pushd ~/pytorch
-# USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
-USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda-9.2 NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
+CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/usr/local/cuda/targets/x86_64-linux/ NCCL_LIB_DIR=/usr/local/cuda/targets/x86_64-linux/lib NCCL_INCLUDE_DIR=/usr/local/cuda/targets/x86_64-linux/include python setup.py install
+# USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda-9.2 NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
 popd
+
+
 
 # Move back older cuda version libraries
 pushd /usr/local/
@@ -101,12 +86,20 @@ popd
 
 # Install rest of dependencies
 pip install torchvision torchtext
-# pip uninstall pillow --yes
-# CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 conda install jupyter bcolz scipy tqdm -y
 pip install sklearn-pandas
 conda install tqdm -y
 pip install tensorboardX
+
+
+# THIS VERSION IS SLOWER THAN JUST INSTALLING FROM PIP BELOW...
+# Install libjpeg-turbo with pillow-simd
+# sudo apt install yasm
+# https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
+# seems like it's faster without the top versioncond
+pip uninstall pillow -y
+CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
+
 
 # Create fastai environment
 conda create -n fastai_source --clone pytorch_source
