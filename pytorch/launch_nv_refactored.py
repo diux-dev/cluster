@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 #
-# TODO: don't use env-var, too easy to forget to unset it
-# export NCLUSTER_AWS_FAST_ROOTDISK=1
 # python train_imagenet.py --machines=1  # 1 machine
 # python train_imagenet.py --machines=4  # 4 machines
 # python train_imagenet.py --machines=8  # 8 machines
