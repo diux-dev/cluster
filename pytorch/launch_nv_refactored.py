@@ -25,6 +25,8 @@ ENV_NAME = 'pytorch_source'
 INSTANCE_TYPE = 'p3.16xlarge'
 NUM_GPUS = 8
 
+ncluster.set_backend('aws')
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--preemptible', action='store_true', help='launch using preemptible/spot instances')
 parser.add_argument('--name', type=str, default='imagenet', help="name of the current run")
@@ -43,9 +45,7 @@ one_machine = [
   {'ep': (33, 35), 'lr': lr / 1000}
 ]
 
-four_machines = []
-
-lr = 0.235 * 8 # 8 = num tasks
+lr = 0.235 * 8
 eight_machines = [
   {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
   {'ep':(0,6),  'lr':(lr,lr*2)},
@@ -61,16 +61,32 @@ eight_machines = [
   {'ep':(38,40),'lr':lr/1000}
 ]
 
-sixteen_machines = []
+lr = 0.235 * 8
+sixteen_machines = [
+  {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+  {'ep':(0,6),  'lr':(lr,lr*2)},
+  {'ep':6,            'bs':128, 'keep_dl':True},
+  {'ep':6,      'lr':lr*2},
+  {'ep':16, 'sz':224,'bs':64},
+  {'ep':16,      'lr':lr},
+  {'ep':19,           'bs':192, 'keep_dl':True},
+  {'ep':19,     'lr':2*lr/(10/1.5)},
+  {'ep':31,     'lr':2*lr/(100/1.5)},
+  {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+  {'ep':37,     'lr':2*lr/100},
+  {'ep':(38,50),'lr':2*lr/1000}
+]
 
 schedules = {1: one_machine,
-             4: four_machines,
              8: eight_machines,
              16: sixteen_machines}
 
 
 def main():
 
+
+
+  assert args.machines in schedules, f"{args.machines} not supported, only support {schedules.keys()}"
   # since we are using configurable name of conda env, modify install script
   # to run in that conda env
   install_script = open(INSTALL_SCRIPT_FN).read()
@@ -96,7 +112,6 @@ def main():
     '--fp16',
     '--logdir', job.logdir,
     '--distributed',
-    '--skip-auto-shutdown',
     '--init-bn0',
     '--no-bn-wd',
   ]
