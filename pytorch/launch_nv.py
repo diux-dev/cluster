@@ -124,14 +124,14 @@ bs_scale = [x/bs[0] for x in bs]
 xar_args_pytorch = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':(0,7),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     # {'ep':5, 'lr':lr},
-    {'ep':(6,13), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':(7,13), 'lr':(lr*2,lr/4)}, # trying one cycle
     {'ep':13, 'sz':224, 'bs':bs[1]},
-    {'ep':(13,23),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
-    {'ep':(23,27),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
-    {'ep':27, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
-    {'ep':(27,30),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
+    {'ep':(13,22),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(22,25),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':25, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(25,28),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
   ],
   '--init-bn0',
   '--no-bn-wd',
@@ -141,6 +141,30 @@ xar_args_pytorch = [
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
 ]
 
+# Current best settings
+# Current benchmark for 1x p3
+lr = 1.0
+bs = [512, 224, 128] # largest batch size that fits in memory for each image size
+bs_scale = [x/bs[0] for x in bs]
+xar_args_pytorch2 = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
+    {'ep':(0,7),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':5, 'lr':lr}, # baseline without one cycle
+    # {'ep':(7,13), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':13, 'sz':224, 'bs':bs[1]},
+    {'ep':(13,22),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(22,25),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':25, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(25,28),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_source',
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+]
 
 # Current best settings 4x p3 - 34.5 minutes
 lr = 0.50 * 4 # 4 = num tasks
