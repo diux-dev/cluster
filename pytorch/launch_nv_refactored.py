@@ -34,36 +34,36 @@ parser.add_argument('--machines', type=int, default=1, help="how many machines t
 args = parser.parse_args()
 
 lr = 1.0
-scale_224 = 224/512
-scale_288 = 128/512
+bs = [512, 224, 128] # largest batch size that fits in memory for each image size
+bs_scale = [x/bs[0] for x in bs]
 one_machine = [
-  {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+  {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
   {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
   {'ep':5, 'lr':lr},
-  {'ep':14, 'sz':224, 'bs':224,
-                'lr':lr*scale_224},
-  {'ep':16,     'lr':lr/10*scale_224},
-  {'ep':27,     'lr':lr/100*scale_224},
-  {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
-                'lr':lr/100*scale_288},
-  {'ep':(33,35),'lr':lr/1000*scale_288}
+  {'ep':14, 'sz':224, 'bs':bs[1],
+                'lr':lr*bs_scale[1]},
+  {'ep':16,     'lr':lr/10*bs_scale[1]},
+  {'ep':27,     'lr':lr/100*bs_scale[1]},
+  {'ep':32, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True,
+                'lr':lr/100*bs_scale[2]},
+  {'ep':(33,35),'lr':lr/1000*bs_scale[2]}
 ]
 
 lr = 0.50 * 4 # 4 = num tasks
-scale_224 = 224/256
-scale_288 = 128/256
+bs = [256, 224, 128] # largest batch size that fits in memory for each image size
+bs_scale = [x/bs[0] for x in bs] # scale learning rate to batch size
 four_machines = [
-    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)}, 
-    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True,
+    {'ep':6,  'sz':128, 'bs':bs[0]*2, 'keep_dl':True,
                   'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':224, 'trndir': '-sz/352', 'min_scale': 0.087,
-                  'lr':lr*scale_224},
-    {'ep':19,     'lr':lr/10*scale_224},
-    {'ep':30,     'lr':lr/100*scale_224},
-    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
-                  'lr':lr/100*scale_288},
-    {'ep':(37,39),'lr':lr/1000*scale_288}
+    {'ep':16, 'sz':224, 'bs':bs[1], 'trndir': '-sz/352', 'min_scale': 0.087,
+                  'lr':lr*bs_scale[1]},
+    {'ep':19,     'lr':lr/10*bs_scale[1]},
+    {'ep':30,     'lr':lr/100*bs_scale[1]},
+    {'ep':35, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100*bs_scale[2]},
+    {'ep':(37,39),'lr':lr/1000*bs_scale[2]}
 ]
 
 # monday-eight.02, 24:15 to 93.06
@@ -76,7 +76,7 @@ eight_machines = [
                 'lr':lr*2},
   {'ep':16, 'sz':224,'bs':128,
                 'lr':lr},
-  {'ep':19,          'bs':192, 'keep_dl':True,
+  {'ep':19,          'bs':224, 'keep_dl':True,
                 'lr':lr/10*scale_224},
   {'ep':31,     'lr':lr/100*scale_224},
   {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
@@ -102,14 +102,12 @@ sixteen_machines = [
 ]
 
 schedules = {1: one_machine,
+             4: four_machines,
              8: eight_machines,
              16: sixteen_machines}
 
 
 def main():
-
-
-
   assert args.machines in schedules, f"{args.machines} not supported, only support {schedules.keys()}"
   # since we are using configurable name of conda env, modify install script
   # to run in that conda env
