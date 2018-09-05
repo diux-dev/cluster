@@ -1,28 +1,15 @@
 #!/usr/bin/env python
-#
-# python train_imagenet.py --machines=1  # 1 machine
-# python train_imagenet.py --machines=4  # 4 machines
-# python train_imagenet.py --machines=8  # 8 machines
-# python train_imagenet.py --machines=16 # 16 machines
-
 
 import argparse
+import ncluster
 import os
 
-import ncluster
-
-# TODO: bake source activate into install script
-INSTALL_SCRIPT_FN = 'setup_env_nv.sh'
 IMAGE_NAME = 'pytorch.imagenet.source.v7'
-ENV_NAME = 'pytorch_source'
 INSTANCE_TYPE = 'p3.16xlarge'
 NUM_GPUS = 8
 
 ncluster.set_backend('aws')
-
 parser = argparse.ArgumentParser()
-parser.add_argument('--preemptible', action='store_true',
-                    help='launch using preemptible/spot instances')
 parser.add_argument('--name', type=str, default='imagenet',
                     help="name of the current run")
 parser.add_argument('--machines', type=int, default=1,
@@ -32,7 +19,7 @@ args = parser.parse_args()
 lr = 0.47
 one_machine = [
   {'ep': 0, 'sz': 128, 'bs': 512, 'trndir': '-sz/160'},
-  {'ep': (0, 5), 'lr': (lr, lr * 2)},  # lr warmup is better with --init-bn0
+  {'ep': (0, 5), 'lr': (lr, lr * 2)},
   {'ep': 5, 'lr': lr},
   {'ep': 14, 'sz': 224, 'bs': 192},
   {'ep': 16, 'lr': lr / 10},
@@ -41,7 +28,7 @@ one_machine = [
   {'ep': (33, 35), 'lr': lr / 1000}
 ]
 
-lr = 0.50 * 4  # 4 = num tasks
+lr = 0.50 * 4
 scale_224 = 224 / 256
 scale_288 = 128 / 256
 four_machines = [
@@ -93,12 +80,15 @@ sixteen_machines = [
 ]
 
 schedules = {1: one_machine,
+             4: four_machines,
              8: eight_machines,
              16: sixteen_machines}
 
 
-def get_nccl_args(num_tasks, num_gpus):
-  if num_tasks <= 1: return 'NCCL_DEBUG=VERSION'
+# routines to build NCCL ring orders
+def get_nccl_params(num_tasks, num_gpus):
+  if num_tasks <= 1:
+    return 'NCCL_DEBUG=VERSION'
   nccl_rings = get_nccl_rings(num_tasks, num_gpus)
   return f'NCCL_RINGS="{nccl_rings}" NCCL_SINGLE_RING_THRESHOLD=10 NCCL_DEBUG=VERSION'
   # return 'NCCL_MIN_NRINGS=2 NCCL_SINGLE_RING_THRESHOLD=10 NCCL_DEBUG=VERSION'
@@ -139,7 +129,7 @@ def get_skip_order(size):
   return [(i * skip_step) % size for i in range(size)]
 
 
-def format_args(arg):
+def format_params(arg):
   if isinstance(arg, list) or isinstance(arg, dict):
     return '\"' + str(arg) + '\"'
   else:
@@ -148,24 +138,18 @@ def format_args(arg):
 
 def main():
   assert args.machines in schedules, f"{args.machines} not supported, only support {schedules.keys()}"
-  # since we are using configurable name of conda env, modify install script
-  # to run in that conda env
-  install_script = open(INSTALL_SCRIPT_FN).read()
-  install_script = f'source activate {ENV_NAME}\n' + install_script
 
-  os.environ['NCLUSTER_AWS_FAST_ROOTDISK'] = '1'
+  os.environ['NCLUSTER_AWS_FAST_ROOTDISK'] = '1'  # use io2 disk on AWS
   job = ncluster.make_job(name=args.name,
                           run_name=args.name,
                           num_tasks=args.machines,
                           image_name=IMAGE_NAME,
                           instance_type=INSTANCE_TYPE,
-                          install_script=install_script,
-                          preemptible=args.preemptible)
+                          install_script=open('setup.sh').read())
   job.upload('training')
-  job.run(f'source activate {ENV_NAME}')
+  job.run(f'source activate pytorch_source')
 
-  world_size = NUM_GPUS * args.machines
-  nccl_args = get_nccl_args(args.machines, NUM_GPUS)
+  nccl_params = get_nccl_params(args.machines, NUM_GPUS)
 
   # Training script args
   default_params = [
@@ -178,16 +162,13 @@ def main():
   ]
 
   params = ['--phases', schedules[args.machines]]
+  training_params = default_params + params
+  training_params = ' '.join(map(format_params, training_params))
 
-  training_args = default_params + params
-  training_args = ' '.join(map(format_args, training_args))
-
-  # TODO: simplify args processing
-  # Run tasks
-  task_cmds = []
+  # TODO: simplify args processing, or give link to actual commands run
   for i, task in enumerate(job.tasks):
-    dist_args = f'--nproc_per_node=8 --nnodes={args.machines} --node_rank={i} --master_addr={job.tasks[0].ip} --master_port={6006}'
-    cmd = f'{nccl_args} python -m torch.distributed.launch {dist_args} training/train_imagenet_nv.py {training_args}'
+    dist_params = f'--nproc_per_node=8 --nnodes={args.machines} --node_rank={i} --master_addr={job.tasks[0].ip} --master_port={6006}'
+    cmd = f'{nccl_params} python -m torch.distributed.launch {dist_params} training/train_imagenet_nv.py {training_params}'
     task.run(f'echo {cmd} > {job.logdir}/task-{i}.cmd')  # save command-line
     task.run(cmd, async=True)
 

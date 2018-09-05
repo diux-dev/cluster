@@ -1,12 +1,13 @@
 #!/bin/bash
 #
 # ImageNet training setup script for pytorch.imagenet.source.v7 AMI
-# That image is a fork of Ubuntu DLAMI v12 with August build of pytorch from source made available in
-# pytorch_source conda env
-source activate pytorch_source
+# That image is a fork of Ubuntu DLAMI v12 with "pytorch_source" conda env added which is a clone of pytorch_p36 with
+# the following modifications:
+# - pip install tqdm
+# - pip install tensorboardX
+# - version of PyTorch built from master around August
 
-conda install tqdm -y
-pip install tensorboardX
+source activate pytorch_source
 
 # index file used to speed up evaluation
 pushd ~/data/imagenet
