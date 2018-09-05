@@ -126,13 +126,12 @@ xar_args_pytorch = [
     {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
     # {'ep':5, 'lr':lr},
-    {'ep':(6,14), 'lr':(lr*2,lr/4)}, # trying one cycle
-    {'ep':14, 'sz':224, 'bs':bs[1]},
-    {'ep':(14,26),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
-    {'ep':(26,30),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
-    {'ep':30, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True,
-                  'lr':lr/100*bs_scale[2]},
-    {'ep':(31,33),'lr':lr/1000*bs_scale[2]}
+    {'ep':(6,13), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':13, 'sz':224, 'bs':bs[1]},
+    {'ep':(13,23),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(23,27),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':27, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(27,30),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
   ],
   '--init-bn0',
   '--no-bn-wd',
@@ -206,10 +205,10 @@ x8ar_args_352_folder = [
     {'ep':15, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
                   'lr':lr},
     {'ep':18,           'bs':224, 'keep_dl':True},
-    {'ep':(18,26),     'lr':(lr,lr/10*scale_224)},
-    {'ep':(26,33),     'lr':(lr/10*scale_224,lr/100*scale_224)},
-    {'ep':33, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':(33,37),'lr':(lr/100,lr/1000)}
+    {'ep':(18,25),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(25,31),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':31, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(31,37),'lr':(lr/100,lr/1000)}
   ],
   '--init-bn0',
   '--no-bn-wd',
