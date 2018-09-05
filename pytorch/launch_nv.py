@@ -201,14 +201,14 @@ x8ar_args_352_folder = [
     {'ep':6,            'bs':256, 'keep_dl':True},
     {'ep':6,      'lr':lr*2},
     # {'ep':11,            'bs':512, 'keep_dl':True},
-    {'ep':(12,15), 'lr':(lr*2,lr)}, # trying one cycle
-    {'ep':15, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
+    {'ep':(11,14), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
                   'lr':lr},
-    {'ep':18,           'bs':224, 'keep_dl':True},
-    {'ep':(18,25),     'lr':(lr,lr/10*scale_224)},
-    {'ep':(25,31),     'lr':(lr/10*scale_224,lr/100*scale_224)},
-    {'ep':31, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-    {'ep':(31,37),'lr':(lr/100,lr/1000)}
+    {'ep':17,           'bs':224, 'keep_dl':True},
+    {'ep':(17,23),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(23,29),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(29,37),'lr':(lr/100,lr/1000)}
   ],
   '--init-bn0',
   '--no-bn-wd',
