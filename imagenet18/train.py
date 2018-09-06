@@ -11,72 +11,81 @@ NUM_GPUS = 8
 ncluster.set_backend('aws')
 parser = argparse.ArgumentParser()
 parser.add_argument('--name', type=str, default='imagenet',
-                    help="name of the current run")
+                    help="name of the current run, used for machine naming and tensorboard visualization")
 parser.add_argument('--machines', type=int, default=1,
                     help="how many machines to use")
 args = parser.parse_args()
 
-lr = 0.47
+lr = 1.0
+scale_224 = 224/512
+scale_288 = 128/512
 one_machine = [
-  {'ep': 0, 'sz': 128, 'bs': 512, 'trndir': '-sz/160'},
-  {'ep': (0, 5), 'lr': (lr, lr * 2)},
-  {'ep': 5, 'lr': lr},
-  {'ep': 14, 'sz': 224, 'bs': 192},
-  {'ep': 16, 'lr': lr / 10},
-  {'ep': 27, 'lr': lr / 100},
-  {'ep': 32, 'sz': 288, 'bs': 128, 'min_scale': 0.5, 'rect_val': True},
-  {'ep': (33, 35), 'lr': lr / 1000}
+  {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
+  {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+  {'ep':5, 'lr':lr},
+  {'ep':14, 'sz':224, 'bs':224,
+                'lr':lr*scale_224},
+  {'ep':16,     'lr':lr/10*scale_224},
+  {'ep':27,     'lr':lr/100*scale_224},
+  {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                'lr':lr/100*scale_288},
+  {'ep':(33,35),'lr':lr/1000*scale_288}
 ]
 
-lr = 0.50 * 4
-scale_224 = 224 / 256
-scale_288 = 128 / 256
+lr = 0.50 * 4 # 4 = num tasks
+scale_224 = 224/256
+scale_288 = 128/256
 four_machines = [
-  {'ep': 0, 'sz': 128, 'bs': 256, 'trndir': '-sz/160'},
-  {'ep': (0, 6), 'lr': (lr, lr * 2)},
-  {'ep': 6, 'sz': 128, 'bs': 512, 'keep_dl': True,
-   'lr': lr * 2},
-  {'ep': 16, 'sz': 224, 'bs': 224, 'trndir': '-sz/352', 'min_scale': 0.087,
-   'lr': lr * scale_224},
-  {'ep': 19, 'lr': lr / 10 * scale_224},
-  {'ep': 30, 'lr': lr / 100 * scale_224},
-  {'ep': 35, 'sz': 288, 'bs': 128, 'min_scale': 0.5, 'rect_val': True,
-   'lr': lr / 100 * scale_288},
-  {'ep': (37, 39), 'lr': lr / 1000 * scale_288}
+    {'ep':0,  'sz':128, 'bs':256, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)}, 
+    {'ep':6,  'sz':128, 'bs':512, 'keep_dl':True,
+                  'lr':lr*2},
+    {'ep':16, 'sz':224, 'bs':224, 'trndir': '-sz/352', 'min_scale': 0.087,
+                  'lr':lr*scale_224},
+    {'ep':19,     'lr':lr/10*scale_224},
+    {'ep':30,     'lr':lr/100*scale_224},
+    {'ep':35, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                  'lr':lr/100*scale_288},
+    {'ep':(37,39),'lr':lr/1000*scale_288}
 ]
 
 # monday-eight.02, 24:15 to 93.06
 lr = 0.235 * 8
+scale_224 = 224/128
 eight_machines = [
-  {'ep': 0, 'sz': 128, 'bs': 128, 'trndir': '-sz/160'},
-  {'ep': (0, 6), 'lr': (lr, lr * 2)},
-  {'ep': 6, 'bs': 256, 'keep_dl': True},
-  {'ep': 6, 'lr': lr * 2},
-  {'ep': 16, 'sz': 224, 'bs': 128},
-  {'ep': 16, 'lr': lr},
-  {'ep': 19, 'bs': 192, 'keep_dl': True},
-  {'ep': 19, 'lr': lr / (10 / 1.5)},
-  {'ep': 31, 'lr': lr / (100 / 1.5)},
-  {'ep': 37, 'sz': 288, 'bs': 128, 'min_scale': 0.5, 'rect_val': True},
-  {'ep': 37, 'lr': lr / 100},
-  {'ep': (38, 40), 'lr': lr / 1000}
+  {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+  {'ep':(0,6),  'lr':(lr,lr*2)},
+  {'ep':6,            'bs':256, 'keep_dl':True,
+                'lr':lr*2},
+  {'ep':16, 'sz':224,'bs':128,
+                'lr':lr},
+  {'ep':19,          'bs':192, 'keep_dl':True,
+                'lr':lr/10*scale_224},
+  {'ep':31,     'lr':lr/100*scale_224},
+  {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
+                'lr':lr/100},
+  {'ep':(38,40),'lr':lr/1000}
 ]
 
-# monday-sixteen.01, 17:16 to 93.04
-lr = 0.235 * 8
+# time 16:08
+# https://s3.amazonaws.com/yaroslavvb/logs/logs/imagenet-16.cmd.tar
+lr = 0.24 * 8 # 8 = num tasks
+bs224 = 224 # change to 192 if OOM
+scale_224 = bs224/64
 sixteen_machines = [
-  {'ep': 0, 'sz': 128, 'bs': 64, 'trndir': '-sz/160'},
-  {'ep': (0, 6), 'lr': (lr, lr * 2)},
-  {'ep': 6, 'bs': 128, 'keep_dl': True},
-  {'ep': 6, 'lr': lr * 2},
-  {'ep': 16, 'sz': 224, 'bs': 64},
-  {'ep': 16, 'lr': lr},
-  {'ep': 19, 'bs': 192, 'keep_dl': True},
-  {'ep': 19, 'lr': 2 * lr / (10 / 1.5)},
-  {'ep': 31, 'lr': 2 * lr / (100 / 1.5)},
-  {'ep': 37, 'sz': 288, 'bs': 128, 'min_scale': 0.5, 'rect_val': True},
-  {'ep': 37, 'lr': 2 * lr / 100},
-  {'ep': (38, 50), 'lr': 2 * lr / 1000}
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':(11,14), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.087,
+                  'lr':lr},
+    {'ep':17,           'bs':bs224, 'keep_dl':True},
+    {'ep':(17,23),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(23,29),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(29,37),'lr':(lr/100,lr/1000)},
+    {'ep':(37,40),'lr':lr/1000}
 ]
 
 schedules = {1: one_machine,
@@ -141,7 +150,7 @@ def main():
 
   os.environ['NCLUSTER_AWS_FAST_ROOTDISK'] = '1'  # use io2 disk on AWS
   job = ncluster.make_job(name=args.name,
-                          run_name=args.name,
+                          run_name=f"{args.name}-{args.machines}",
                           num_tasks=args.machines,
                           image_name=IMAGE_NAME,
                           instance_type=INSTANCE_TYPE,
