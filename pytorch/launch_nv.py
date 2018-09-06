@@ -124,14 +124,14 @@ bs_scale = [x/bs[0] for x in bs]
 xar_args_pytorch = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
-    {'ep':(0,7),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-    # {'ep':5, 'lr':lr},
-    {'ep':(7,13), 'lr':(lr*2,lr/4)}, # trying one cycle
-    {'ep':13, 'sz':224, 'bs':bs[1]},
-    {'ep':(13,22),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
-    {'ep':(22,25),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
-    {'ep':25, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
-    {'ep':(25,28),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
+    {'ep':(0,6),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    # {'ep':5, 'lr':lr}, # does not help
+    {'ep':(6,12), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':12, 'sz':224, 'bs':bs[1]},
+    {'ep':(12,20),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(20,23),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':23, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(23,25),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
   ],
   '--init-bn0',
   '--no-bn-wd',
@@ -140,6 +140,9 @@ xar_args_pytorch = [
   '--env-name', 'pytorch_source',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
 ]
+
+
+
 
 # Current best settings
 # Current benchmark for 1x p3
@@ -288,6 +291,33 @@ x16ar_args_benchmark = [
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':2*lr/100},
     {'ep':(38,50),'lr':2*lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 16,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_source',
+]
+
+
+# Smooth linear LR decay
+lr = 0.24 * 8 # 8 = num tasks
+bs224 = 224 # change to 192 if OOM
+scale_224 = bs224/64
+x16ar_args_linear_decay = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':(11,14), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.087,
+                  'lr':lr},
+    {'ep':17,           'bs':bs224, 'keep_dl':True},
+    {'ep':(17,23),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(23,29),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(29,37),'lr':(lr/100,lr/1000)}
   ],
   '--init-bn0',
   '--no-bn-wd',
