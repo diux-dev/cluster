@@ -38,32 +38,30 @@ bs = [512, 224, 128] # largest batch size that fits in memory for each image siz
 bs_scale = [x/bs[0] for x in bs]
 one_machine = [
   {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
-  {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-  {'ep':5, 'lr':lr},
-  {'ep':14, 'sz':224, 'bs':bs[1],
-                'lr':lr*bs_scale[1]},
-  {'ep':16,     'lr':lr/10*bs_scale[1]},
-  {'ep':27,     'lr':lr/100*bs_scale[1]},
-  {'ep':32, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True,
-                'lr':lr/100*bs_scale[2]},
-  {'ep':(33,35),'lr':lr/1000*bs_scale[2]}
+  {'ep':(0,7),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+  {'ep':(7,13), 'lr':(lr*2,lr/4)}, # trying one cycle
+  {'ep':13, 'sz':224, 'bs':bs[1], 'trndir':'-sz/352', 'min_scale':0.087},
+  {'ep':(13,22),'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+  {'ep':(22,25),'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+  {'ep':25, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+  {'ep':(25,28),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
 ]
 
 lr = 0.50 * 4 # 4 = num tasks
 bs = [256, 224, 128] # largest batch size that fits in memory for each image size
 bs_scale = [x/bs[0] for x in bs] # scale learning rate to batch size
 four_machines = [
-    {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
-    {'ep':(0,6),  'lr':(lr,lr*2)}, 
-    {'ep':6,  'sz':128, 'bs':bs[0]*2, 'keep_dl':True,
-                  'lr':lr*2},
-    {'ep':16, 'sz':224, 'bs':bs[1], 'trndir': '-sz/352', 'min_scale': 0.087,
-                  'lr':lr*bs_scale[1]},
-    {'ep':19,     'lr':lr/10*bs_scale[1]},
-    {'ep':30,     'lr':lr/100*bs_scale[1]},
-    {'ep':35, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True,
-                  'lr':lr/100*bs_scale[2]},
-    {'ep':(37,39),'lr':lr/1000*bs_scale[2]}
+  {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'}, # bs = 256 * 4 * 8 = 8192
+  {'ep':(0,6),  'lr':(lr,lr*2)}, 
+  {'ep':6,  'sz':128, 'bs':bs[0]*2, 'keep_dl':True},
+  {'ep':6,      'lr':lr*2},
+  {'ep':(11,13), 'lr':(lr*2,lr)}, # trying one cycle
+  {'ep':13, 'sz':224, 'bs':bs[1], 'trndir': '-sz/352', 'min_scale': 0.087},
+  {'ep':13,     'lr':lr*bs_scale[1]},
+  {'ep':(16,23),'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+  {'ep':(23,28),'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+  {'ep':28, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+  {'ep':(28,30),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
 ]
 
 # monday-eight.02, 24:15 to 93.06
@@ -74,31 +72,32 @@ eight_machines = [
   {'ep':(0,6),  'lr':(lr,lr*2)},
   {'ep':6,            'bs':256, 'keep_dl':True,
                 'lr':lr*2},
-  {'ep':16, 'sz':224,'bs':128,
+  {'ep':(11,14),'lr':(lr*2,lr)}, # trying one cycle
+  {'ep':14, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
                 'lr':lr},
-  {'ep':19,          'bs':224, 'keep_dl':True,
-                'lr':lr/10*scale_224},
-  {'ep':31,     'lr':lr/100*scale_224},
-  {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
-                'lr':lr/100},
-  {'ep':(38,40),'lr':lr/1000}
+  {'ep':17,           'bs':224, 'keep_dl':True},
+  {'ep':(17,23),'lr':(lr,lr/10*scale_224)},
+  {'ep':(23,29),'lr':(lr/10*scale_224,lr/100*scale_224)},
+  {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+  {'ep':(29,37),'lr':(lr/100,lr/1000)}
 ]
 
 # monday-sixteen.01, 17:16 to 93.04
 lr = 0.235 * 8
+scale_224 = 224/64
 sixteen_machines = [
   {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
   {'ep':(0,6),  'lr':(lr,lr*2)},
-  {'ep':6,            'bs':128, 'keep_dl':True},
-  {'ep':6,      'lr':lr*2},
-  {'ep':16, 'sz':224,'bs':64},
-  {'ep':16,      'lr':lr},
-  {'ep':19,           'bs':192, 'keep_dl':True},
-  {'ep':19,     'lr':2*lr/(10/1.5)},
-  {'ep':31,     'lr':2*lr/(100/1.5)},
-  {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-  {'ep':37,     'lr':2*lr/100},
-  {'ep':(38,50),'lr':2*lr/1000}
+  {'ep':6,            'bs':128, 'keep_dl':True,
+                'lr':lr*2},
+  {'ep':(11,14),'lr':(lr*2,lr)}, # trying one cycle
+  {'ep':14, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.087,
+                'lr':lr},
+  {'ep':17,           'bs':224, 'keep_dl':True},
+  {'ep':(17,23),'lr':(lr,lr/10*scale_224)},
+  {'ep':(23,29),'lr':(lr/10*scale_224,lr/100*scale_224)},
+  {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+  {'ep':(29,37),'lr':(lr/100,lr/1000)}
 ]
 
 schedules = {1: one_machine,
