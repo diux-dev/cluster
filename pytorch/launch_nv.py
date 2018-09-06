@@ -119,29 +119,55 @@ xar_throughput_dlami = [
 # Current best settings
 # Current benchmark for 1x p3
 lr = 1.0
+bs = [512, 224, 128] # largest batch size that fits in memory for each image size
+bs_scale = [x/bs[0] for x in bs]
 xar_args_pytorch = [
   '--phases', [
-    {'ep':0,  'sz':128, 'bs':512, 'trndir':'-sz/160'},
-    {'ep':(0,5),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
-    # {'ep':5,      'lr':lr},
-    {'ep':(5,10), 'lr':(lr*2,lr)}, # trying one cycle
-    {'ep':14, 'sz':224, 'bs':224,
-                  'lr':lr/(512/224)},
-    {'ep':16,     'lr':lr/10/(512/224)},
-    {'ep':27,     'lr':lr/100/(512/224)},
-    {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True,
-                  'lr':lr/100/(512/128)},
-    {'ep':(33,35),'lr':lr/1000/(512/128)}
+    {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    # {'ep':5, 'lr':lr}, # does not help
+    {'ep':(6,12), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':12, 'sz':224, 'bs':bs[1]},
+    {'ep':(12,20),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(20,23),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':23, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(23,25),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
   ],
   '--init-bn0',
   '--no-bn-wd',
-  # '--autoscale-lr2batch',
   '--num-tasks', 1,
   '--ami-name', DEFAULT_PYTORCH_SOURCE,
   '--env-name', 'pytorch_source',
   '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
 ]
 
+
+
+
+# Current best settings
+# Current benchmark for 1x p3
+lr = 1.0
+bs = [512, 224, 128] # largest batch size that fits in memory for each image size
+bs_scale = [x/bs[0] for x in bs]
+xar_args_pytorch2 = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':bs[0], 'trndir':'-sz/160'},
+    {'ep':(0,7),  'lr':(lr,lr*2)}, # lr warmup is better with --init-bn0
+    {'ep':5, 'lr':lr}, # baseline without one cycle
+    # {'ep':(7,13), 'lr':(lr*2,lr/4)}, # trying one cycle
+    {'ep':13, 'sz':224, 'bs':bs[1]},
+    {'ep':(13,22),     'lr':(lr*bs_scale[1],lr/10*bs_scale[1])},
+    {'ep':(22,25),     'lr':(lr/10*bs_scale[1],lr/100*bs_scale[1])},
+    {'ep':25, 'sz':288, 'bs':bs[2], 'min_scale':0.5, 'rect_val':True},
+    {'ep':(25,28),'lr':(lr/100*bs_scale[2],lr/1000*bs_scale[2])}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 1,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_source',
+  '--dist-url', 'file:///home/ubuntu/data/file.sync', # single instances are faster with file sync
+]
 
 # Current best settings 4x p3 - 34.5 minutes
 lr = 0.50 * 4 # 4 = num tasks
@@ -165,7 +191,7 @@ x4ar_args = [
   '--no-bn-wd',
   '--num-tasks', 4,
   '--ami-name', DEFAULT_PYTORCH_SOURCE,
-  '--env-name', 'pytorch_c10d',
+  '--env-name', 'pytorch_source',
 ]
 
 # Current benchmark for 8x p3's - with Aspect Ratio Validation - Works right now for under 30 min (25:45, memory-eight.06, 25:03 sun-eight, 24:31 release-eight.02)
@@ -192,15 +218,42 @@ x8ar_args_benchmark = [
   '--env-name', 'pytorch_source',
 ]
 
-# Also ~27 minutes. Faster per epoch, but takes one extra
-lr = 0.25 * 8 # 8 = num tasks
+# Also ~23.5 minutes. Faster per epoch, but takes one extra
+lr = 0.24 * 8 # 8 = num tasks
 scale_224 = 224/128
 x8ar_args_352_folder = [
   '--phases', [
     {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
     {'ep':(0,6),  'lr':(lr,lr*2)},
-    {'ep':6,            'bs':256, 'keep_dl':True,
-                  'lr':lr*2},
+    {'ep':6,            'bs':256, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    # {'ep':11,            'bs':512, 'keep_dl':True},
+    {'ep':(11,14), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
+                  'lr':lr},
+    {'ep':17,           'bs':224, 'keep_dl':True},
+    {'ep':(17,23),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(23,29),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(29,37),'lr':(lr/100,lr/1000)}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 8,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_source',
+]
+
+# Also ~27 minutes. Faster per epoch, but takes one extra
+lr = 0.25 * 8 # 8 = num tasks
+scale_224 = 224/128
+x8ar_args_test = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':128, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':512, 'keep_dl':True,
+                  'lr':lr},
+    {'ep':(6,14), 'lr':(lr*4,lr*2)}, # trying one cycle
     {'ep':16, 'sz':224, 'bs':128, 'trndir':'-sz/352', 'min_scale':0.087,
                   'lr':lr},
     {'ep':19,           'bs':224, 'keep_dl':True,
@@ -238,6 +291,33 @@ x16ar_args_benchmark = [
     {'ep':37, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
     {'ep':37,     'lr':2*lr/100},
     {'ep':(38,50),'lr':2*lr/1000}
+  ],
+  '--init-bn0',
+  '--no-bn-wd',
+  '--num-tasks', 16,
+  '--ami-name', DEFAULT_PYTORCH_SOURCE,
+  '--env-name', 'pytorch_source',
+]
+
+
+# Smooth linear LR decay
+lr = 0.24 * 8 # 8 = num tasks
+bs224 = 224 # change to 192 if OOM
+scale_224 = bs224/64
+x16ar_args_linear_decay = [
+  '--phases', [
+    {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
+    {'ep':(0,6),  'lr':(lr,lr*2)},
+    {'ep':6,            'bs':128, 'keep_dl':True},
+    {'ep':6,      'lr':lr*2},
+    {'ep':(11,14), 'lr':(lr*2,lr)}, # trying one cycle
+    {'ep':14, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.087,
+                  'lr':lr},
+    {'ep':17,           'bs':bs224, 'keep_dl':True},
+    {'ep':(17,23),     'lr':(lr,lr/10*scale_224)},
+    {'ep':(23,29),     'lr':(lr/10*scale_224,lr/100*scale_224)},
+    {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+    {'ep':(29,37),'lr':(lr/100,lr/1000)}
   ],
   '--init-bn0',
   '--no-bn-wd',
