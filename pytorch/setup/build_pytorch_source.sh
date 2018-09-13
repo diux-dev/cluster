@@ -2,13 +2,18 @@
 
 # This assumes base DLAMI - "Deep Learning AMI (Ubuntu) Version 12.0"
 
-conda update -n base conda -y
-pip install --upgrade pip
-conda install python -y
-
 sudo apt-get update -y
-sudo apt-get upgrade -y
+sudo apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew upgrade -y
+sudo apt-get install emacs -y
+sudo apt-get autoremove -y
+sudo apt-get autoclean -y
 
+sudo apt-get purge nvidia* -y
+sudo apt-get autoremove -y
+sudo apt-get autoclean -y
+sudo rm -rf /usr/local/cuda*
+
+# install nvidia
 sudo apt-get purge nvidia* -y
 sudo apt-get autoremove -y
 sudo apt-get autoclean -y
@@ -20,18 +25,14 @@ echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x8
 sudo apt-get update  -y
 sudo apt-get -o Dpkg::Options::="--force-overwrite" install cuda-9-2 cuda-drivers -y
 
-# MAY NEED TO REBOOT COMPUTER HERE
-#sudo reboot
-
-sudo ldconfig
-nvidia-smi
-# Driver version should be: 396.37
-
 # Install cudnn 7.2.1
-wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/cudnn-9.2-linux-x64-v7.2.1.38.tgz
-tar -xf cudnn-9.2-linux-x64-v7.2.1.38.tgz
+CUDNN_FILE=cudnn-9.2-linux-x64-v7.2.1.38.tgz
+wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/$CUDNN_FILE
+tar -xf $CUDNN_FILE
 sudo cp -R ~/cuda/include/* /usr/local/cuda-9.2/include
 sudo cp -R ~/cuda/lib64/* /usr/local/cuda-9.2/lib64
+rm $CUDNN_FILE
+rm -rf ~/cuda
 
 # Install nccl 2.2.13 - might not need this
 wget https://s3-us-west-2.amazonaws.com/ashaw-fastai-imagenet/nccl_2.2.13-1%2Bcuda9.2_x86_64.txz
@@ -39,73 +40,72 @@ tar -xf nccl_2.2.13-1+cuda9.2_x86_64.txz
 sudo cp -R ~/nccl_2.2.13-1+cuda9.2_x86_64/* /usr/local/cuda-9.2/targets/x86_64-linux/
 # sudo cp -R ~/nccl_2.2.13-1+cuda9.2_x86_64/* /lib/nccl/cuda-9.2
 sudo ldconfig
-
-
-# Update .bashrc file - /lib/nccl/cuda-9.2
-sed -i -e 's/cuda-9.1/cuda-9.2/g' ~/.bashrc
-source ~/.bashrc
-conda activate pytorch_p36
-
+rm nccl_2.2.13-1+cuda9.2_x86_64.txz
+rm -rf nccl_2.2.13-1+cuda9.2_x86_64
 
 sudo apt-get install libcupti-dev
 
-# Create pytorch_source conda env and install pytorch
+# Verify drivers are installed
+sudo ldconfig
+nvidia-smi
+# you should see driver version: 397.44
+
+# MAY NEED TO REBOOT COMPUTER HERE
+# sudo reboot
+
+if [ ! -d ~/anaconda3 ]; then
+    # install anaconda
+    curl -O https://repo.anaconda.com/archive/Anaconda3-5.2.0-Linux-x86_64.sh
+    bash Anaconda3-5.2.0-Linux-x86_64.sh -b
+    rm Anaconda3-5.2.0-Linux-x86_64.sh
+    . ~/anaconda3/etc/profile.d/conda.sh
+fi
+
+# update conda and python
+conda update -n base conda -y
+~/anaconda3/bin/pip install --upgrade pip
+conda install python -y
+
+
+# Create pytorch source environment
+ENV=pytorch_source
+ENV_BIN=~/anaconda3/envs/$ENV/bin
+conda create -n $ENV -y
+conda install --name $ENV python
+conda install --name $ENV numpy pyyaml mkl mkl-include setuptools cmake cffi typing -y
+conda install --name $ENV -c mingfeima mkldnn -y
+conda install --name $ENV -c pytorch magma-cuda90 -y
+
+
+# Download and install pytorch source
 git clone --recursive https://github.com/pytorch/pytorch.git
-cd ~/pytorch
-
-conda create -n pytorch_source -y
-source activate pytorch_source
-conda install numpy pyyaml mkl mkl-include setuptools cmake cffi typing -y
-conda install -c mingfeima mkldnn -y
-conda install -c pytorch magma-cuda90 -y
-
-# Temporarily move old cuda libraries. For some reason building from source wants to point to these
-pushd /usr/local/
-sudo mv cuda-9.1/ cuda-9.1.bak
-sudo mv cuda-9.0/ cuda-9.0.bak
-sudo mv cuda-8.0/ cuda-8.0.bak
-popd
-
-# Must remember to change this line in DistributedSampler, otherwise performance is degraded
-# https://github.com/pytorch/pytorch/pull/8958#issuecomment-410125932
-
 pushd ~/pytorch
-CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/usr/local/cuda/targets/x86_64-linux/ NCCL_LIB_DIR=/usr/local/cuda/targets/x86_64-linux/lib NCCL_INCLUDE_DIR=/usr/local/cuda/targets/x86_64-linux/include python setup.py install
-# USE_C10D=1 USE_DISTRIBUTED=1 CUDA_HOME=/usr/local/cuda-9.2 NCCL_ROOT_DIR=/lib/nccl/cuda-9.2 NCCL_LIB_DIR=/lib/nccl/cuda-9.2/lib NCCL_INCLUDE_DIR=/lib/nccl/cuda-9.2/include python setup.py install
+FULL_CAFFE2=1 CUDA_HOME=/usr/local/cuda NCCL_ROOT_DIR=/usr/local/cuda/targets/x86_64-linux/ NCCL_LIB_DIR=/usr/local/cuda/targets/x86_64-linux/lib NCCL_INCLUDE_DIR=/usr/local/cuda/targets/x86_64-linux/include $ENV_BIN/python setup.py install
 popd
-
-
-
-# Move back older cuda version libraries
-pushd /usr/local/
-sudo mv cuda-9.1.bak cuda-9.1/
-sudo mv cuda-9.0.bak/ cuda-9.0/
-sudo mv cuda-8.0.bak/ cuda-8.0
-popd
-
 
 # Install rest of dependencies
-pip install torchvision torchtext
-conda install jupyter bcolz scipy tqdm -y
-pip install sklearn-pandas
-conda install tqdm -y
-pip install tensorboardX
-
+PIP_ENV=$ENV_BIN/pip
+$PIP_ENV install torchvision torchtext
+conda install --name $ENV jupyter bcolz scipy tqdm -y
+$PIP_ENV install sklearn-pandas
+$PIP_ENV install tensorboardX
 
 # THIS VERSION IS SLOWER THAN JUST INSTALLING FROM PIP BELOW...
-# Install libjpeg-turbo with pillow-simd
 # sudo apt install yasm
 # https://gist.github.com/soumith/01da3874bf014d8a8c53406c2b95d56b
-# seems like it's faster without the top versioncond
-pip uninstall pillow -y
-CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
+# seems like it's faster without the top version
+$PIP_ENV uninstall pillow -y
+sudo apt-get install libjpeg-turbo8-dev
+CC="cc -mavx2" $PIP_ENV install -U --force-reinstall pillow-simd
+
 
 
 # Create fastai environment
-conda create -n fastai_source --clone pytorch_source
-source activate fastai_source
-pip install opencv-python isoweek pandas-summary seaborn graphviz
+conda create -n fastai_v1 --clone pytorch_source
+FASTAI_PIP_ENV=~/anaconda3/envs/fastai_v1/bin/pip
+FASTAI_PIP_ENV install opencv-python isoweek pandas-summary seaborn graphviz
 # conda install seaborn python-graphviz -y
-git clone https://github.com/fastai/fastai.git
-ln -s ~/fastai/fastai ~/anaconda3/envs/fastai/lib/python3.6/site-packages
+git clone https://github.com/fastai/fastai_v1.git
+ln -s ~/fastai/fastai_v1 ~/anaconda3/envs/fastai_v1/lib/python3.7/site-packages
 
+echo "Installation done. Please reboot computer"
