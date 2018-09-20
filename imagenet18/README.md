@@ -1,4 +1,4 @@
-Code to reproduce ImageNet in 18 minutes, by Andrew Shaw and Yaroslav Bulatov
+Code to reproduce ImageNet in 18 minutes, by Andrew Shaw and Yaroslav Bulatov and Jeremy Howard
 
 
 Pre-requisites: Python 3.6 or higher

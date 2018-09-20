@@ -79,12 +79,12 @@ eight_machines = [
   {'ep':(17,23),'lr':(lr,lr/10*scale_224)},
   {'ep':(23,29),'lr':(lr/10*scale_224,lr/100*scale_224)},
   {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-  {'ep':(29,37),'lr':(lr/100,lr/1000)}
+  {'ep':(29,35),'lr':(lr/100,lr/1000)}
 ]
 
 # monday-sixteen.01, 17:16 to 93.04
 lr = 0.235 * 8
-scale_224 = 224/64
+scale_224 = 224/128
 sixteen_machines = [
   {'ep':0,  'sz':128, 'bs':64, 'trndir':'-sz/160'},
   {'ep':(0,6),  'lr':(lr,lr*2)},
@@ -94,10 +94,10 @@ sixteen_machines = [
   {'ep':14, 'sz':224, 'bs':64, 'trndir':'-sz/352', 'min_scale':0.087,
                 'lr':lr},
   {'ep':17,           'bs':224, 'keep_dl':True},
-  {'ep':(17,23),'lr':(lr,lr/10*scale_224)},
-  {'ep':(23,29),'lr':(lr/10*scale_224,lr/100*scale_224)},
-  {'ep':29, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
-  {'ep':(29,37),'lr':(lr/100,lr/1000)}
+  {'ep':(17,24),'lr':(lr/scale_224,lr/10*scale_224)},
+  {'ep':(24,32),'lr':(lr/10*scale_224,lr/100*scale_224)},
+  {'ep':32, 'sz':288, 'bs':128, 'min_scale':0.5, 'rect_val':True},
+  {'ep':(32,36),'lr':(lr/100,lr/1000)}
 ]
 
 schedules = {1: one_machine,
