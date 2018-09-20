@@ -26,7 +26,7 @@ parser.add_argument("--size-mb", default=10, type=int,
 parser.add_argument("--num-workers", default=2, type=int,
                     help='how many workers to run in parallel')
 
-parser.add_argument("--iters", default=100, type=int)
+parser.add_argument("--iters", default=1, type=int)
 parser.add_argument("--aws", action="store_true", help="enable to run on AWS")
 parser.add_argument("--xray", default=1, type=int,
                     help="whether to use XRay backend")
@@ -57,10 +57,10 @@ class Worker(object):
     # each worker only updates a part of parameters between low and high
     self.low, self.high = index * dim, (index + 1) * dim
 
-  def train(self):
-    for i in range(args.iters):
-      self.value[self.low:self.high] += self.gradients
-      self.log(f"worker {self.index}, value is {self.value}")
+  def train(self, iters):
+    for i in range(iters):
+      self.params[self.low:self.high] += self.gradients
+      self.log(f"worker {self.index}, params is {self.params}")
       time.sleep(0.25)
 
   def get_params(self):
@@ -70,6 +70,7 @@ class Worker(object):
     self.params = params
 
   def log(self, msg):
+    print(msg)
     with open(f'/tmp/w{self.index}', 'a') as f:
       f.write(msg + '\n')
 
@@ -116,8 +117,12 @@ def run_driver():
   workers = [Worker.remote(i, args.num_workers) for i in
              range(args.num_workers)]
 
+  workers[0].train.remote(100)
+  print(ray.get(workers[0].get_params.remote()))
+
   def start_worker(w):
-    w.train.remote()
+    w.train.remote(args.iters)
+  print("First part done")
 
   threads = []
   for worker in workers:
